@@ -165,7 +165,7 @@ export function GitHubPanel({
   // -------------------------------------------------------------
   if (!isAuthenticated) {
     return (
-      <aside className="w-80 h-full bg-[#18191c] border-r border-[#43474e]/40 flex flex-col p-4 shrink-0 overflow-y-auto">
+      <aside className="w-full h-full bg-[#18191c] border-r border-[#43474e]/40 flex flex-col p-4 shrink-0 overflow-y-auto">
         <div className="flex items-center gap-2 border-b border-[#43474e]/30 pb-3 mb-4">
           <M3Icon name="lock" size={20} className="text-[#a8c7fa]" />
           <h2 className="text-sm font-semibold uppercase tracking-wider text-white">GitHub Access Required</h2>
@@ -263,7 +263,7 @@ export function GitHubPanel({
   // REAL AUTHENTICATED VIEW
   // -------------------------------------------------------------
   return (
-    <aside className="w-80 h-full bg-[#18191c] border-r border-[#43474e]/40 flex flex-col shrink-0 overflow-hidden">
+    <aside className="w-full h-full bg-[#18191c] border-r border-[#43474e]/40 flex flex-col shrink-0 overflow-hidden">
       {/* Real GitHub User Header */}
       <div className="p-3 bg-[#1e1f22] border-b border-[#43474e]/30 flex items-center justify-between">
         <a

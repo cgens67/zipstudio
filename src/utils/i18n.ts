@@ -156,6 +156,43 @@ export interface Translations {
   jumpToLine: string;
   hideReplace: string;
   toggleReplace: string;
+  // Context Menu & File Ops
+  addFile: string;
+  rename: string;
+  download: string;
+  properties: string;
+  fileProperties: string;
+  filePath: string;
+  fileSize: string;
+  fileType: string;
+  fileLines: string;
+  lastModified: string;
+  renameFile: string;
+  renameFolder: string;
+  enterNewName: string;
+  deleteConfirm: string;
+  // Hotkeys & Buttons
+  undo: string;
+  redo: string;
+  deleteLine: string;
+  findInFiles: string;
+  // Session Recovery
+  restoreSessionTitle: string;
+  restoreSessionDesc: string;
+  restoreSession: string;
+  startFresh: string;
+  // Progress & Preview
+  estimatedTime: string;
+  estimatedRemaining: string;
+  vectorPreview: string;
+  markdownPreview: string;
+  webAppPreview: string;
+  zoomIn: string;
+  zoomOut: string;
+  resetZoom: string;
+  fitToScreen: string;
+  toggleBackground: string;
+  pathsCount: string;
 }
 
 export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
@@ -310,6 +347,43 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     jumpToLine: 'Click line number to jump to line in code',
     hideReplace: 'Hide Replace',
     toggleReplace: 'Toggle Replace',
+    // Context Menu & File Ops
+    addFile: 'Add File',
+    rename: 'Rename',
+    download: 'Download',
+    properties: 'Properties',
+    fileProperties: 'File Properties',
+    filePath: 'Full Path',
+    fileSize: 'File Size',
+    fileType: 'Type',
+    fileLines: 'Total Lines',
+    lastModified: 'Last Modified',
+    renameFile: 'Rename File',
+    renameFolder: 'Rename Folder',
+    enterNewName: 'Enter new name:',
+    deleteConfirm: 'Are you sure you want to delete this item? This action cannot be undone.',
+    // Hotkeys & Buttons
+    undo: 'Undo (Ctrl+Z)',
+    redo: 'Redo (Ctrl+Y)',
+    deleteLine: 'Delete Line (Ctrl+Shift+K)',
+    findInFiles: 'Find in Files (Ctrl+Shift+F)',
+    // Session Recovery
+    restoreSessionTitle: 'Unsaved Session Detected',
+    restoreSessionDesc: 'You have uncommitted files and work in progress from a previous session.',
+    restoreSession: 'Restore Session',
+    startFresh: 'Start Fresh',
+    // Progress & Preview
+    estimatedTime: 'Estimated Time',
+    estimatedRemaining: 'remaining',
+    vectorPreview: 'Vector Graphic (.xml)',
+    markdownPreview: 'Rendered Markdown (.md)',
+    webAppPreview: 'Web App Preview',
+    zoomIn: 'Zoom In',
+    zoomOut: 'Zoom Out',
+    resetZoom: 'Reset Zoom (100%)',
+    fitToScreen: 'Fit to Screen',
+    toggleBackground: 'Toggle Background Grid',
+    pathsCount: 'vector paths',
   },
   'zh-CN': {
     appName: 'ZipStudio',
@@ -462,6 +536,43 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     jumpToLine: '点击行号快速定位到代码行',
     hideReplace: '收起替换',
     toggleReplace: '展开替换',
+    // Context Menu & File Ops
+    addFile: '新建文件',
+    rename: '重命名',
+    download: '下载',
+    properties: '属性',
+    fileProperties: '文件属性',
+    filePath: '完整路径',
+    fileSize: '文件大小',
+    fileType: '类型',
+    fileLines: '代码行数',
+    lastModified: '修改时间',
+    renameFile: '重命名文件',
+    renameFolder: '重命名文件夹',
+    enterNewName: '输入新名称:',
+    deleteConfirm: '确定要删除该项吗？此操作无法撤销。',
+    // Hotkeys & Buttons
+    undo: '撤销 (Ctrl+Z)',
+    redo: '重做 (Ctrl+Y)',
+    deleteLine: '删除整行 (Ctrl+Shift+K)',
+    findInFiles: '全局查找 (Ctrl+Shift+F)',
+    // Session Recovery
+    restoreSessionTitle: '发现未提交的工作会话',
+    restoreSessionDesc: '检测到您上次有未提交的代码与工作区文件。',
+    restoreSession: '恢复工作区',
+    startFresh: '重新开始',
+    // Progress & Preview
+    estimatedTime: '预计时间',
+    estimatedRemaining: '剩余',
+    vectorPreview: '矢量图形 (.xml)',
+    markdownPreview: '渲染 Markdown (.md)',
+    webAppPreview: 'Web 应用预览',
+    zoomIn: '放大',
+    zoomOut: '缩小',
+    resetZoom: '重置缩放 (100%)',
+    fitToScreen: '适应窗口',
+    toggleBackground: '切换背景网格',
+    pathsCount: '条矢量路径',
   },
   ms: {
     appName: 'ZipStudio',
@@ -614,5 +725,42 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     jumpToLine: 'Klik nombor baris untuk melompat ke baris kod',
     hideReplace: 'Sembunyikan Ganti',
     toggleReplace: 'Togol Ganti',
+    // Context Menu & File Ops
+    addFile: 'Tambah Fail',
+    rename: 'Namakan Semula',
+    download: 'Muat Turun',
+    properties: 'Ciri-ciri',
+    fileProperties: 'Ciri-ciri Fail',
+    filePath: 'Laluan Penuh',
+    fileSize: 'Saiz Fail',
+    fileType: 'Jenis',
+    fileLines: 'Jumlah Baris',
+    lastModified: 'Terakhir Diubah Suai',
+    renameFile: 'Namakan Semula Fail',
+    renameFolder: 'Namakan Semula Folder',
+    enterNewName: 'Masukkan nama baharu:',
+    deleteConfirm: 'Adakah anda pasti mahu memadamkan item ini? Tindakan ini tidak boleh dibuat asal.',
+    // Hotkeys & Buttons
+    undo: 'Buat Asal (Ctrl+Z)',
+    redo: 'Buat Semula (Ctrl+Y)',
+    deleteLine: 'Padam Baris (Ctrl+Shift+K)',
+    findInFiles: 'Cari dalam Fail (Ctrl+Shift+F)',
+    // Session Recovery
+    restoreSessionTitle: 'Sesi Belum Disimpan Dikesan',
+    restoreSessionDesc: 'Anda mempunyai fail belum dikomit dari sesi terdahulu.',
+    restoreSession: 'Pulihkan Sesi',
+    startFresh: 'Mula Baharu',
+    // Progress & Preview
+    estimatedTime: 'Anggaran Masa',
+    estimatedRemaining: 'baki',
+    vectorPreview: 'Grafik Vektor (.xml)',
+    markdownPreview: 'Markdown Diterjemah (.md)',
+    webAppPreview: 'Pratonton Aplikasi Web',
+    zoomIn: 'Zum Masuk',
+    zoomOut: 'Zum Keluar',
+    resetZoom: 'Tetapkan Semula Zum (100%)',
+    fitToScreen: 'Muat ke Skrin',
+    toggleBackground: 'Togol Grid Latar Belakang',
+    pathsCount: 'laluan vektor',
   },
 };

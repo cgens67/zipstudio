@@ -438,3 +438,41 @@ export function generatePreviewHtml(files: Record<string, VFile>): string {
 
   return html;
 }
+
+/**
+ * Formats a file size into readable bytes, KB, or MB.
+ */
+export function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+/**
+ * Packages a specific folder subtree into a .zip Blob.
+ */
+export async function packageSubtreeZip(files: Record<string, VFile>, folderPath: string): Promise<Blob> {
+  const zip = new JSZip();
+  const prefix = folderPath.endsWith('/') ? folderPath : `${folderPath}/`;
+
+  for (const [path, file] of Object.entries(files)) {
+    if (path.startsWith(prefix)) {
+      const relative = path.substring(prefix.length);
+      if (file.isBinary && file.content.startsWith('data:')) {
+        const commaIndex = file.content.indexOf(',');
+        const base64 = file.content.substring(commaIndex + 1);
+        zip.file(relative, base64, { base64: true });
+      } else {
+        zip.file(relative, file.content);
+      }
+    }
+  }
+
+  return await zip.generateAsync({
+    type: 'blob',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
+  });
+}

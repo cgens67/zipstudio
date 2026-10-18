@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { VFile, getFileExtension, getLanguageFromExt } from '../utils/fileSystem';
 import { M3Icon, M3IconButton, M3Badge } from './M3Components';
 import { explainCodeInPlainEnglish, CodeBlockExplanation } from '../utils/codeExplainer';
@@ -17,6 +17,7 @@ interface EditorProps {
   onCloseTab: (path: string) => void;
   onUpdateContent: (path: string, newContent: string) => void;
   onSaveFile?: (path: string) => void;
+  onFindInFiles?: () => void;
   targetLine?: number;
   t?: Translations;
   onMaximize?: () => void;
@@ -31,6 +32,7 @@ export function Editor({
   onCloseTab,
   onUpdateContent,
   onSaveFile,
+  onFindInFiles,
   targetLine,
   t = TRANSLATIONS.en,
   onMaximize,
@@ -48,13 +50,94 @@ export function Editor({
   const gutterRef = useRef<HTMLDivElement>(null);
   const gutterInnerRef = useRef<HTMLDivElement>(null);
 
+  // Undo / Redo history state
+  const historyRef = useRef<Record<string, { stack: string[]; pointer: number }>>({});
+
   const lineHeight = Math.round(fontSize * 1.55);
 
+  // Initialize or restore history when active file changes
   useEffect(() => {
     if (activeFile) {
       setContent(activeFile.content);
+      if (!historyRef.current[activeFilePath]) {
+        historyRef.current[activeFilePath] = {
+          stack: [activeFile.content],
+          pointer: 0,
+        };
+      }
     }
   }, [activeFilePath, activeFile]);
+
+  // Record history snapshot (debounced)
+  const recordHistory = useCallback(
+    (newVal: string) => {
+      if (!activeFilePath) return;
+      const fileHist = historyRef.current[activeFilePath] || { stack: [], pointer: -1 };
+      const current = fileHist.stack[fileHist.pointer];
+      if (current === newVal) return;
+
+      const newStack = fileHist.stack.slice(0, fileHist.pointer + 1);
+      if (newStack.length > 50) newStack.shift();
+      newStack.push(newVal);
+
+      historyRef.current[activeFilePath] = {
+        stack: newStack,
+        pointer: newStack.length - 1,
+      };
+    },
+    [activeFilePath]
+  );
+
+  // Undo action
+  const handleUndo = useCallback(() => {
+    if (!activeFilePath) return;
+    const hist = historyRef.current[activeFilePath];
+    if (hist && hist.pointer > 0) {
+      hist.pointer -= 1;
+      const prevVal = hist.stack[hist.pointer];
+      setContent(prevVal);
+      onUpdateContent(activeFilePath, prevVal);
+    }
+  }, [activeFilePath, onUpdateContent]);
+
+  // Redo action
+  const handleRedo = useCallback(() => {
+    if (!activeFilePath) return;
+    const hist = historyRef.current[activeFilePath];
+    if (hist && hist.pointer < hist.stack.length - 1) {
+      hist.pointer += 1;
+      const nextVal = hist.stack[hist.pointer];
+      setContent(nextVal);
+      onUpdateContent(activeFilePath, nextVal);
+    }
+  }, [activeFilePath, onUpdateContent]);
+
+  // Delete current line action
+  const handleDeleteLine = useCallback(() => {
+    if (!textareaRef.current || !activeFilePath) return;
+    const text = textareaRef.current.value;
+    const selStart = textareaRef.current.selectionStart;
+
+    // Find start of current line
+    const lastNewlineBefore = text.lastIndexOf('\n', selStart - 1);
+    const lineStart = lastNewlineBefore === -1 ? 0 : lastNewlineBefore + 1;
+
+    // Find end of current line
+    const nextNewline = text.indexOf('\n', selStart);
+    const lineEnd = nextNewline === -1 ? text.length : nextNewline + 1;
+
+    const newVal = text.substring(0, lineStart) + text.substring(lineEnd);
+    setContent(newVal);
+    onUpdateContent(activeFilePath, newVal);
+    recordHistory(newVal);
+
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.selectionStart = textareaRef.current.selectionEnd = Math.min(lineStart, newVal.length);
+        handleSelection();
+      }
+    }, 0);
+  }, [activeFilePath, onUpdateContent, recordHistory]);
 
   // Synchronize gutter scroll when jumping to targetLine
   useEffect(() => {
@@ -81,6 +164,7 @@ export function Editor({
     setContent(val);
     if (activeFilePath) {
       onUpdateContent(activeFilePath, val);
+      recordHistory(val);
     }
   };
 
@@ -172,10 +256,10 @@ export function Editor({
         })}
       </div>
 
-      {/* Editor Controls Bar */}
-      <div className="h-9 px-3 bg-[#1e1f22] border-b border-[#43474e]/30 flex items-center justify-between text-xs shrink-0">
+      {/* Editor Controls & Hotkeys Bar */}
+      <div className="h-9 px-3 bg-[#1e1f22] border-b border-[#43474e]/30 flex items-center justify-between text-xs shrink-0 gap-2">
         <div className="flex items-center gap-2 truncate">
-          <span className="text-[#a8c7fa] font-mono font-medium truncate max-w-[200px]">
+          <span className="text-[#a8c7fa] font-mono font-medium truncate max-w-[180px]">
             {activeFile.path}
           </span>
           <M3Badge variant="secondary">{lang}</M3Badge>
@@ -185,10 +269,41 @@ export function Editor({
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
+          {/* Quick Hotkey Buttons */}
+          <M3IconButton
+            size="sm"
+            icon="undo"
+            label={t.undo}
+            onClick={handleUndo}
+          />
+          <M3IconButton
+            size="sm"
+            icon="redo"
+            label={t.redo}
+            onClick={handleRedo}
+          />
+          <M3IconButton
+            size="sm"
+            icon="content_cut"
+            label={t.deleteLine}
+            onClick={handleDeleteLine}
+          />
+
+          {onFindInFiles && (
+            <M3IconButton
+              size="sm"
+              icon="search"
+              label={t.findInFiles}
+              onClick={onFindInFiles}
+            />
+          )}
+
+          <div className="w-[1px] h-3.5 bg-[#43474e]/50 mx-1" />
+
           {/* Plain English Mode Toggle */}
           <button
             onClick={() => setPlainEnglishMode(!plainEnglishMode)}
-            className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`px-2 py-0.5 rounded-md text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer ${
               plainEnglishMode
                 ? 'bg-[#a8c7fa] text-[#003062] font-semibold'
                 : 'bg-[#2b2d30] text-[#c4c6d0] hover:text-white hover:bg-[#383a3e]'
@@ -196,7 +311,7 @@ export function Editor({
             title={t.plainEnglishDesc}
           >
             <M3Icon name="translate" size={14} />
-            <span className="hidden sm:inline">{t.plainEnglish}</span>
+            <span className="hidden md:inline">{t.plainEnglish}</span>
           </button>
 
           {/* Font Size controls */}
@@ -206,7 +321,7 @@ export function Editor({
             label={t.decreaseFont}
             onClick={() => setFontSize(Math.max(11, fontSize - 1))}
           />
-          <span className="text-[11px] text-[#8e9199] w-5 text-center font-mono">{fontSize}</span>
+          <span className="text-[11px] text-[#8e9199] w-4 text-center font-mono">{fontSize}</span>
           <M3IconButton
             size="sm"
             icon="add"
@@ -334,7 +449,7 @@ export function Editor({
               </div>
             </div>
 
-            {/* Editable Text Area with real-time synchronized scroll */}
+            {/* Editable Text Area with real-time synchronized scroll & hotkeys */}
             <textarea
               ref={textareaRef}
               value={content}
@@ -343,6 +458,7 @@ export function Editor({
               onClick={handleSelection}
               onScroll={handleScroll}
               onKeyDown={(e) => {
+                // Tab indentation
                 if (e.key === 'Tab') {
                   e.preventDefault();
                   const start = e.currentTarget.selectionStart;
@@ -351,16 +467,45 @@ export function Editor({
                   const newVal = val.substring(0, start) + '  ' + val.substring(end);
                   setContent(newVal);
                   if (activeFilePath) onUpdateContent(activeFilePath, newVal);
+                  recordHistory(newVal);
                   setTimeout(() => {
                     if (textareaRef.current) {
                       textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + 2;
                     }
                   }, 0);
-                } else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                }
+                // Save hotkey (Ctrl+S / Cmd+S)
+                else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                   e.preventDefault();
                   if (onSaveFile && activeFilePath) {
                     onSaveFile(activeFilePath);
                   }
+                }
+                // Find in Files (Ctrl+Shift+F / Cmd+Shift+F)
+                else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
+                  e.preventDefault();
+                  if (onFindInFiles) onFindInFiles();
+                }
+                // Delete Line (Ctrl+Shift+K / Cmd+Shift+K or Ctrl+D)
+                else if (
+                  ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) ||
+                  ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'k' || e.key === 'K'))
+                ) {
+                  e.preventDefault();
+                  handleDeleteLine();
+                }
+                // Undo (Ctrl+Z / Cmd+Z without Shift)
+                else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
+                  e.preventDefault();
+                  handleUndo();
+                }
+                // Redo (Ctrl+Y or Ctrl+Shift+Z)
+                else if (
+                  ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) ||
+                  ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z'))
+                ) {
+                  e.preventDefault();
+                  handleRedo();
                 }
               }}
               spellCheck={false}
