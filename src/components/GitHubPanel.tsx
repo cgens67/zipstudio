@@ -13,6 +13,7 @@ import {
   GitHubUser,
   GitHubRepo,
 } from '../utils/gitService';
+import { Translations } from '../utils/i18n';
 
 interface GitHubPanelProps {
   isAuthenticated: boolean;
@@ -26,10 +27,14 @@ interface GitHubPanelProps {
   pullRequests: PullRequest[];
   oauthConfigured: boolean;
   callbackUrl: string;
+  t: Translations;
+  isCleanZipImport?: boolean;
+  isLoadingRepo?: boolean;
   onConnectOAuth: () => void;
   onConnectToken: (token: string) => Promise<void>;
   onDisconnect: () => void;
   onSelectRepo: (repo: GitHubRepo) => void;
+  onLoadRepoFiles: () => Promise<void>;
   onCreateRepo: (name: string, description: string, isPrivate: boolean) => Promise<void>;
   onSwitchBranch: (branchName: string) => Promise<void>;
   onCreateBranch: (branchName: string) => Promise<void>;
@@ -50,10 +55,14 @@ export function GitHubPanel({
   pullRequests,
   oauthConfigured,
   callbackUrl,
+  t,
+  isCleanZipImport,
+  isLoadingRepo,
   onConnectOAuth,
   onConnectToken,
   onDisconnect,
   onSelectRepo,
+  onLoadRepoFiles,
   onCreateRepo,
   onSwitchBranch,
   onCreateBranch,
@@ -325,6 +334,27 @@ export function GitHubPanel({
             No repositories found. Click &quot;New Repo&quot; to create one.
           </div>
         )}
+
+        {repos.length > 0 && selectedRepo && (
+          <button
+            type="button"
+            disabled={isLoadingRepo}
+            onClick={onLoadRepoFiles}
+            className="w-full mt-2 py-1 px-2 rounded-lg bg-[#a8c7fa]/10 hover:bg-[#a8c7fa]/20 text-[#a8c7fa] border border-[#a8c7fa]/30 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {isLoadingRepo ? (
+              <>
+                <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                <span>{t.loadingRepo}</span>
+              </>
+            ) : (
+              <>
+                <M3Icon name="cloud_download" size={14} />
+                <span>{t.loadRepoFiles} ({selectedRepo.name})</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Real Branch Switcher & Creator */}
@@ -429,6 +459,12 @@ export function GitHubPanel({
               </div>
             ) : (
               <>
+                {isCleanZipImport && (
+                  <div className="p-2.5 rounded-lg bg-[#00468b]/30 border border-[#a8c7fa]/40 text-[#d6e3ff] text-[11px] flex items-start gap-2">
+                    <M3Icon name="auto_delete" size={16} className="text-[#a8c7fa] shrink-0 mt-0.5" />
+                    <span>{t.cleanOverwriteNotice}</span>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <div className="text-[11px] font-semibold uppercase text-[#8e9199] mb-1">
                     Staged Files ({diffs.length})

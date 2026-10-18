@@ -380,12 +380,89 @@ export class GitHubApiClient {
     });
   }
 
+  async fetchRepoTree(
+    owner: string,
+    repo: string,
+    branch: string
+  ): Promise<Record<string, VFileRef>> {
+    const files: Record<string, VFileRef> = {};
+    try {
+      const treeData: any = await this.request(
+        `/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`
+      );
+
+      if (!treeData.tree || !Array.isArray(treeData.tree)) {
+        return files;
+      }
+
+      // Filter blobs (files, not directories)
+      const blobs = treeData.tree.filter((item: any) => item.type === 'blob');
+
+      // Fetch file contents in parallel batches of 8 to avoid rate limit spikes
+      const batchSize = 8;
+      for (let i = 0; i < blobs.length; i += batchSize) {
+        const batch = blobs.slice(i, i + batchSize);
+        await Promise.all(
+          batch.map(async (blobItem: any) => {
+            try {
+              const blobRes: any = await this.request(
+                `/repos/${owner}/${repo}/git/blobs/${blobItem.sha}`
+              );
+
+              const path = blobItem.path;
+              const name = path.split('/').pop() || path;
+              const isBinary =
+                blobItem.path.match(/\.(png|jpg|jpeg|gif|webp|ico|bmp|woff|woff2|ttf|mp3|pdf|zip)$/i) !== null;
+
+              let content = '';
+              if (blobRes.encoding === 'base64') {
+                if (isBinary) {
+                  const ext = name.split('.').pop() || 'png';
+                  content = `data:image/${ext};base64,${blobRes.content.replace(/\s/g, '')}`;
+                } else {
+                  // Decode base64 to text (handles UTF-8)
+                  try {
+                    content = decodeURIComponent(
+                      atob(blobRes.content.replace(/\s/g, ''))
+                        .split('')
+                        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                        .join('')
+                    );
+                  } catch {
+                    content = atob(blobRes.content.replace(/\s/g, ''));
+                  }
+                }
+              } else {
+                content = blobRes.content || '';
+              }
+
+              files[path] = {
+                path,
+                name,
+                content,
+                isBinary,
+                size: blobRes.size || content.length,
+                lastModified: Date.now(),
+              };
+            } catch (blobErr) {
+              console.warn(`Failed to fetch blob ${blobItem.path}:`, blobErr);
+            }
+          })
+        );
+      }
+    } catch (err: any) {
+      console.warn(`Could not load tree for ${owner}/${repo}@${branch}:`, err.message);
+    }
+    return files;
+  }
+
   async commitAndPushFiles(
     owner: string,
     repo: string,
     branch: string,
     message: string,
-    changedFiles: Record<string, VFileRef>
+    changedFiles: Record<string, VFileRef>,
+    cleanOverwrite = false
   ): Promise<string> {
     // 1. Get latest commit SHA on branch
     const refData: any = await this.request(`/repos/${owner}/${repo}/git/ref/heads/${branch}`);
@@ -420,13 +497,16 @@ export class GitHubApiClient {
       }
     }
 
-    // 4. Create new tree
+    // 4. Create new tree.
+    // When cleanOverwrite is true, omit base_tree so that previous files in the repo are completely replaced!
+    const treePayload: any = { tree: treeItems };
+    if (!cleanOverwrite) {
+      treePayload.base_tree = baseTreeSha;
+    }
+
     const newTree: any = await this.request(`/repos/${owner}/${repo}/git/trees`, {
       method: 'POST',
-      body: JSON.stringify({
-        base_tree: baseTreeSha,
-        tree: treeItems,
-      }),
+      body: JSON.stringify(treePayload),
     });
 
     // 5. Create commit
@@ -444,7 +524,7 @@ export class GitHubApiClient {
       method: 'PATCH',
       body: JSON.stringify({
         sha: newCommit.sha,
-        force: false,
+        force: cleanOverwrite,
       }),
     });
 
