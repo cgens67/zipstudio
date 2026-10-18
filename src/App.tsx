@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   VFile,
   buildFileTree,
@@ -65,6 +65,48 @@ export default function App() {
 
   // Bottom terminal toggle (desktop)
   const [showTerminal, setShowTerminal] = useState(true);
+
+  // Mouse Resizable Layout State (Sidebar, Splitter Code/Preview, Bottom Terminal)
+  const [sidebarWidth, setSidebarWidth] = useState<number>(270);
+  const [terminalHeight, setTerminalHeight] = useState<number>(230);
+  const [splitRatio, setSplitRatio] = useState<number>(50); // % width of code editor in split view
+  const [terminalMaximized, setTerminalMaximized] = useState<boolean>(false);
+  const [isDragging, setIsDragging] = useState<'sidebar' | 'terminal' | 'splitter' | null>(null);
+  const centralWorkspaceRef = useRef<HTMLDivElement>(null);
+
+  // Global mouse move and mouse up listeners for smooth resizing with mouse
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging === 'sidebar') {
+        // Activity bar is 48px wide
+        const newWidth = Math.max(180, Math.min(600, e.clientX - 48));
+        setSidebarWidth(newWidth);
+      } else if (isDragging === 'terminal') {
+        const newHeight = Math.max(100, Math.min(window.innerHeight - 120, window.innerHeight - e.clientY));
+        setTerminalHeight(newHeight);
+      } else if (isDragging === 'splitter') {
+        if (centralWorkspaceRef.current) {
+          const rect = centralWorkspaceRef.current.getBoundingClientRect();
+          const offsetX = e.clientX - rect.left;
+          const newRatio = Math.max(15, Math.min(85, (offsetX / rect.width) * 100));
+          setSplitRatio(newRatio);
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
 
   // File System State
   const defaultTemplate = STARTER_TEMPLATES[0];
@@ -508,7 +550,7 @@ export default function App() {
       const count = Object.keys(extracted).length;
 
       if (count === 0) {
-        alert('The uploaded archive appears to be empty or contains no supported files.');
+        alert(t.emptyArchiveAlert);
         return;
       }
 
@@ -541,7 +583,7 @@ export default function App() {
       );
     } catch (err: any) {
       console.error('Extraction error:', err);
-      alert(`Failed to extract .zip file: ${err.message}`);
+      alert(`${t.extractFailed}: ${err.message}`);
     }
   };
 
@@ -560,7 +602,7 @@ export default function App() {
       URL.revokeObjectURL(url);
       addGitLog(`Exported .zip archive: ${a.download}`);
     } catch (err: any) {
-      alert(`Failed to export archive: ${err.message}`);
+      alert(`${t.exportFailed}: ${err.message}`);
     }
   };
 
@@ -601,7 +643,7 @@ export default function App() {
   const handleCreateFile = (path: string) => {
     const normalized = normalizePath(path);
     if (files[normalized]) {
-      alert('A file with this path already exists.');
+      alert(t.fileAlreadyExists);
       return;
     }
     const newFile: VFile = {
@@ -671,7 +713,7 @@ export default function App() {
       const pattern = isRegex ? searchQuery : searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       regex = new RegExp(pattern, caseSensitive ? 'g' : 'gi');
     } catch {
-      alert('Invalid regular expression.');
+      alert(t.invalidRegex);
       return;
     }
 
@@ -764,6 +806,7 @@ export default function App() {
               <Sidebar
                 tree={tree}
                 activeFilePath={activeFilePath}
+                t={t}
                 onSelectFile={handleSelectFile}
                 onUploadZip={handleUploadZip}
                 onExportZip={handleExportZip}
@@ -783,6 +826,7 @@ export default function App() {
                 openTabs={openTabs}
                 activeFilePath={activeFilePath}
                 files={files}
+                t={t}
                 onSelectTab={setActiveFilePath}
                 onCloseTab={handleCloseTab}
                 onUpdateContent={handleUpdateContent}
@@ -796,6 +840,7 @@ export default function App() {
             <div className="flex-1 w-full h-full overflow-hidden flex flex-col">
               <Preview
                 files={files}
+                t={t}
                 onConsoleMessage={handlePreviewConsole}
               />
             </div>
@@ -805,6 +850,7 @@ export default function App() {
             <div className="flex-1 w-full h-full overflow-hidden flex flex-col">
               <SearchPanel
                 files={files}
+                t={t}
                 onSelectResult={handleSelectSearchResult}
                 onReplaceAll={handleReplaceAllInCode}
                 onClose={() => setMobileTab('editor')}
@@ -856,6 +902,7 @@ export default function App() {
                 onClearLogs={() => setLogs([])}
                 onClearGitLogs={() => setGitLogs([])}
                 onClose={() => setMobileTab('editor')}
+                t={t}
               />
             </div>
           )}
@@ -962,7 +1009,7 @@ export default function App() {
             className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors ${
               viewMode === 'code' ? 'bg-[#a8c7fa] text-[#003062] font-semibold' : 'text-[#8e9199] hover:text-white'
             }`}
-            title="Editor View Only"
+            title={t.editorViewOnly}
           >
             <M3Icon name="code" size={14} />
             <span className="hidden md:inline">{t.editor}</span>
@@ -972,17 +1019,17 @@ export default function App() {
             className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors ${
               viewMode === 'split' ? 'bg-[#a8c7fa] text-[#003062] font-semibold' : 'text-[#8e9199] hover:text-white'
             }`}
-            title="Split Code & Live Preview"
+            title={t.splitView}
           >
             <M3Icon name="vertical_split" size={14} />
-            <span className="hidden md:inline">Split View</span>
+            <span className="hidden md:inline">{t.splitView}</span>
           </button>
           <button
             onClick={() => setViewMode('preview')}
             className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors ${
               viewMode === 'preview' ? 'bg-[#a8c7fa] text-[#003062] font-semibold' : 'text-[#8e9199] hover:text-white'
             }`}
-            title="Live Preview Only"
+            title={t.previewViewOnly}
           >
             <M3Icon name="visibility" size={14} />
             <span className="hidden md:inline">{t.preview}</span>
@@ -996,7 +1043,7 @@ export default function App() {
             value={currentLang}
             onChange={(e) => handleLanguageChange(e.target.value as SupportedLanguage)}
             className="bg-[#121316] border border-[#43474e]/50 rounded-lg px-2 py-1 text-xs text-[#a8c7fa] focus:outline-none"
-            title="Language / 语言 / Bahasa"
+            title={t.language}
           >
             <option value="en">English</option>
             <option value="zh-CN">简体中文</option>
@@ -1007,7 +1054,7 @@ export default function App() {
           <button
             onClick={() => setActivePanel('git')}
             className="px-2.5 py-1 rounded-lg bg-[#00468b]/30 hover:bg-[#00468b]/50 border border-[#a8c7fa]/40 text-[#a8c7fa] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            title="Commit and push changes directly without using the terminal"
+            title={t.commitDirectTooltip}
           >
             <M3Icon name="cloud_upload" size={16} />
             <span>
@@ -1022,7 +1069,7 @@ export default function App() {
                 ? 'bg-[#2b2d30] border-[#a8c7fa]/40 text-[#a8c7fa]'
                 : 'bg-transparent border-[#43474e]/40 text-[#8e9199] hover:text-white'
             }`}
-            title="Toggle Bottom Terminal"
+            title={t.toggleTerminal}
           >
             <M3Icon name="terminal" size={16} />
             <span className="hidden sm:inline">{t.terminal}</span>
@@ -1031,7 +1078,7 @@ export default function App() {
           <button
             onClick={handleExportZip}
             className="px-2.5 py-1 rounded-lg bg-[#a8c7fa] hover:bg-[#c2e7ff] text-[#003062] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            title="Download current workspace as .zip"
+            title={t.downloadZipTooltip}
           >
             <M3Icon name="download" size={16} />
             <span className="hidden sm:inline">{t.exportZip}</span>
@@ -1042,7 +1089,7 @@ export default function App() {
             <div
               onClick={() => setActivePanel('git')}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#0f5223]/30 border border-[#308745] text-[#b4f3b7] text-xs font-medium cursor-pointer"
-              title="GitHub Connected (Real)"
+              title={`${t.connectedAs} @${githubUser?.login}`}
             >
               <M3Icon name="check_circle" size={14} />
               <span className="hidden md:inline">@{githubUser?.login}</span>
@@ -1051,7 +1098,7 @@ export default function App() {
             <button
               onClick={() => setActivePanel('git')}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#690005]/30 border border-[#ff8585]/40 text-[#ffdad6] text-xs font-medium hover:bg-[#690005]/50 transition-colors cursor-pointer"
-              title="Connect GitHub"
+              title={t.connectGitHub}
             >
               <M3Icon name="lock" size={14} />
               <span className="hidden md:inline">{t.connectGitHub}</span>
@@ -1059,6 +1106,15 @@ export default function App() {
           )}
         </div>
       </header>
+
+      {/* Global Mouse Drag Overlay to prevent iframe event interception */}
+      {isDragging && (
+        <div
+          className={`fixed inset-0 z-50 select-none bg-transparent ${
+            isDragging === 'terminal' ? 'cursor-row-resize' : 'cursor-col-resize'
+          }`}
+        />
+      )}
 
       {/* Main Layout Area */}
       <div className="flex-1 flex overflow-hidden">
@@ -1112,93 +1168,146 @@ export default function App() {
           </button>
         </nav>
 
-        {/* Collapsible Sidebar Content Area */}
-        {activePanel === 'explorer' && (
-          <Sidebar
-            tree={tree}
-            activeFilePath={activeFilePath}
-            onSelectFile={handleSelectFile}
-            onUploadZip={handleUploadZip}
-            onExportZip={handleExportZip}
-            onCreateFile={handleCreateFile}
-            onCreateFolder={handleCreateFolder}
-            onDeleteNode={handleDeleteNode}
-            onRenameNode={() => {}}
-            onLoadTemplate={handleLoadTemplate}
-            onExplainCode={() => {}}
-          />
+        {/* Collapsible & Mouse Resizable Sidebar Content Area */}
+        {activePanel && (
+          <div
+            style={{ width: `${sidebarWidth}px` }}
+            className="h-full relative shrink-0 flex flex-col overflow-hidden select-none bg-[#18191c]"
+          >
+            {activePanel === 'explorer' && (
+              <Sidebar
+                tree={tree}
+                activeFilePath={activeFilePath}
+                t={t}
+                onSelectFile={handleSelectFile}
+                onUploadZip={handleUploadZip}
+                onExportZip={handleExportZip}
+                onCreateFile={handleCreateFile}
+                onCreateFolder={handleCreateFolder}
+                onDeleteNode={handleDeleteNode}
+                onRenameNode={() => {}}
+                onLoadTemplate={handleLoadTemplate}
+                onExplainCode={() => {}}
+              />
+            )}
+
+            {activePanel === 'search' && (
+              <SearchPanel
+                files={files}
+                t={t}
+                onSelectResult={handleSelectSearchResult}
+                onReplaceAll={handleReplaceAllInCode}
+                onClose={() => setActivePanel(null)}
+              />
+            )}
+
+            {activePanel === 'git' && (
+              <GitHubPanel
+                isAuthenticated={isAuthenticated}
+                user={githubUser}
+                repos={repos}
+                selectedRepo={selectedRepo}
+                branches={branches}
+                activeBranch={activeBranch}
+                diffs={diffs}
+                commits={commits}
+                pullRequests={pullRequests}
+                oauthConfigured={oauthConfigured}
+                callbackUrl={callbackUrl}
+                t={t}
+                isCleanZipImport={isCleanZipImport}
+                isLoadingRepo={isLoadingRepo}
+                onConnectOAuth={handleConnectOAuth}
+                onConnectToken={handleConnectToken}
+                onDisconnect={handleDisconnect}
+                onSelectRepo={handleSelectRepo}
+                onLoadRepoFiles={handleLoadRepoFilesExplicit}
+                onCreateRepo={handleCreateRepo}
+                onSwitchBranch={handleSwitchBranch}
+                onCreateBranch={handleCreateBranch}
+                onCommitAndPush={handleCommitAndPush}
+                onCreatePullRequest={handleCreatePullRequest}
+                onSubmitPRReview={handleSubmitPRReview}
+              />
+            )}
+
+            {/* Mouse Drag Resize Handle for Sidebar */}
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsDragging('sidebar');
+              }}
+              onDoubleClick={() => setSidebarWidth(270)}
+              title={t.resizeSidebar}
+              className="absolute top-0 -right-1 bottom-0 w-2.5 hover:bg-[#a8c7fa]/50 cursor-col-resize z-20 group transition-colors flex items-center justify-center"
+            >
+              <div className="w-0.5 h-8 rounded-full bg-[#43474e]/60 group-hover:bg-[#a8c7fa] group-active:bg-[#a8c7fa] transition-colors" />
+            </div>
+          </div>
         )}
 
-        {activePanel === 'search' && (
-          <SearchPanel
-            files={files}
-            onSelectResult={handleSelectSearchResult}
-            onReplaceAll={handleReplaceAllInCode}
-            onClose={() => setActivePanel(null)}
-          />
-        )}
-
-        {activePanel === 'git' && (
-          <GitHubPanel
-            isAuthenticated={isAuthenticated}
-            user={githubUser}
-            repos={repos}
-            selectedRepo={selectedRepo}
-            branches={branches}
-            activeBranch={activeBranch}
-            diffs={diffs}
-            commits={commits}
-            pullRequests={pullRequests}
-            oauthConfigured={oauthConfigured}
-            callbackUrl={callbackUrl}
-            t={t}
-            isCleanZipImport={isCleanZipImport}
-            isLoadingRepo={isLoadingRepo}
-            onConnectOAuth={handleConnectOAuth}
-            onConnectToken={handleConnectToken}
-            onDisconnect={handleDisconnect}
-            onSelectRepo={handleSelectRepo}
-            onLoadRepoFiles={handleLoadRepoFilesExplicit}
-            onCreateRepo={handleCreateRepo}
-            onSwitchBranch={handleSwitchBranch}
-            onCreateBranch={handleCreateBranch}
-            onCommitAndPush={handleCommitAndPush}
-            onCreatePullRequest={handleCreatePullRequest}
-            onSubmitPRReview={handleSubmitPRReview}
-          />
-        )}
-
-        {/* Central Workspace (Editor and Preview) */}
+        {/* Central Workspace (Editor, Resizer, Preview, and Terminal) */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 flex overflow-hidden">
-            {/* Editor Pane */}
+          <div ref={centralWorkspaceRef} className="flex-1 flex overflow-hidden relative">
+            {/* Editor Pane (Code Viewer) */}
             {(viewMode === 'code' || viewMode === 'split') && (
-              <div className="flex-1 h-full overflow-hidden flex flex-col">
+              <div
+                style={{
+                  width: viewMode === 'split' ? `${splitRatio}%` : '100%',
+                }}
+                className="h-full overflow-hidden flex flex-col"
+              >
                 <Editor
                   openTabs={openTabs}
                   activeFilePath={activeFilePath}
                   files={files}
+                  t={t}
                   onSelectTab={setActiveFilePath}
                   onCloseTab={handleCloseTab}
                   onUpdateContent={handleUpdateContent}
                   onSaveFile={() => addGitLog(`Saved file: ${activeFilePath}`)}
                   targetLine={targetSearchLine}
+                  isMaximized={viewMode === 'code'}
+                  onMaximize={() => setViewMode(viewMode === 'code' ? 'split' : 'code')}
                 />
               </div>
             )}
 
-            {/* Live Preview Pane */}
+            {/* Vertical Splitter Resizer Handle between Editor and Preview */}
+            {viewMode === 'split' && (
+              <div
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsDragging('splitter');
+                }}
+                onDoubleClick={() => setSplitRatio(50)}
+                title={`${t.resizeSplitter} (${t.resetSplit})`}
+                className="w-2.5 hover:w-3 -mx-1 bg-[#1e1f22] border-x border-[#43474e]/30 hover:bg-[#a8c7fa]/50 active:bg-[#a8c7fa] cursor-col-resize z-20 flex items-center justify-center group transition-colors"
+              >
+                <div className="w-0.5 h-10 rounded-full bg-[#43474e] group-hover:bg-[#a8c7fa] group-active:bg-[#a8c7fa] transition-colors" />
+              </div>
+            )}
+
+            {/* Live Preview Pane (HTML Viewer) */}
             {(viewMode === 'preview' || viewMode === 'split') && (
-              <div className="flex-1 h-full overflow-hidden flex flex-col">
+              <div
+                style={{
+                  width: viewMode === 'split' ? `${100 - splitRatio}%` : '100%',
+                }}
+                className="h-full overflow-hidden flex flex-col"
+              >
                 <Preview
                   files={files}
+                  t={t}
                   onConsoleMessage={handlePreviewConsole}
+                  isMaximized={viewMode === 'preview'}
+                  onMaximize={() => setViewMode(viewMode === 'preview' ? 'split' : 'preview')}
                 />
               </div>
             )}
           </div>
 
-          {/* Bottom VS Code Terminal Dock */}
+          {/* Bottom VS Code Terminal Dock with Mouse Drag Resize & Controls */}
           {showTerminal && (
             <Terminal
               files={files}
@@ -1210,6 +1319,15 @@ export default function App() {
               onClearLogs={() => setLogs([])}
               onClearGitLogs={() => setGitLogs([])}
               onClose={() => setShowTerminal(false)}
+              t={t}
+              height={terminalHeight}
+              onResizeStart={(e) => {
+                e.preventDefault();
+                setIsDragging('terminal');
+              }}
+              isMaximized={terminalMaximized}
+              onToggleMaximize={() => setTerminalMaximized(!terminalMaximized)}
+              onMinimize={() => setShowTerminal(false)}
             />
           )}
         </div>

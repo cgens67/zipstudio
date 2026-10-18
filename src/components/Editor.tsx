@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { VFile, getFileExtension, getLanguageFromExt } from '../utils/fileSystem';
 import { M3Icon, M3IconButton, M3Badge } from './M3Components';
 import { explainCodeInPlainEnglish, CodeBlockExplanation } from '../utils/codeExplainer';
+import { Translations, TRANSLATIONS } from '../utils/i18n';
 
 interface EditorProps {
   openTabs: string[];
@@ -17,6 +18,9 @@ interface EditorProps {
   onUpdateContent: (path: string, newContent: string) => void;
   onSaveFile?: (path: string) => void;
   targetLine?: number;
+  t?: Translations;
+  onMaximize?: () => void;
+  isMaximized?: boolean;
 }
 
 export function Editor({
@@ -28,14 +32,23 @@ export function Editor({
   onUpdateContent,
   onSaveFile,
   targetLine,
+  t = TRANSLATIONS.en,
+  onMaximize,
+  isMaximized,
 }: EditorProps) {
   const activeFile = files[activeFilePath];
   const [content, setContent] = useState(activeFile?.content || '');
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
   const [plainEnglishMode, setPlainEnglishMode] = useState(false);
   const [fontSize, setFontSize] = useState(13);
-  const [wordWrap, setWordWrap] = useState(true);
+  const [wordWrap, setWordWrap] = useState(false);
+  const [scrollTop, setScrollTop] = useState(0);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const gutterRef = useRef<HTMLDivElement>(null);
+  const gutterInnerRef = useRef<HTMLDivElement>(null);
+
+  const lineHeight = Math.round(fontSize * 1.55);
 
   useEffect(() => {
     if (activeFile) {
@@ -43,6 +56,7 @@ export function Editor({
     }
   }, [activeFilePath, activeFile]);
 
+  // Synchronize gutter scroll when jumping to targetLine
   useEffect(() => {
     if (targetLine && textareaRef.current && activeFile) {
       const lines = activeFile.content.split('\n');
@@ -52,11 +66,15 @@ export function Editor({
       }
       textareaRef.current.focus();
       textareaRef.current.setSelectionRange(charPos, charPos + (lines[targetLine - 1]?.length || 0));
-      const lineHeight = fontSize * 1.5;
-      textareaRef.current.scrollTop = Math.max(0, (targetLine - 5) * lineHeight);
+      const scrollPos = Math.max(0, (targetLine - 4) * lineHeight);
+      textareaRef.current.scrollTop = scrollPos;
+      setScrollTop(scrollPos);
+      if (gutterInnerRef.current) {
+        gutterInnerRef.current.style.transform = `translateY(-${scrollPos}px)`;
+      }
       setCursorPos({ line: targetLine, col: 1 });
     }
-  }, [targetLine, activeFilePath, activeFile, fontSize]);
+  }, [targetLine, activeFilePath, activeFile, lineHeight]);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
@@ -77,29 +95,47 @@ export function Editor({
     });
   };
 
+  // Synchronize line gutter scrolling in real time with textarea scroll using hardware accelerated transform
+  const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    const st = e.currentTarget.scrollTop;
+    setScrollTop(st);
+    if (gutterInnerRef.current) {
+      gutterInnerRef.current.style.transform = `translateY(-${st}px)`;
+    }
+  };
+
+  const jumpToLineIndex = (index: number) => {
+    if (!textareaRef.current) return;
+    const lines = content.split('\n');
+    let charPos = 0;
+    for (let j = 0; j < index; j++) {
+      charPos += lines[j].length + 1;
+    }
+    textareaRef.current.focus();
+    textareaRef.current.setSelectionRange(charPos, charPos + (lines[index]?.length || 0));
+    setCursorPos({ line: index + 1, col: 1 });
+  };
+
   const lineCount = content.split('\n').length;
   const ext = activeFile ? getFileExtension(activeFile.name) : '';
   const lang = getLanguageFromExt(ext);
-  const explanation: CodeBlockExplanation | null = activeFile && !activeFile.isBinary
-    ? explainCodeInPlainEnglish(activeFile.name, content)
-    : null;
+  const explanation: CodeBlockExplanation | null =
+    activeFile && !activeFile.isBinary ? explainCodeInPlainEnglish(activeFile.name, content) : null;
 
   if (!activeFile) {
     return (
       <div className="flex-1 h-full bg-[#1e1f22] flex flex-col items-center justify-center text-[#8e9199] p-8">
         <M3Icon name="code" size={56} className="text-[#a8c7fa]/30 mb-4" />
-        <h3 className="text-base font-medium text-[#e2e2e6] mb-1">No File Open</h3>
-        <p className="text-xs max-w-sm text-center">
-          Select a file from the explorer on the left, import a .zip project, or pick a starter template.
-        </p>
+        <h3 className="text-base font-medium text-[#e2e2e6] mb-1">{t.noFileOpen}</h3>
+        <p className="text-xs max-w-sm text-center">{t.noFileOpenDesc}</p>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 h-full bg-[#1e1f22] flex flex-col overflow-hidden">
+    <div className="flex-1 h-full bg-[#1e1f22] flex flex-col overflow-hidden select-none">
       {/* Tabs Bar */}
-      <div className="h-9 bg-[#18191c] border-b border-[#43474e]/40 flex items-center overflow-x-auto no-scrollbar">
+      <div className="h-9 bg-[#18191c] border-b border-[#43474e]/40 flex items-center overflow-x-auto no-scrollbar shrink-0">
         {openTabs.map((path) => {
           const file = files[path];
           if (!file) return null;
@@ -108,7 +144,7 @@ export function Editor({
             <div
               key={path}
               onClick={() => onSelectTab(path)}
-              className={`h-full px-3 flex items-center gap-2 text-xs border-r border-[#43474e]/30 cursor-pointer select-none group transition-colors ${
+              className={`h-full px-3 flex items-center gap-2 text-xs border-r border-[#43474e]/30 cursor-pointer select-none group transition-colors shrink-0 ${
                 isActive
                   ? 'bg-[#1e1f22] text-[#a8c7fa] border-t-2 border-t-[#a8c7fa] font-medium'
                   : 'text-[#c4c6d0] hover:bg-white/5 hover:text-white'
@@ -119,7 +155,7 @@ export function Editor({
                 size={14}
                 className={isActive ? 'text-[#a8c7fa]' : 'text-[#8e9199]'}
               />
-              <span className="truncate max-w-[120px]">{file.name}</span>
+              <span className="truncate max-w-[140px] font-mono text-[11px]">{file.name}</span>
               <button
                 type="button"
                 onClick={(e) => {
@@ -127,6 +163,7 @@ export function Editor({
                   onCloseTab(path);
                 }}
                 className="w-4 h-4 rounded flex items-center justify-center opacity-60 hover:opacity-100 hover:bg-white/10 text-xs"
+                title={t.close}
               >
                 ✕
               </button>
@@ -136,14 +173,18 @@ export function Editor({
       </div>
 
       {/* Editor Controls Bar */}
-      <div className="h-9 px-3 bg-[#1e1f22] border-b border-[#43474e]/30 flex items-center justify-between text-xs">
-        <div className="flex items-center gap-2">
-          <span className="text-[#a8c7fa] font-mono font-medium">{activeFile.path}</span>
+      <div className="h-9 px-3 bg-[#1e1f22] border-b border-[#43474e]/30 flex items-center justify-between text-xs shrink-0">
+        <div className="flex items-center gap-2 truncate">
+          <span className="text-[#a8c7fa] font-mono font-medium truncate max-w-[200px]">
+            {activeFile.path}
+          </span>
           <M3Badge variant="secondary">{lang}</M3Badge>
-          <span className="text-[#8e9199] text-[11px]">{lineCount} lines</span>
+          <span className="text-[#8e9199] text-[11px] shrink-0 font-mono">
+            {lineCount} {t.linesLabel}
+          </span>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           {/* Plain English Mode Toggle */}
           <button
             onClick={() => setPlainEnglishMode(!plainEnglishMode)}
@@ -152,25 +193,24 @@ export function Editor({
                 ? 'bg-[#a8c7fa] text-[#003062] font-semibold'
                 : 'bg-[#2b2d30] text-[#c4c6d0] hover:text-white hover:bg-[#383a3e]'
             }`}
-            title="Translate code into plain English for non-coders"
+            title={t.plainEnglishDesc}
           >
             <M3Icon name="translate" size={14} />
-            <span>Plain English</span>
+            <span className="hidden sm:inline">{t.plainEnglish}</span>
           </button>
-
 
           {/* Font Size controls */}
           <M3IconButton
             size="sm"
             icon="remove"
-            label="Decrease Font"
+            label={t.decreaseFont}
             onClick={() => setFontSize(Math.max(11, fontSize - 1))}
           />
           <span className="text-[11px] text-[#8e9199] w-5 text-center font-mono">{fontSize}</span>
           <M3IconButton
             size="sm"
             icon="add"
-            label="Increase Font"
+            label={t.increaseFont}
             onClick={() => setFontSize(Math.min(22, fontSize + 1))}
           />
 
@@ -178,21 +218,31 @@ export function Editor({
           <M3IconButton
             size="sm"
             icon={wordWrap ? 'wrap_text' : 'format_align_left'}
-            label={wordWrap ? 'Disable Word Wrap' : 'Enable Word Wrap'}
+            label={t.toggleWordWrap}
             onClick={() => setWordWrap(!wordWrap)}
           />
+
+          {/* Maximize / Restore Editor Button */}
+          {onMaximize && (
+            <M3IconButton
+              size="sm"
+              icon={isMaximized ? 'collapse_content' : 'fullscreen'}
+              label={isMaximized ? t.restore : t.maximizeEditor}
+              onClick={onMaximize}
+            />
+          )}
         </div>
       </div>
 
-      {/* Plain English Explanation Banner (Accessible for people who can't understand code) */}
+      {/* Plain English Explanation Banner */}
       {plainEnglishMode && explanation && (
-        <div className="bg-[#18191c] border-b border-[#a8c7fa]/30 p-3.5 animate-fadeIn">
+        <div className="bg-[#18191c] border-b border-[#a8c7fa]/30 p-3.5 animate-fadeIn shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <span className="px-2 py-0.5 rounded-full bg-[#00468b] text-[#d6e3ff] text-[11px] font-semibold flex items-center gap-1">
                   <M3Icon name="psychology" size={14} />
-                  Plain English Reader
+                  {t.plainEnglish}
                 </span>
                 <h4 className="text-xs font-bold text-white">{explanation.title}</h4>
               </div>
@@ -212,7 +262,7 @@ export function Editor({
             <M3IconButton
               size="sm"
               icon="close"
-              label="Close Explainer"
+              label={t.close}
               onClick={() => setPlainEnglishMode(false)}
             />
           </div>
@@ -235,29 +285,63 @@ export function Editor({
               <div className="text-center text-[#c4c6d0]">
                 <M3Icon name="inventory_2" size={48} className="mx-auto mb-2 text-[#a8c7fa]" />
                 <p className="text-sm font-semibold">{activeFile.name}</p>
-                <p className="text-xs text-[#8e9199] mt-1">Binary Asset ({Math.round(activeFile.size / 1024)} KB)</p>
+                <p className="text-xs text-[#8e9199] mt-1 font-mono">
+                  {t.binaryAsset} ({Math.round(activeFile.size / 1024)} KB)
+                </p>
               </div>
             )}
           </div>
         ) : (
           <div className="flex-1 flex overflow-hidden relative bg-[#121316]">
-            {/* Line Numbers Gutter */}
+            {/* Synchronized Line Numbers Gutter */}
             <div
-              className="w-12 bg-[#18191c] border-r border-[#43474e]/30 select-none py-3 text-right pr-2 text-[#6e7179] font-mono overflow-hidden shrink-0"
-              style={{ fontSize: `${fontSize}px`, lineHeight: '1.5' }}
+              ref={gutterRef}
+              title={t.jumpToLine}
+              onWheel={(e) => {
+                if (textareaRef.current) {
+                  textareaRef.current.scrollTop += e.deltaY;
+                }
+              }}
+              className="w-12 bg-[#18191c] border-r border-[#43474e]/30 select-none overflow-hidden shrink-0 cursor-default"
             >
-              {Array.from({ length: lineCount }).map((_, i) => (
-                <div key={i}>{i + 1}</div>
-              ))}
+              <div
+                ref={gutterInnerRef}
+                className="py-3 text-right pr-2 font-mono will-change-transform"
+                style={{
+                  transform: `translateY(-${scrollTop}px)`,
+                  fontSize: `${fontSize}px`,
+                  lineHeight: `${lineHeight}px`,
+                }}
+              >
+                {Array.from({ length: lineCount }).map((_, i) => {
+                  const lineNum = i + 1;
+                  const isCurrentLine = lineNum === cursorPos.line;
+                  return (
+                    <div
+                      key={lineNum}
+                      onClick={() => jumpToLineIndex(i)}
+                      style={{ height: `${lineHeight}px`, lineHeight: `${lineHeight}px` }}
+                      className={`transition-colors cursor-pointer rounded-xs px-1 hover:text-white hover:bg-white/10 ${
+                        isCurrentLine
+                          ? 'text-[#a8c7fa] font-bold bg-[#a8c7fa]/20'
+                          : 'text-[#6e7179]'
+                      }`}
+                    >
+                      {lineNum}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Editable Text Area */}
+            {/* Editable Text Area with real-time synchronized scroll */}
             <textarea
               ref={textareaRef}
               value={content}
               onChange={handleChange}
               onKeyUp={handleSelection}
               onClick={handleSelection}
+              onScroll={handleScroll}
               onKeyDown={(e) => {
                 if (e.key === 'Tab') {
                   e.preventDefault();
@@ -281,10 +365,12 @@ export function Editor({
               }}
               spellCheck={false}
               wrap={wordWrap ? 'on' : 'off'}
-              className="flex-1 bg-transparent text-[#e2e2e6] font-mono p-3 resize-none focus:outline-none overflow-auto border-none selection:bg-[#a8c7fa]/25"
+              className={`flex-1 bg-transparent text-[#e2e2e6] font-mono py-3 px-3 resize-none focus:outline-none overflow-auto border-none selection:bg-[#a8c7fa]/25 ${
+                wordWrap ? 'whitespace-pre-wrap' : 'whitespace-pre'
+              }`}
               style={{
                 fontSize: `${fontSize}px`,
-                lineHeight: '1.5',
+                lineHeight: `${lineHeight}px`,
                 tabSize: 2,
               }}
             />
@@ -293,16 +379,18 @@ export function Editor({
       </div>
 
       {/* Editor Status Bar */}
-      <div className="h-6 px-3 bg-[#18191c] border-t border-[#43474e]/30 flex items-center justify-between text-[11px] text-[#8e9199]">
+      <div className="h-6 px-3 bg-[#18191c] border-t border-[#43474e]/30 flex items-center justify-between text-[11px] text-[#8e9199] shrink-0 font-mono">
         <div className="flex items-center gap-3">
-          <span>Ln {cursorPos.line}, Col {cursorPos.col}</span>
-          <span>Spaces: 2</span>
+          <span className="text-[#a8c7fa]">
+            {t.linesLabel} {cursorPos.line}, {t.spaces} {cursorPos.col}
+          </span>
+          <span>{t.spaces}: 2</span>
           <span>UTF-8</span>
         </div>
         <div className="flex items-center gap-3">
           <span>{lang.toUpperCase()}</span>
           <span className="flex items-center gap-1 text-[#b4f3b7]">
-            <M3Icon name="cloud_done" size={12} /> Ready
+            <M3Icon name="cloud_done" size={12} /> {t.ready}
           </span>
         </div>
       </div>

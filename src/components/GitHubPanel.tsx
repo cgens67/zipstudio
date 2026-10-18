@@ -193,11 +193,11 @@ export function GitHubPanel({
                 rel="noreferrer"
                 className="text-[11px] text-[#a8c7fa] hover:underline"
               >
-                Generate Token ↗
+                {t.generateTokenLink}
               </a>
             </div>
             <p className="text-[11px] text-[#8e9199]">
-              Create a classic token with <code className="bg-[#121316] px-1 py-0.5 rounded text-[#a8c7fa]">repo</code> scope for full read/write access.
+              {t.createTokenNotice}
             </p>
             <input
               type="password"
@@ -219,7 +219,7 @@ export function GitHubPanel({
               loading={isConnectingToken}
               disabled={!patInput.trim()}
             >
-              Connect with GitHub Token
+              {t.connectWithToken}
             </M3Button>
           </form>
 
@@ -232,7 +232,7 @@ export function GitHubPanel({
               className="w-full mb-2"
               onClick={onConnectOAuth}
             >
-              Sign In via GitHub OAuth
+              {t.oauthSignIn}
             </M3Button>
 
             <button
@@ -240,14 +240,14 @@ export function GitHubPanel({
               onClick={() => setShowOAuthInfo(!showOAuthInfo)}
               className="text-[11px] text-[#8e9199] hover:text-[#a8c7fa] underline cursor-pointer"
             >
-              {showOAuthInfo ? 'Hide OAuth setup info' : 'View OAuth setup configuration'}
+              {showOAuthInfo ? t.hideOAuthInfo : t.viewOAuthInfo}
             </button>
 
             {showOAuthInfo && (
               <div className="mt-2 text-left bg-[#121316] p-2.5 rounded-lg border border-[#43474e]/40 text-[11px] text-[#c4c6d0] space-y-1.5 animate-fadeIn">
-                <div className="font-semibold text-white">OAuth App Configuration:</div>
-                <div>Status: {oauthConfigured ? <span className="text-[#b4f3b7]">CLIENT_ID Configured</span> : <span className="text-[#ffd54f]">CLIENT_ID Not in .env</span>}</div>
-                <div>Callback URL:</div>
+                <div className="font-semibold text-white">{t.oauthSignIn}:</div>
+                <div>Status: {oauthConfigured ? <span className="text-[#b4f3b7]">{t.oauthConfiguredLabel}</span> : <span className="text-[#ffd54f]">{t.oauthNotConfiguredLabel}</span>}</div>
+                <div>{t.callbackUrlLabel}:</div>
                 <div className="p-1 bg-[#1e1f22] rounded font-mono text-[10px] break-all text-[#a8c7fa] select-all">
                   {callbackUrl}
                 </div>
@@ -564,14 +564,14 @@ export function GitHubPanel({
                   {/* Review Actions */}
                   <div className="pt-2 border-t border-[#43474e]/30 flex items-center justify-between">
                     <span className="text-[10px] text-[#8e9199]">
-                      {pr.reviews.length} reviews
+                      {pr.reviews.length} {t.reviews}
                     </span>
                     <button
                       onClick={() => setActivePRToReview(pr)}
                       className="px-2.5 py-1 rounded bg-[#a8c7fa]/20 hover:bg-[#a8c7fa]/30 text-[#a8c7fa] text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
                     >
                       <M3Icon name="rate_review" size={14} />
-                      Review PR
+                      {t.reviewPR}
                     </button>
                   </div>
                 </div>
@@ -613,7 +613,7 @@ export function GitHubPanel({
               <M3IconButton
                 size="sm"
                 icon="close"
-                label="Close Diff"
+                label={t.closeDiff}
                 onClick={() => setSelectedDiff(null)}
               />
             </div>
@@ -653,11 +653,11 @@ export function GitHubPanel({
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-lg w-full p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-white">Review PR #{activePRToReview.number}</h3>
+              <h3 className="text-sm font-semibold text-white">{t.reviewPRTitle} #{activePRToReview.number}</h3>
               <M3IconButton
                 size="sm"
                 icon="close"
-                label="Close"
+                label={t.close}
                 onClick={() => setActivePRToReview(null)}
               />
             </div>
@@ -666,7 +666,7 @@ export function GitHubPanel({
 
             <textarea
               rows={3}
-              placeholder="Leave review comments, feedback, or approval notes..."
+              placeholder={t.reviewNotesPlaceholder}
               value={reviewComment}
               onChange={(e) => setReviewComment(e.target.value)}
               className="w-full bg-[#121316] border border-[#43474e] rounded-lg p-2.5 text-xs text-white mb-4 focus:outline-none focus:border-[#a8c7fa]"
@@ -678,21 +678,21 @@ export function GitHubPanel({
                 className="flex-1 py-2 px-3 rounded-xl bg-[#0f5223] hover:bg-[#146c2e] text-[#b4f3b7] text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
               >
                 <M3Icon name="check" size={16} />
-                Approve
+                {t.approve}
               </button>
               <button
                 onClick={() => handleReviewAction('CHANGES_REQUESTED')}
                 className="flex-1 py-2 px-3 rounded-xl bg-[#690005] hover:bg-[#8c0009] text-[#ffdad6] text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
               >
                 <M3Icon name="cancel" size={16} />
-                Request Changes
+                {t.requestChanges}
               </button>
               <button
                 onClick={() => handleReviewAction('COMMENTED')}
                 className="flex-1 py-2 px-3 rounded-xl bg-[#2b2d30] hover:bg-[#383a3e] text-[#e2e2e6] text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
               >
                 <M3Icon name="chat" size={16} />
-                Comment
+                {t.comment}
               </button>
             </div>
           </div>
@@ -703,18 +703,18 @@ export function GitHubPanel({
       {showNewRepoModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
           <form onSubmit={handleCreateRepoSubmit} className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-3">
-            <h3 className="text-sm font-semibold text-white">Create New GitHub Repository</h3>
+            <h3 className="text-sm font-semibold text-white">{t.createRepoTitle}</h3>
             <input
               type="text"
               required
-              placeholder="Repository name (e.g. my-app)"
+              placeholder={t.repoNamePlaceholder}
               value={newRepoName}
               onChange={(e) => setNewRepoName(e.target.value)}
               className="w-full bg-[#121316] border border-[#43474e] rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#a8c7fa]"
             />
             <input
               type="text"
-              placeholder="Description (optional)"
+              placeholder={t.repoDescPlaceholder}
               value={newRepoDesc}
               onChange={(e) => setNewRepoDesc(e.target.value)}
               className="w-full bg-[#121316] border border-[#43474e] rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#a8c7fa]"
@@ -726,14 +726,14 @@ export function GitHubPanel({
                 onChange={(e) => setNewRepoPrivate(e.target.checked)}
                 className="rounded accent-[#a8c7fa]"
               />
-              <span>Private repository</span>
+              <span>{t.privateRepo}</span>
             </label>
             <div className="flex gap-2 pt-2">
               <M3Button variant="tonal" size="sm" type="button" onClick={() => setShowNewRepoModal(false)} className="flex-1">
-                Cancel
+                {t.cancel}
               </M3Button>
               <M3Button variant="filled" size="sm" type="submit" className="flex-1">
-                Create on GitHub
+                {t.createOnGitHub}
               </M3Button>
             </div>
           </form>
@@ -744,22 +744,22 @@ export function GitHubPanel({
       {showNewBranchModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
           <form onSubmit={handleCreateBranchSubmit} className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-3">
-            <h3 className="text-sm font-semibold text-white">Create Branch on GitHub</h3>
-            <p className="text-xs text-[#c4c6d0]">Will branch from: <span className="text-[#a8c7fa] font-mono">{activeBranch}</span></p>
+            <h3 className="text-sm font-semibold text-white">{t.createBranchTitle}</h3>
+            <p className="text-xs text-[#c4c6d0]">{t.branchFrom}: <span className="text-[#a8c7fa] font-mono">{activeBranch}</span></p>
             <input
               type="text"
               required
-              placeholder="Branch name (e.g. feature-login)"
+              placeholder={t.branchNamePlaceholder}
               value={newBranchName}
               onChange={(e) => setNewBranchName(e.target.value)}
               className="w-full bg-[#121316] border border-[#43474e] rounded-lg px-2.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#a8c7fa]"
             />
             <div className="flex gap-2 pt-2">
               <M3Button variant="tonal" size="sm" type="button" onClick={() => setShowNewBranchModal(false)} className="flex-1">
-                Cancel
+                {t.cancel}
               </M3Button>
               <M3Button variant="filled" size="sm" type="submit" className="flex-1">
-                Create Branch
+                {t.newBranch}
               </M3Button>
             </div>
           </form>
@@ -770,7 +770,7 @@ export function GitHubPanel({
       {showNewPRModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
           <form onSubmit={handleCreatePRSubmit} className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-3">
-            <h3 className="text-sm font-semibold text-white">Create Pull Request on GitHub</h3>
+            <h3 className="text-sm font-semibold text-white">{t.newPR}</h3>
             <div className="flex items-center gap-2 text-xs">
               <select
                 value={prHead}
@@ -809,10 +809,10 @@ export function GitHubPanel({
             />
             <div className="flex gap-2 pt-2">
               <M3Button variant="tonal" size="sm" type="button" onClick={() => setShowNewPRModal(false)} className="flex-1">
-                Cancel
+                {t.cancel}
               </M3Button>
               <M3Button variant="filled" size="sm" type="submit" className="flex-1">
-                Open PR on GitHub
+                {t.openPR}
               </M3Button>
             </div>
           </form>

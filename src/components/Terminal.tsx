@@ -7,6 +7,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { M3Icon, M3IconButton } from './M3Components';
 import { VFile } from '../utils/fileSystem';
 import { GitBranch, GitCommit } from '../utils/gitService';
+import { Translations, TRANSLATIONS } from '../utils/i18n';
 
 export interface ConsoleLogEntry {
   id: string;
@@ -26,6 +27,12 @@ interface TerminalProps {
   onClearGitLogs: () => void;
   onClose: () => void;
   onRunGitCommand?: (cmd: string) => void;
+  t?: Translations;
+  height?: number;
+  onResizeStart?: (e: React.MouseEvent) => void;
+  isMaximized?: boolean;
+  onToggleMaximize?: () => void;
+  onMinimize?: () => void;
 }
 
 export function Terminal({
@@ -38,17 +45,26 @@ export function Terminal({
   onClearLogs,
   onClearGitLogs,
   onClose,
-  onRunGitCommand,
+  t = TRANSLATIONS.en,
+  height = 220,
+  onResizeStart,
+  isMaximized = false,
+  onToggleMaximize,
+  onMinimize,
 }: TerminalProps) {
   const [activeTab, setActiveTab] = useState<'terminal' | 'console' | 'git' | 'problems'>('terminal');
-  const [isMaximized, setIsMaximized] = useState(false);
+  const [internalMaximized, setInternalMaximized] = useState(false);
   const [logFilter, setLogFilter] = useState<'all' | 'error' | 'warn' | 'log'>('all');
+
+  // If parent controls maximize, use isMaximized, otherwise use internalMaximized
+  const maximized = onToggleMaximize ? isMaximized : internalMaximized;
+  const toggleMaximize = onToggleMaximize || (() => setInternalMaximized(!internalMaximized));
 
   // Interactive virtual terminal state
   const [history, setHistory] = useState<string[]>([
-    'ZipStudio Virtual Environment v1.0.0 (Linux x86_64)',
-    'Type "help" for a list of available commands.',
-    `Connected to project workspace. Active branch: ${activeBranch}`,
+    t.welcomeTerminal,
+    t.typeHelp,
+    `${t.connectedWorkspace} ${activeBranch}`,
   ]);
   const [inputVal, setInputVal] = useState('');
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
@@ -128,7 +144,7 @@ export function Terminal({
         const sub = args[0];
         if (sub === 'status') {
           newHistory.push(`On branch ${activeBranch}`);
-          newHistory.push('Working tree ready. Use the Source Control sidebar for visual commits & diffs.');
+          newHistory.push(t.workingTreeClean);
         } else if (sub === 'branch') {
           branches.forEach((b) => {
             newHistory.push(`${b.name === activeBranch ? '* ' : '  '}${b.name}`);
@@ -140,31 +156,36 @@ export function Terminal({
             newHistory.push(`Date:   ${new Date(c.timestamp).toLocaleString()}`);
             newHistory.push(`    ${c.message}\n`);
           });
+          if (commits.length === 0) {
+            newHistory.push('(No commits yet)');
+          }
         } else {
-          newHistory.push(`git: '${sub}' is simulated. Use the Source Control panel for complete GitHub synchronization.`);
+          newHistory.push(`git: '${sub}' is simulated. Use UI Source Control for direct GitHub sync.`);
         }
         break;
       }
 
-      case 'npm':
+      case 'npm': {
         if (args[0] === 'test') {
-          newHistory.push('> project@0.0.0 test');
-          newHistory.push('✔ 11 passed (311ms)');
-          newHistory.push('All unit test suites executed cleanly.');
+          newHistory.push('> project@1.0.0 test');
+          newHistory.push('✔ Virtual file system valid');
+          newHistory.push('✔ In-browser package bundler ready');
+          newHistory.push('✔ All 11 unit tests passed (311ms)');
         } else {
-          newHistory.push(`npm: running ${args.join(' ')}...`);
+          newHistory.push(`npm: running ${args.join(' ')} (simulated)`);
         }
         break;
+      }
 
       case 'build':
-        newHistory.push('Building project bundle...');
-        newHistory.push('✔ Transformed index.html');
-        newHistory.push('✔ Resolved inline stylesheets & scripts');
-        newHistory.push('✔ Build completed successfully. Preview refreshed.');
+        newHistory.push('Building web assets for production distribution...');
+        newHistory.push('✔ HTML/CSS/JS bundled');
+        newHistory.push(`✔ Total workspace size: ${Math.round(Object.values(files).reduce((a, b) => a + b.size, 0) / 1024)} KB`);
+        newHistory.push('Ready for commit or .zip download.');
         break;
 
       default:
-        newHistory.push(`bash: ${cmd}: command not found. Type "help" for valid commands.`);
+        newHistory.push(`bash: ${cmd}: command not found. Type 'help' for available commands.`);
     }
 
     setHistory(newHistory);
@@ -173,40 +194,52 @@ export function Terminal({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowUp') {
       e.preventDefault();
-      if (commandHistory.length > 0) {
-        const nextIndex = historyIndex === -1 ? commandHistory.length - 1 : Math.max(0, historyIndex - 1);
+      if (commandHistory.length === 0) return;
+      const nextIndex = historyIndex + 1;
+      if (nextIndex < commandHistory.length) {
         setHistoryIndex(nextIndex);
-        setInputVal(commandHistory[nextIndex]);
+        setInputVal(commandHistory[commandHistory.length - 1 - nextIndex]);
       }
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      if (historyIndex >= 0) {
-        const nextIndex = historyIndex + 1;
-        if (nextIndex < commandHistory.length) {
-          setHistoryIndex(nextIndex);
-          setInputVal(commandHistory[nextIndex]);
-        } else {
-          setHistoryIndex(-1);
-          setInputVal('');
-        }
+      if (historyIndex > 0) {
+        const nextIndex = historyIndex - 1;
+        setHistoryIndex(nextIndex);
+        setInputVal(commandHistory[commandHistory.length - 1 - nextIndex]);
+      } else if (historyIndex === 0) {
+        setHistoryIndex(-1);
+        setInputVal('');
       }
     }
   };
 
   const filteredLogs = logs.filter((l) => {
     if (logFilter === 'all') return true;
-    return l.type === logFilter;
+    if (logFilter === 'error') return l.type === 'error';
+    if (logFilter === 'warn') return l.type === 'warn';
+    if (logFilter === 'log') return l.type === 'log' || l.type === 'info';
+    return true;
   });
 
   return (
     <div
-      className={`bg-[#18191c] border-t border-[#43474e]/40 flex flex-col shrink-0 transition-all duration-200 ${
-        isMaximized ? 'h-[75vh]' : 'h-56'
-      }`}
+      style={{ height: maximized ? '75vh' : `${height}px` }}
+      className="bg-[#18191c] border-t border-[#43474e]/40 flex flex-col transition-[height] duration-150 select-none relative shrink-0"
     >
-      {/* Terminal Tab Bar */}
-      <div className="h-9 px-3 bg-[#1e1f22] border-b border-[#43474e]/30 flex items-center justify-between text-xs select-none">
-        <div className="flex items-center gap-1">
+      {/* Mouse Drag Resize Handle on Top Edge */}
+      {onResizeStart && (
+        <div
+          onMouseDown={onResizeStart}
+          title={t.resizeTerminal}
+          className="absolute -top-1.5 inset-x-0 h-3 cursor-row-resize z-30 group flex items-center justify-center hover:bg-[#a8c7fa]/20 transition-colors"
+        >
+          <div className="w-16 h-1 rounded-full bg-[#43474e]/50 group-hover:bg-[#a8c7fa] group-active:bg-[#a8c7fa] transition-colors" />
+        </div>
+      )}
+
+      {/* Terminal Header Tabs Bar */}
+      <div className="h-9 px-3 bg-[#1e1f22] border-b border-[#43474e]/30 flex items-center justify-between text-xs shrink-0">
+        <div className="flex items-center gap-1 h-full">
           <button
             onClick={() => setActiveTab('terminal')}
             className={`px-3 py-1.5 font-medium flex items-center gap-1.5 border-b-2 cursor-pointer transition-colors ${
@@ -216,21 +249,21 @@ export function Terminal({
             }`}
           >
             <M3Icon name="terminal" size={14} />
-            <span>Terminal</span>
+            <span>{t.terminal}</span>
           </button>
 
           <button
             onClick={() => setActiveTab('console')}
-            className={`px-3 py-1.5 font-medium flex items-center gap-1.5 border-b-2 cursor-pointer transition-colors ${
+            className={`px-3 py-1.5 font-medium flex items-center gap-1.5 border-b-2 cursor-pointer transition-colors relative ${
               activeTab === 'console'
                 ? 'border-[#a8c7fa] text-[#a8c7fa]'
                 : 'border-transparent text-[#8e9199] hover:text-[#e2e2e6]'
             }`}
           >
-            <M3Icon name="bug_report" size={14} />
-            <span>Preview Logs</span>
+            <M3Icon name="dvr" size={14} />
+            <span>{t.logs}</span>
             {logs.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-[#2b2d30] text-[10px] text-[#c4c6d0]">
+              <span className="w-4 h-4 rounded-full bg-[#00468b] text-[#d6e3ff] font-bold text-[9px] flex items-center justify-center">
                 {logs.length}
               </span>
             )}
@@ -244,8 +277,8 @@ export function Terminal({
                 : 'border-transparent text-[#8e9199] hover:text-[#e2e2e6]'
             }`}
           >
-            <M3Icon name="sync" size={14} />
-            <span>Git Output</span>
+            <M3Icon name="commit" size={14} />
+            <span>{t.gitOutput}</span>
           </button>
 
           <button
@@ -257,7 +290,7 @@ export function Terminal({
             }`}
           >
             <M3Icon name="error_outline" size={14} />
-            <span>Diagnostics</span>
+            <span>{t.diagnostics}</span>
           </button>
         </div>
 
@@ -270,15 +303,15 @@ export function Terminal({
                 onChange={(e) => setLogFilter(e.target.value as any)}
                 className="bg-[#121316] border border-[#43474e]/40 rounded px-2 py-0.5 text-[11px] text-[#c4c6d0] focus:outline-none"
               >
-                <option value="all">All Logs</option>
-                <option value="error">Errors Only</option>
-                <option value="warn">Warnings</option>
-                <option value="log">Logs</option>
+                <option value="all">{t.allLogs}</option>
+                <option value="error">{t.errorsOnly}</option>
+                <option value="warn">{t.warnings}</option>
+                <option value="log">{t.infoLogs}</option>
               </select>
               <M3IconButton
                 size="sm"
                 icon="block"
-                label="Clear Logs"
+                label={t.clearLogs}
                 onClick={onClearLogs}
               />
             </div>
@@ -288,7 +321,7 @@ export function Terminal({
             <M3IconButton
               size="sm"
               icon="delete_sweep"
-              label="Clear Terminal"
+              label={t.clearTerminal}
               onClick={() => setHistory([])}
             />
           )}
@@ -297,22 +330,31 @@ export function Terminal({
             <M3IconButton
               size="sm"
               icon="clear_all"
-              label="Clear Git Logs"
+              label={t.clearGitLogs}
               onClick={onClearGitLogs}
+            />
+          )}
+
+          {onMinimize && (
+            <M3IconButton
+              size="sm"
+              icon="keyboard_arrow_down"
+              label={t.minimizeTerminal}
+              onClick={onMinimize}
             />
           )}
 
           <M3IconButton
             size="sm"
-            icon={isMaximized ? 'collapse_content' : 'expand_content'}
-            label={isMaximized ? 'Restore Terminal' : 'Maximize Terminal'}
-            onClick={() => setIsMaximized(!isMaximized)}
+            icon={maximized ? 'collapse_content' : 'expand_content'}
+            label={maximized ? t.restoreTerminal : t.maximizeTerminal}
+            onClick={toggleMaximize}
           />
 
           <M3IconButton
             size="sm"
             icon="close"
-            label="Close Panel"
+            label={t.close}
             onClick={onClose}
           />
         </div>
@@ -338,7 +380,7 @@ export function Terminal({
                 value={inputVal}
                 onChange={(e) => setInputVal(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type 'help' or run commands..."
+                placeholder={t.typeCommandPrompt}
                 className="flex-1 bg-transparent border-none text-[#e2e2e6] focus:outline-none font-mono text-xs"
               />
             </form>
@@ -350,69 +392,59 @@ export function Terminal({
         {activeTab === 'console' && (
           <div className="space-y-1">
             {filteredLogs.length === 0 ? (
-              <div className="text-[#8e9199] italic">
-                No preview console logs. As your preview app prints console.log, console.warn, or errors, they will appear here.
-              </div>
+              <div className="text-[#8e9199] italic">{t.noLogs}</div>
             ) : (
-              filteredLogs.map((item) => {
-                const colors = {
-                  log: 'text-[#e2e2e6]',
-                  info: 'text-[#a8c7fa]',
-                  warn: 'text-[#ffd54f]',
-                  error: 'text-[#ff8585]',
-                }[item.type];
-
-                const icons = {
-                  log: 'terminal',
-                  info: 'info',
-                  warn: 'warning',
-                  error: 'cancel',
-                }[item.type];
-
-                return (
-                  <div key={item.id} className={`flex items-start gap-2 py-0.5 ${colors}`}>
-                    <M3Icon name={icons} size={14} className="mt-0.5 shrink-0" />
-                    <span className="text-[10px] text-[#8e9199] shrink-0">
-                      {new Date(item.timestamp).toLocaleTimeString()}
-                    </span>
-                    <span className="break-all">{item.message}</span>
-                  </div>
-                );
-              })
+              filteredLogs.map((log) => (
+                <div
+                  key={log.id}
+                  className={`flex items-start gap-2 py-0.5 border-b border-[#43474e]/20 ${
+                    log.type === 'error'
+                      ? 'text-[#ff8585] bg-[#690005]/15'
+                      : log.type === 'warn'
+                      ? 'text-[#ffd54f] bg-[#ff8f00]/10'
+                      : 'text-[#c4c6d0]'
+                  }`}
+                >
+                  <span className="text-[#8e9199] text-[10px] shrink-0 font-mono">
+                    {new Date(log.timestamp).toLocaleTimeString()}
+                  </span>
+                  <span className="font-bold shrink-0 text-[10px] uppercase">
+                    [{log.type}]
+                  </span>
+                  <span className="whitespace-pre-wrap break-all flex-1">{log.message}</span>
+                </div>
+              ))
             )}
-            <div ref={terminalBottomRef} />
           </div>
         )}
 
         {/* Git Output Tab */}
         {activeTab === 'git' && (
-          <div className="space-y-1">
+          <div className="space-y-1 font-mono text-[11px]">
             {gitLogs.length === 0 ? (
-              <div className="text-[#8e9199] italic">
-                No git output yet. Connect to GitHub or run version control operations to see real-time sync logs.
-              </div>
+              <div className="text-[#8e9199] italic">{t.noGitLogs}</div>
             ) : (
               gitLogs.map((log, idx) => (
-                <div key={idx} className="flex items-center gap-2 text-[#c4c6d0]">
-                  <M3Icon name="chevron_right" size={14} className="text-[#a8c7fa]" />
-                  <span>{log}</span>
+                <div key={idx} className="text-[#a8c7fa]/90">
+                  {log}
                 </div>
               ))
             )}
-            <div ref={terminalBottomRef} />
           </div>
         )}
 
-        {/* Diagnostics / Problems Tab */}
+        {/* Diagnostics Tab */}
         {activeTab === 'problems' && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-[#b4f3b7] text-xs font-semibold">
-              <M3Icon name="check_circle" size={16} />
-              <span>No syntax or build errors found across {Object.keys(files).length} files.</span>
+          <div className="space-y-2 text-xs">
+            <div className="p-3 bg-[#1e1f22] rounded-lg border border-[#43474e]/40 flex items-center gap-2 text-[#b4f3b7]">
+              <M3Icon name="verified" size={18} />
+              <span>{t.noDiagnostics}</span>
             </div>
-            <p className="text-xs text-[#8e9199]">
-              All extracted code files and relative imports in the sandbox have verified syntax.
-            </p>
+            <div className="text-[11px] text-[#8e9199] space-y-1">
+              <div>• HTML parser: Active</div>
+              <div>• ES module loader: Ready</div>
+              <div>• Sandboxed preview bridge: Online</div>
+            </div>
           </div>
         )}
       </div>
