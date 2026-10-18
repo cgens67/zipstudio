@@ -1,0 +1,6 @@
+{
+  "name": "ZipStudio - Browser IDE & GitHub Sync",
+  "description": "Material 3 Expressive web IDE to import zip projects, edit code with live preview, debug with Gemini reasoning, and synchronize branches and pull requests to GitHub.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
