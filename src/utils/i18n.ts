@@ -193,6 +193,12 @@ export interface Translations {
   fitToScreen: string;
   toggleBackground: string;
   pathsCount: string;
+  codeOnly: string;
+  splitEditorPreview: string;
+  previewOnly: string;
+  hideTerminal: string;
+  showTerminal: string;
+  fileCountLabel: string;
 }
 
 export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
@@ -384,6 +390,12 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     fitToScreen: 'Fit to Screen',
     toggleBackground: 'Toggle Background Grid',
     pathsCount: 'vector paths',
+    codeOnly: 'Code Only',
+    splitEditorPreview: 'Split Editor & Preview',
+    previewOnly: 'Preview Only',
+    hideTerminal: 'Hide Terminal',
+    showTerminal: 'Show Terminal',
+    fileCountLabel: 'File Count',
   },
   'zh-CN': {
     appName: 'ZipStudio',
@@ -573,6 +585,12 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     fitToScreen: '适应窗口',
     toggleBackground: '切换背景网格',
     pathsCount: '条矢量路径',
+    codeOnly: '仅代码',
+    splitEditorPreview: '分屏代码与预览',
+    previewOnly: '仅预览',
+    hideTerminal: '隐藏终端',
+    showTerminal: '显示终端',
+    fileCountLabel: '文件数量',
   },
   ms: {
     appName: 'ZipStudio',
@@ -762,5 +780,11 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     fitToScreen: 'Muat ke Skrin',
     toggleBackground: 'Togol Grid Latar Belakang',
     pathsCount: 'laluan vektor',
+    codeOnly: 'Kod Sahaja',
+    splitEditorPreview: 'Pisahkan Editor & Pratonton',
+    previewOnly: 'Pratonton Sahaja',
+    hideTerminal: 'Sembunyikan Terminal',
+    showTerminal: 'Tunjukkan Terminal',
+    fileCountLabel: 'Jumlah Fail',
   },
 };

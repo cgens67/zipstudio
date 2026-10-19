@@ -12,6 +12,7 @@ import {
   PullRequest,
   GitHubUser,
   GitHubRepo,
+  RepoLoadProgress,
 } from '../utils/gitService';
 import { Translations } from '../utils/i18n';
 
@@ -30,6 +31,7 @@ interface GitHubPanelProps {
   t: Translations;
   isCleanZipImport?: boolean;
   isLoadingRepo?: boolean;
+  repoLoadProgress?: RepoLoadProgress | null;
   onConnectOAuth: () => void;
   onConnectToken: (token: string) => Promise<void>;
   onDisconnect: () => void;
@@ -58,6 +60,7 @@ export function GitHubPanel({
   t,
   isCleanZipImport,
   isLoadingRepo,
+  repoLoadProgress,
   onConnectOAuth,
   onConnectToken,
   onDisconnect,
@@ -336,24 +339,57 @@ export function GitHubPanel({
         )}
 
         {repos.length > 0 && selectedRepo && (
-          <button
-            type="button"
-            disabled={isLoadingRepo}
-            onClick={onLoadRepoFiles}
-            className="w-full mt-2 py-1 px-2 rounded-lg bg-[#a8c7fa]/10 hover:bg-[#a8c7fa]/20 text-[#a8c7fa] border border-[#a8c7fa]/30 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-          >
+          <>
             {isLoadingRepo ? (
-              <>
-                <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                <span>{t.loadingRepo}</span>
-              </>
+              <div className="w-full mt-2 p-2.5 rounded-xl bg-[#a8c7fa]/10 border border-[#a8c7fa]/30 text-xs">
+                <div className="flex items-center justify-between mb-1.5 text-[#a8c7fa] font-medium">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    <span>{t.loadingRepo}</span>
+                  </span>
+                  {repoLoadProgress && (
+                    <span className="font-mono text-[11px] text-[#c4c6d0]">
+                      {repoLoadProgress.loaded}/{repoLoadProgress.total}
+                    </span>
+                  )}
+                </div>
+                {repoLoadProgress && (
+                  <>
+                    <div className="w-full bg-[#1e1f22] h-1.5 rounded-full overflow-hidden mb-1.5">
+                      <div
+                        className="bg-[#a8c7fa] h-full transition-all duration-300 rounded-full"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            Math.round(
+                              (repoLoadProgress.loaded / (repoLoadProgress.total || 1)) * 100
+                            )
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-[#8e9199]">
+                      <span className="truncate max-w-[130px]" title={repoLoadProgress.currentFile}>
+                        {repoLoadProgress.currentFile ? repoLoadProgress.currentFile.split('/').pop() : ''}
+                      </span>
+                      <span className="shrink-0 text-[#ffd54f] font-mono">
+                        ~{repoLoadProgress.estimatedSecondsRemaining}s {t.estimatedRemaining}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
             ) : (
-              <>
+              <button
+                type="button"
+                onClick={onLoadRepoFiles}
+                className="w-full mt-2 py-1 px-2 rounded-lg bg-[#a8c7fa]/10 hover:bg-[#a8c7fa]/20 text-[#a8c7fa] border border-[#a8c7fa]/30 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
                 <M3Icon name="cloud_download" size={14} />
                 <span>{t.loadRepoFiles} ({selectedRepo.name})</span>
-              </>
+              </button>
             )}
-          </button>
+          </>
         )}
       </div>
 

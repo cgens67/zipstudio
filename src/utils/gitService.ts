@@ -276,6 +276,13 @@ export function createCommit(
   };
 }
 
+export interface RepoLoadProgress {
+  loaded: number;
+  total: number;
+  estimatedSecondsRemaining: number;
+  currentFile: string;
+}
+
 /**
  * Client for GitHub REST API calls using Personal Access Token or OAuth Bearer.
  */
@@ -383,7 +390,8 @@ export class GitHubApiClient {
   async fetchRepoTree(
     owner: string,
     repo: string,
-    branch: string
+    branch: string,
+    onProgress?: (progress: RepoLoadProgress) => void
   ): Promise<Record<string, VFileRef>> {
     const files: Record<string, VFileRef> = {};
     try {
@@ -397,6 +405,17 @@ export class GitHubApiClient {
 
       // Filter blobs (files, not directories)
       const blobs = treeData.tree.filter((item: any) => item.type === 'blob');
+      const total = blobs.length;
+      let loaded = 0;
+      const startTime = performance.now();
+
+      // Initial progress report
+      onProgress?.({
+        loaded: 0,
+        total,
+        estimatedSecondsRemaining: Math.ceil(total * 0.08),
+        currentFile: '',
+      });
 
       // Fetch file contents in parallel batches of 8 to avoid rate limit spikes
       const batchSize = 8;
@@ -449,6 +468,19 @@ export class GitHubApiClient {
             }
           })
         );
+
+        loaded = Math.min(total, i + batch.length);
+        const elapsedSec = (performance.now() - startTime) / 1000;
+        const avgTimePerFile = elapsedSec / (loaded || 1);
+        const remaining = total - loaded;
+        const estimatedSecondsRemaining = Math.max(0, Math.ceil(remaining * avgTimePerFile));
+
+        onProgress?.({
+          loaded,
+          total,
+          estimatedSecondsRemaining,
+          currentFile: batch[batch.length - 1]?.path || '',
+        });
       }
     } catch (err: any) {
       console.warn(`Could not load tree for ${owner}/${repo}@${branch}:`, err.message);

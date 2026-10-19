@@ -21,16 +21,26 @@ import {
   computeWorkingTreeChanges,
   createCommit,
   GitHubApiClient,
+  RepoLoadProgress,
 } from './utils/gitService';
-import { STARTER_TEMPLATES, StarterTemplate } from './utils/starterTemplates';
+import { STARTER_TEMPLATES } from './utils/starterTemplates';
 import { SupportedLanguage, TRANSLATIONS } from './utils/i18n';
-import { M3Icon } from './components/M3Components';
+import { M3Icon, M3Button } from './components/M3Components';
 import { Sidebar } from './components/Sidebar';
 import { SearchPanel } from './components/SearchPanel';
 import { Editor } from './components/Editor';
 import { Preview } from './components/Preview';
 import { Terminal, ConsoleLogEntry } from './components/Terminal';
 import { GitHubPanel } from './components/GitHubPanel';
+
+interface SavedSession {
+  savedAt: number;
+  files: Record<string, VFile>;
+  openTabs: string[];
+  activeFilePath: string;
+  repoName?: string;
+  isCleanZipImport?: boolean;
+}
 
 export default function App() {
   // Screen size detection for dedicated mobile UI
@@ -80,7 +90,6 @@ export default function App() {
 
     const handleMouseMove = (e: MouseEvent) => {
       if (isDragging === 'sidebar') {
-        // Activity bar is 48px wide
         const newWidth = Math.max(180, Math.min(600, e.clientX - 48));
         setSidebarWidth(newWidth);
       } else if (isDragging === 'terminal') {
@@ -119,8 +128,12 @@ export default function App() {
   // Clean zip import overwrite flag
   const [isCleanZipImport, setIsCleanZipImport] = useState(false);
 
-  // Loading GitHub repo files state
+  // Loading GitHub repo files state & ETA progress
   const [isLoadingRepo, setIsLoadingRepo] = useState(false);
+  const [repoLoadProgress, setRepoLoadProgress] = useState<RepoLoadProgress | null>(null);
+
+  // Unsaved session persistence & prompt state
+  const [pendingSession, setPendingSession] = useState<SavedSession | null>(null);
 
   // Terminal & Preview Logs
   const [logs, setLogs] = useState<ConsoleLogEntry[]>([]);
@@ -144,25 +157,103 @@ export default function App() {
   const [oauthConfigured, setOauthConfigured] = useState(false);
   const [callbackUrl, setCallbackUrl] = useState('');
 
-  // Compute file tree and working tree diffs
-  const tree = useMemo(() => buildFileTree(files), [files]);
-  const diffs = useMemo(() => computeWorkingTreeChanges(baseFiles, files), [baseFiles, files]);
-
-  // Log to Git Output
-  const addGitLog = useCallback((msg: string) => {
-    setGitLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+  // Check saved session on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('zipstudio_workspace_session');
+      if (raw) {
+        const parsed: SavedSession = JSON.parse(raw);
+        if (parsed.files && Object.keys(parsed.files).length > 0) {
+          setPendingSession(parsed);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed restoring saved session:', e);
+    }
   }, []);
 
-  // Check OAuth endpoint configuration and check for saved token
+  // Debounced auto-save session
+  useEffect(() => {
+    if (pendingSession) return;
+    const timer = setTimeout(() => {
+      try {
+        const session: SavedSession = {
+          savedAt: Date.now(),
+          files,
+          openTabs,
+          activeFilePath,
+          repoName: selectedRepo?.fullName,
+          isCleanZipImport,
+        };
+        localStorage.setItem('zipstudio_workspace_session', JSON.stringify(session));
+      } catch (e) {
+        console.warn('Failed auto-saving session:', e);
+      }
+    }, 1200);
+
+    return () => clearTimeout(timer);
+  }, [files, openTabs, activeFilePath, selectedRepo, isCleanZipImport, pendingSession]);
+
+  const handleRestoreSession = () => {
+    if (!pendingSession) return;
+    setFiles(pendingSession.files);
+    setBaseFiles(pendingSession.files);
+    if (pendingSession.openTabs && pendingSession.openTabs.length > 0) {
+      setOpenTabs(pendingSession.openTabs);
+    }
+    if (pendingSession.activeFilePath) {
+      setActiveFilePath(pendingSession.activeFilePath);
+    }
+    if (typeof pendingSession.isCleanZipImport === 'boolean') {
+      setIsCleanZipImport(pendingSession.isCleanZipImport);
+    }
+    addGitLog(`Restored previous unsaved session (${Object.keys(pendingSession.files).length} files).`);
+    setPendingSession(null);
+  };
+
+  const handleDiscardSession = () => {
+    localStorage.removeItem('zipstudio_workspace_session');
+    setPendingSession(null);
+    addGitLog('Discarded previous unsaved session.');
+  };
+
+  // Global hotkeys (Find in files: Ctrl+Shift+F)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
+        e.preventDefault();
+        if (isMobile) {
+          setMobileTab('search');
+        } else {
+          setActivePanel('search');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isMobile]);
+
+  // Helper to add git log with auto-timestamp
+  const addGitLog = useCallback((message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setGitLogs((prev) => [...prev, `[${timestamp}] ${message}`]);
+  }, []);
+
+  // Check OAuth configuration status on mount
   useEffect(() => {
     fetch('/api/auth/github/url')
       .then((res) => res.json())
       .then((data) => {
-        setOauthConfigured(!!data.configured);
-        setCallbackUrl(data.redirectUri || '');
+        setOauthConfigured(Boolean(data.configured));
+        if (data.callbackUrl) {
+          setCallbackUrl(data.callbackUrl);
+        }
       })
-      .catch((err) => console.error('OAuth check error:', err));
+      .catch(() => setOauthConfigured(false));
+  }, []);
 
+  // Restore authenticated session from localStorage if present
+  useEffect(() => {
     const savedToken = localStorage.getItem('zipstudio_github_token');
     if (savedToken) {
       handleConnectToken(savedToken).catch(() => {
@@ -246,18 +337,24 @@ export default function App() {
     }
   };
 
-  // Helper: Load remote repository files directly into editor and preview
+  // Helper: Load remote repository files directly into editor and preview with ETA progress
   const loadRemoteRepoTree = async (
     client: GitHubApiClient,
     repo: GitHubRepo,
     branch: string
   ) => {
     setIsLoadingRepo(true);
+    setRepoLoadProgress(null);
     addGitLog(`Downloading full file tree for ${repo.fullName}@${branch}...`);
 
     try {
       const [owner, repoName] = repo.fullName.split('/');
-      const repoFiles = await client.fetchRepoTree(owner, repoName, branch);
+      const repoFiles = await client.fetchRepoTree(
+        owner,
+        repoName,
+        branch,
+        (progress) => setRepoLoadProgress(progress)
+      );
       const fileCount = Object.keys(repoFiles).length;
 
       if (fileCount > 0) {
@@ -311,6 +408,7 @@ export default function App() {
       addGitLog(`Failed loading repository tree: ${err.message}`);
     } finally {
       setIsLoadingRepo(false);
+      setRepoLoadProgress(null);
     }
   };
 
@@ -372,7 +470,7 @@ export default function App() {
         isCurrent: b.name === branchName,
       }))
     );
-    addGitLog(`Switched working branch to '${branchName}'`);
+    addGitLog(`Switched local HEAD branch to "${branchName}"`);
 
     if (githubToken && selectedRepo) {
       const client = new GitHubApiClient(githubToken);
@@ -380,57 +478,71 @@ export default function App() {
     }
   };
 
-  // Create branch on GitHub
+  // Create branch
   const handleCreateBranch = async (branchName: string) => {
-    const cleanName = branchName.trim();
-    if (branches.some((b) => b.name === cleanName)) {
-      alert('A branch with this name already exists.');
-      return;
-    }
-
-    if (githubToken && selectedRepo) {
-      try {
-        const [owner, repoName] = selectedRepo.fullName.split('/');
-        addGitLog(`Creating remote branch '${cleanName}' on ${selectedRepo.fullName}...`);
-        const client = new GitHubApiClient(githubToken);
-        await client.createBranch(owner, repoName, cleanName, activeBranch);
-        addGitLog(`Branch '${cleanName}' created successfully on GitHub.`);
-      } catch (err: any) {
-        addGitLog(`GitHub branch creation note: ${err.message}`);
-      }
-    }
-
-    const newBranch: GitBranch = {
-      name: cleanName,
-      isCurrent: true,
-      isDefault: false,
-      commitSha: 'HEAD',
-    };
-    setBranches((prev) => [...prev.map((b) => ({ ...b, isCurrent: false })), newBranch]);
-    setActiveBranch(cleanName);
-  };
-
-  // Commit and Push to real GitHub repo
-  const handleCommitAndPush = async (message: string) => {
     if (!githubToken || !selectedRepo) {
-      alert('Please connect your GitHub account and select a repository before committing.');
+      // Local fallback
+      setBranches((prev) => [
+        ...prev.map((b) => ({ ...b, isCurrent: false })),
+        { name: branchName, isCurrent: true, isDefault: false, commitSha: 'HEAD' },
+      ]);
+      setActiveBranch(branchName);
+      addGitLog(`Created and switched to local branch "${branchName}"`);
       return;
     }
-
-    const [owner, repoName] = selectedRepo.fullName.split('/');
-    addGitLog(
-      `Pushing changes to ${selectedRepo.fullName} on branch ${activeBranch} (Clean Overwrite: ${isCleanZipImport ? 'YES' : 'NO'})...`
-    );
 
     try {
+      addGitLog(`Creating branch "${branchName}" on GitHub...`);
+      const [owner, repoName] = selectedRepo.fullName.split('/');
       const client = new GitHubApiClient(githubToken);
+      await client.createBranch(owner, repoName, branchName, activeBranch);
+      setBranches((prev) => [
+        ...prev.map((b) => ({ ...b, isCurrent: false })),
+        { name: branchName, isCurrent: true, isDefault: false, commitSha: 'HEAD' },
+      ]);
+      setActiveBranch(branchName);
+      addGitLog(`Branch "${branchName}" created on GitHub and set as active.`);
+    } catch (err: any) {
+      addGitLog(`Error creating branch: ${err.message}`);
+      alert(`Failed to create branch: ${err.message}`);
+    }
+  };
+
+  // Compute live git diffs against baseFiles
+  const diffs = useMemo(() => {
+    return computeWorkingTreeChanges(baseFiles, files);
+  }, [baseFiles, files]);
+
+  // Commit and Push changes
+  const handleCommitAndPush = async (message: string) => {
+    if (!githubToken || !selectedRepo) {
+      // Offline local commit
+      const commit = createCommit(
+        message,
+        activeBranch,
+        githubUser?.name || 'Local User',
+        githubUser?.login ? `${githubUser.login}@users.noreply.github.com` : 'user@local',
+        diffs.length || Object.keys(files).length
+      );
+      setCommits((prev) => [commit, ...prev]);
+      setBaseFiles({ ...files });
+      setIsCleanZipImport(false);
+      addGitLog(`Committed locally [${commit.shortId}] on ${activeBranch}: "${message}"`);
+      return;
+    }
+
+    try {
+      addGitLog(`Creating commit on GitHub (${selectedRepo.fullName}@${activeBranch})...`);
+      const [owner, repoName] = selectedRepo.fullName.split('/');
+      const client = new GitHubApiClient(githubToken);
+
       const commitSha = await client.commitAndPushFiles(
         owner,
         repoName,
         activeBranch,
         message,
         files,
-        isCleanZipImport // When true, completely removes old repo files not in the zip!
+        isCleanZipImport
       );
 
       const commit: GitCommit = {
@@ -439,62 +551,83 @@ export default function App() {
         message,
         author: {
           name: githubUser?.name || githubUser?.login || 'Developer',
-          email: githubUser?.login ? `${githubUser.login}@users.noreply.github.com` : 'dev@zipstudio.local',
+          email: `${githubUser?.login || 'user'}@users.noreply.github.com`,
           avatarUrl: githubUser?.avatarUrl,
         },
         timestamp: Date.now(),
         branch: activeBranch,
-        filesChanged: Object.keys(files).length,
+        filesChanged: diffs.length || Object.keys(files).length,
       };
 
       setCommits((prev) => [commit, ...prev]);
-      setBaseFiles({ ...files }); // reset diffs
-      setIsCleanZipImport(false); // reset clean overwrite flag
-
-      addGitLog(`Pushed commit ${commit.shortId} to GitHub: ${message}`);
-      addGitLog(`Commit URL: https://github.com/${selectedRepo.fullName}/commit/${commitSha}`);
+      setBaseFiles({ ...files });
+      setIsCleanZipImport(false);
+      addGitLog(
+        `Successfully pushed commit [${commit.shortId}] to https://github.com/${selectedRepo.fullName}/commit/${commitSha}`
+      );
     } catch (err: any) {
       addGitLog(`Commit error: ${err.message}`);
-      alert(`GitHub push failed: ${err.message}\nMake sure your token has "repo" write permissions.`);
+      alert(`Failed to commit & push to GitHub: ${err.message}`);
     }
   };
 
-  // Create Pull Request on real GitHub repo
-  const handleCreatePullRequest = async (title: string, head: string, base: string, body: string) => {
-    if (!githubToken || !selectedRepo) {
-      alert('Please connect your GitHub account and select a repository.');
-      return;
+  // Create Pull Request
+  const handleCreatePullRequest = async (
+    title: string,
+    head: string,
+    base: string,
+    body: string
+  ) => {
+    if (githubToken && selectedRepo) {
+      try {
+        addGitLog(`Creating pull request "${title}" on GitHub...`);
+        const [owner, repoName] = selectedRepo.fullName.split('/');
+        const client = new GitHubApiClient(githubToken);
+        const newPr = await client.createPullRequest(owner, repoName, title, head, base, body);
+        setPullRequests((prev) => [
+          {
+            id: newPr.id,
+            number: newPr.number,
+            title: newPr.title,
+            description: newPr.body || '',
+            headBranch: newPr.head?.ref || head,
+            baseBranch: newPr.base?.ref || base,
+            state: newPr.state as any,
+            author: {
+              login: newPr.user?.login || githubUser?.login || 'author',
+              avatarUrl: newPr.user?.avatar_url || githubUser?.avatarUrl,
+            },
+            createdAt: Date.now(),
+            reviews: [],
+            diffs: [],
+          },
+          ...prev,
+        ]);
+        addGitLog(`Created real GitHub PR #${newPr.number}: "${title}"`);
+        return;
+      } catch (err: any) {
+        addGitLog(`PR creation notice: ${err.message}`);
+      }
     }
 
-    try {
-      const [owner, repoName] = selectedRepo.fullName.split('/');
-      addGitLog(`Opening Pull Request on ${selectedRepo.fullName} (${head} -> ${base})...`);
-      const client = new GitHubApiClient(githubToken);
-      const prData = await client.createPullRequest(owner, repoName, title, head, base, body);
-
-      const newPR: PullRequest = {
-        id: prData.id,
-        number: prData.number,
-        title: prData.title,
-        description: prData.body || '',
-        headBranch: head,
-        baseBranch: base,
-        state: 'open',
-        author: {
-          login: prData.user?.login || githubUser?.login || '',
-          avatarUrl: prData.user?.avatar_url || githubUser?.avatarUrl || '',
-        },
-        createdAt: Date.now(),
-        reviews: [],
-        diffs: [...diffs],
-      };
-
-      setPullRequests((prev) => [newPR, ...prev]);
-      addGitLog(`Pull Request #${prData.number} successfully opened: ${prData.html_url}`);
-    } catch (err: any) {
-      addGitLog(`PR creation error: ${err.message}`);
-      alert(`Failed to create Pull Request on GitHub: ${err.message}`);
-    }
+    const pr: PullRequest = {
+      id: Math.floor(Math.random() * 10000),
+      number: pullRequests.length + 1,
+      title,
+      description: body,
+      headBranch: head,
+      baseBranch: base,
+      state: 'open',
+      author: {
+        login: githubUser?.login || 'developer',
+        avatarUrl: githubUser?.avatarUrl || '',
+      },
+      createdAt: Date.now(),
+      reviews: [],
+      diffs,
+    };
+    setPullRequests((prev) => [pr, ...prev]);
+    addGitLog(`Created pull request #${pr.number}: "${title}" from ${head} into ${base}`);
   };
 
   // Submit Pull Request Review
@@ -618,7 +751,7 @@ export default function App() {
   };
 
   const handleCloseTab = (path: string) => {
-    const nextTabs = openTabs.filter((t) => t !== path);
+    const nextTabs = openTabs.filter((tab) => tab !== path);
     setOpenTabs(nextTabs);
     if (activeFilePath === path) {
       setActiveFilePath(nextTabs[nextTabs.length - 1] || '');
@@ -682,15 +815,65 @@ export default function App() {
     addGitLog(`Deleted: ${path}`);
   };
 
-  const handleLoadTemplate = (template: StarterTemplate) => {
-    setFiles(template.files);
-    setBaseFiles(template.files);
-    setIsCleanZipImport(false);
-    const keys = Object.keys(template.files);
-    const initial = keys.includes('index.html') ? 'index.html' : keys[0];
-    setOpenTabs(keys.slice(0, 3));
-    setActiveFilePath(initial);
-    addGitLog(`Loaded template "${template.name}".`);
+  const handleRenameNode = (oldPath: string, newPath: string) => {
+    const normOld = normalizePath(oldPath);
+    const normNew = normalizePath(newPath);
+    if (!normNew || normOld === normNew) return;
+
+    if (files[normNew]) {
+      alert(t.fileAlreadyExists);
+      return;
+    }
+
+    setFiles((prev) => {
+      const updated = { ...prev };
+      if (updated[normOld]) {
+        const file = updated[normOld];
+        delete updated[normOld];
+        updated[normNew] = {
+          ...file,
+          path: normNew,
+          name: getFileName(normNew),
+          lastModified: Date.now(),
+        };
+      } else {
+        const prefix = `${normOld}/`;
+        for (const [key, file] of Object.entries(updated)) {
+          if (key.startsWith(prefix)) {
+            const suffix = key.slice(prefix.length);
+            const renamedKey = `${normNew}/${suffix}`;
+            delete updated[key];
+            updated[renamedKey] = {
+              ...file,
+              path: renamedKey,
+              name: getFileName(renamedKey),
+              lastModified: Date.now(),
+            };
+          }
+        }
+      }
+      return updated;
+    });
+
+    setOpenTabs((prev) =>
+      prev.map((tab) => {
+        if (tab === normOld) return normNew;
+        if (tab.startsWith(`${normOld}/`)) {
+          return `${normNew}/${tab.slice(normOld.length + 1)}`;
+        }
+        return tab;
+      })
+    );
+
+    setActiveFilePath((curr) => {
+      if (curr === normOld) return normNew;
+      if (curr.startsWith(`${normOld}/`)) {
+        return `${normNew}/${curr.slice(normOld.length + 1)}`;
+      }
+      return curr;
+    });
+
+    addGitLog(`Renamed "${normOld}" to "${normNew}".`);
   };
 
   // Search in Code Handlers
@@ -734,7 +917,7 @@ export default function App() {
     }
 
     setFiles(updatedFiles);
-    addGitLog(`Replaced ${totalReplaced} occurrences across files.`);
+    addGitLog(`Search & Replace: replaced ${totalReplaced} occurrences in code.`);
     setLogs((prev) => [
       ...prev,
       {
@@ -759,12 +942,63 @@ export default function App() {
     ]);
   };
 
+  const tree = useMemo(() => buildFileTree(files), [files]);
+
+  // Session Recovery Modal component (shared desktop/mobile)
+  const sessionRecoveryModal = pendingSession ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn">
+      <div className="bg-[#1e1f22] border border-[#a8c7fa]/40 rounded-2xl p-5 max-w-md w-full shadow-2xl">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-full bg-[#00468b]/30 text-[#a8c7fa] flex items-center justify-center shrink-0">
+            <M3Icon name="history" size={24} />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white">{t.restoreSessionTitle}</h3>
+            <p className="text-xs text-[#8e9199]">
+              {t.restoreSessionDesc}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-[#121316] rounded-xl p-3 border border-[#43474e]/40 my-3 text-xs space-y-1.5 text-[#c4c6d0]">
+          <div className="flex justify-between">
+            <span className="text-[#8e9199]">Workspace:</span>
+            <span className="font-mono text-white truncate max-w-[200px]">
+              {pendingSession.repoName || 'Local Project'}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#8e9199]">{t.fileCountLabel}:</span>
+            <span className="font-mono text-[#a8c7fa]">
+              {Object.keys(pendingSession.files).length} files
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#8e9199]">{t.lastModified}:</span>
+            <span className="font-mono text-[#8e9199]">
+              {new Date(pendingSession.savedAt).toLocaleTimeString()} ({new Date(pendingSession.savedAt).toLocaleDateString()})
+            </span>
+          </div>
+        </div>
+
+        <div className="flex gap-2 justify-end mt-4">
+          <M3Button variant="text" size="sm" onClick={handleDiscardSession}>
+            {t.startFresh}
+          </M3Button>
+          <M3Button variant="filled" size="sm" icon="restore" onClick={handleRestoreSession}>
+            {t.restoreSession}
+          </M3Button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   // -----------------------------------------------------------------
   // DEDICATED MOBILE USER INTERFACE
   // -----------------------------------------------------------------
   if (isMobile) {
     return (
-      <div className="h-screen w-screen flex flex-col bg-[#121316] text-[#e2e2e6] overflow-hidden select-none">
+      <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] flex flex-col bg-[#121316] text-[#e2e2e6] overflow-hidden select-none">
         {/* Mobile Top Header */}
         <header className="h-12 px-3 bg-[#1e1f22] border-b border-[#43474e]/40 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 truncate">
@@ -791,7 +1025,7 @@ export default function App() {
             {/* Quick Commit Button */}
             <button
               onClick={() => setMobileTab('git')}
-              className="px-2 py-1 rounded-lg bg-[#00468b]/40 hover:bg-[#00468b]/60 border border-[#a8c7fa]/40 text-[#a8c7fa] text-[11px] font-semibold flex items-center gap-1"
+              className="px-2 py-1 rounded-lg bg-[#00468b]/40 hover:bg-[#00468b]/60 border border-[#a8c7fa]/40 text-[#a8c7fa] text-[11px] font-semibold flex items-center gap-1 cursor-pointer"
             >
               <M3Icon name="cloud_upload" size={14} />
               <span>{t.commit}</span>
@@ -800,12 +1034,13 @@ export default function App() {
         </header>
 
         {/* Mobile Main Body View (Full-Screen View Switching) */}
-        <main className="flex-1 overflow-hidden relative flex flex-col">
+        <main className="flex-1 min-h-0 overflow-hidden relative flex flex-col">
           {mobileTab === 'files' && (
-            <div className="flex-1 w-full h-full overflow-hidden flex flex-col">
+            <div className="flex-1 w-full h-full overflow-y-auto flex flex-col">
               <Sidebar
                 tree={tree}
                 activeFilePath={activeFilePath}
+                files={files}
                 t={t}
                 onSelectFile={handleSelectFile}
                 onUploadZip={handleUploadZip}
@@ -813,9 +1048,7 @@ export default function App() {
                 onCreateFile={handleCreateFile}
                 onCreateFolder={handleCreateFolder}
                 onDeleteNode={handleDeleteNode}
-                onRenameNode={() => {}}
-                onLoadTemplate={handleLoadTemplate}
-                onExplainCode={() => {}}
+                onRenameNode={handleRenameNode}
               />
             </div>
           )}
@@ -831,6 +1064,7 @@ export default function App() {
                 onCloseTab={handleCloseTab}
                 onUpdateContent={handleUpdateContent}
                 onSaveFile={() => addGitLog(`Saved file: ${activeFilePath}`)}
+                onFindInFiles={() => setMobileTab('search')}
                 targetLine={targetSearchLine}
               />
             </div>
@@ -840,6 +1074,8 @@ export default function App() {
             <div className="flex-1 w-full h-full overflow-hidden flex flex-col">
               <Preview
                 files={files}
+                activeFile={files[activeFilePath] || null}
+                activeFilePath={activeFilePath}
                 t={t}
                 onConsoleMessage={handlePreviewConsole}
               />
@@ -875,6 +1111,7 @@ export default function App() {
                 t={t}
                 isCleanZipImport={isCleanZipImport}
                 isLoadingRepo={isLoadingRepo}
+                repoLoadProgress={repoLoadProgress}
                 onConnectOAuth={handleConnectOAuth}
                 onConnectToken={handleConnectToken}
                 onDisconnect={handleDisconnect}
@@ -909,7 +1146,13 @@ export default function App() {
         </main>
 
         {/* Mobile Bottom Navigation Bar */}
-        <nav className="h-14 bg-[#1e1f22] border-t border-[#43474e]/40 flex items-center justify-around shrink-0 px-1">
+        <nav
+          className="bg-[#1e1f22] border-t border-[#43474e]/40 flex items-center justify-around shrink-0 px-1 z-30"
+          style={{
+            height: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))',
+            paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          }}
+        >
           <button
             onClick={() => setMobileTab('files')}
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer transition-colors ${
@@ -959,7 +1202,7 @@ export default function App() {
             <M3Icon name="sync" size={20} />
             <span className="text-[10px] mt-0.5">{t.sourceControl}</span>
             {diffs.length > 0 && (
-              <span className="absolute top-1 right-2 w-3.5 h-3.5 rounded-full bg-[#a8c7fa] text-[#003062] font-bold text-[8px] flex items-center justify-center">
+              <span className="absolute top-1 right-3 w-4 h-4 rounded-full bg-[#a8c7fa] text-[#003062] font-bold text-[9px] flex items-center justify-center">
                 {diffs.length}
               </span>
             )}
@@ -975,148 +1218,117 @@ export default function App() {
             <span className="text-[10px] mt-0.5">{t.terminal}</span>
           </button>
         </nav>
+
+        {sessionRecoveryModal}
       </div>
     );
   }
 
   // -----------------------------------------------------------------
-  // DESKTOP FULL-FEATURED USER INTERFACE
+  // DESKTOP FULL-FEATURED IDE
   // -----------------------------------------------------------------
   return (
     <div className="h-screen w-screen flex flex-col bg-[#121316] text-[#e2e2e6] overflow-hidden select-none">
-      {/* Top Application Bar */}
-      <header className="h-11 px-3 bg-[#1e1f22] border-b border-[#43474e]/40 flex items-center justify-between shrink-0">
-        {/* Brand & Workspace Title */}
+      {/* Top VS Code Style Menu Bar */}
+      <header className="h-9 px-3 bg-[#1e1f22] border-b border-[#43474e]/40 flex items-center justify-between shrink-0 text-xs">
+        {/* Left: Branding & Breadcrumb */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-[#a8c7fa] font-bold text-sm">
-            <M3Icon name="folder_zip" size={22} className="text-[#a8c7fa]" />
+          <div className="flex items-center gap-1.5 font-bold tracking-wide text-[#a8c7fa]">
+            <M3Icon name="folder_zip" size={18} />
             <span>{t.appName}</span>
           </div>
-          <span className="text-[#43474e]">/</span>
-          <div className="flex items-center gap-1.5 text-xs text-[#c4c6d0]">
-            <M3Icon name="bookmark" size={14} className="text-[#8e9199]" />
-            <span className="font-mono text-white">{selectedRepo?.name || 'workspace'}</span>
-            <span className="px-2 py-0.5 rounded-full bg-[#00468b]/40 text-[#a8c7fa] text-[11px] font-mono border border-[#a8c7fa]/20">
+
+          <div className="hidden sm:flex items-center gap-2 text-[#8e9199]">
+            <span>/</span>
+            <span className="text-white font-mono">{selectedRepo?.name || 'local-workspace'}</span>
+            <span>/</span>
+            <span className="text-[#a8c7fa] font-mono text-[11px] bg-[#121316] px-1.5 py-0.5 rounded border border-[#43474e]/40">
               {activeBranch}
             </span>
           </div>
         </div>
 
-        {/* View Mode Switcher (Editor / Split / Preview) */}
-        <div className="flex items-center gap-1 bg-[#121316] p-0.5 rounded-lg border border-[#43474e]/30">
+        {/* Center: Quick View Mode Toggles */}
+        <div className="flex items-center bg-[#121316] rounded-lg p-0.5 border border-[#43474e]/40">
           <button
+            title={t.codeOnly}
             onClick={() => setViewMode('code')}
-            className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors ${
-              viewMode === 'code' ? 'bg-[#a8c7fa] text-[#003062] font-semibold' : 'text-[#8e9199] hover:text-white'
+            className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+              viewMode === 'code' ? 'bg-[#2b2d30] text-[#a8c7fa]' : 'text-[#8e9199] hover:text-white'
             }`}
-            title={t.editorViewOnly}
           >
             <M3Icon name="code" size={14} />
-            <span className="hidden md:inline">{t.editor}</span>
+            <span>{t.code}</span>
           </button>
           <button
+            title={t.splitEditorPreview}
             onClick={() => setViewMode('split')}
-            className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors ${
-              viewMode === 'split' ? 'bg-[#a8c7fa] text-[#003062] font-semibold' : 'text-[#8e9199] hover:text-white'
+            className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+              viewMode === 'split' ? 'bg-[#2b2d30] text-[#a8c7fa]' : 'text-[#8e9199] hover:text-white'
             }`}
-            title={t.splitView}
           >
             <M3Icon name="vertical_split" size={14} />
-            <span className="hidden md:inline">{t.splitView}</span>
+            <span>{t.splitView}</span>
           </button>
           <button
+            title={t.previewOnly}
             onClick={() => setViewMode('preview')}
-            className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors ${
-              viewMode === 'preview' ? 'bg-[#a8c7fa] text-[#003062] font-semibold' : 'text-[#8e9199] hover:text-white'
+            className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+              viewMode === 'preview' ? 'bg-[#2b2d30] text-[#a8c7fa]' : 'text-[#8e9199] hover:text-white'
             }`}
-            title={t.previewViewOnly}
           >
             <M3Icon name="visibility" size={14} />
-            <span className="hidden md:inline">{t.preview}</span>
+            <span>{t.preview}</span>
           </button>
         </div>
 
-        {/* Quick Actions (Language, Commit, Terminal toggle, Export, GitHub Status) */}
+        {/* Right: Actions, Language & Status */}
         <div className="flex items-center gap-2">
-          {/* Language Selector */}
-          <select
-            value={currentLang}
-            onChange={(e) => handleLanguageChange(e.target.value as SupportedLanguage)}
-            className="bg-[#121316] border border-[#43474e]/50 rounded-lg px-2 py-1 text-xs text-[#a8c7fa] focus:outline-none"
-            title={t.language}
-          >
-            <option value="en">English</option>
-            <option value="zh-CN">简体中文</option>
-            <option value="ms">Bahasa Melayu</option>
-          </select>
+          {/* Language Selector Dropdown */}
+          <div className="flex items-center gap-1 bg-[#121316] px-2 py-0.5 rounded-lg border border-[#43474e]/40">
+            <M3Icon name="translate" size={14} className="text-[#a8c7fa]" />
+            <select
+              value={currentLang}
+              onChange={(e) => handleLanguageChange(e.target.value as SupportedLanguage)}
+              className="bg-transparent text-[11px] text-[#a8c7fa] focus:outline-none cursor-pointer"
+            >
+              <option value="en">English</option>
+              <option value="zh-CN">简体中文</option>
+              <option value="ms">Bahasa Melayu</option>
+            </select>
+          </div>
 
-          {/* One-Click Commit Button without Terminal */}
+          {/* Terminal Toggle Button */}
           <button
-            onClick={() => setActivePanel('git')}
-            className="px-2.5 py-1 rounded-lg bg-[#00468b]/30 hover:bg-[#00468b]/50 border border-[#a8c7fa]/40 text-[#a8c7fa] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            title={t.commitDirectTooltip}
-          >
-            <M3Icon name="cloud_upload" size={16} />
-            <span>
-              {t.commit} ({diffs.length > 0 ? diffs.length : Object.keys(files).length})
-            </span>
-          </button>
-
-          <button
+            title={showTerminal ? t.hideTerminal : t.showTerminal}
             onClick={() => setShowTerminal(!showTerminal)}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer border ${
-              showTerminal
-                ? 'bg-[#2b2d30] border-[#a8c7fa]/40 text-[#a8c7fa]'
-                : 'bg-transparent border-[#43474e]/40 text-[#8e9199] hover:text-white'
+            className={`p-1 rounded hover:bg-white/5 transition-colors cursor-pointer flex items-center gap-1 text-[11px] ${
+              showTerminal ? 'text-[#a8c7fa]' : 'text-[#8e9199]'
             }`}
-            title={t.toggleTerminal}
           >
             <M3Icon name="terminal" size={16} />
             <span className="hidden sm:inline">{t.terminal}</span>
           </button>
 
-          <button
-            onClick={handleExportZip}
-            className="px-2.5 py-1 rounded-lg bg-[#a8c7fa] hover:bg-[#c2e7ff] text-[#003062] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            title={t.downloadZipTooltip}
-          >
-            <M3Icon name="download" size={16} />
-            <span className="hidden sm:inline">{t.exportZip}</span>
-          </button>
-
-          {/* Real GitHub Account Status Pill */}
+          {/* GitHub Connection Badge */}
           {isAuthenticated ? (
-            <div
-              onClick={() => setActivePanel('git')}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#0f5223]/30 border border-[#308745] text-[#b4f3b7] text-xs font-medium cursor-pointer"
-              title={`${t.connectedAs} @${githubUser?.login}`}
-            >
-              <M3Icon name="check_circle" size={14} />
-              <span className="hidden md:inline">@{githubUser?.login}</span>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#00468b]/30 border border-[#a8c7fa]/30 text-[11px] text-[#a8c7fa]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#b4f3b7]" />
+              <span className="font-mono">@{githubUser?.login}</span>
             </div>
           ) : (
             <button
               onClick={() => setActivePanel('git')}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#690005]/30 border border-[#ff8585]/40 text-[#ffdad6] text-xs font-medium hover:bg-[#690005]/50 transition-colors cursor-pointer"
-              title={t.connectGitHub}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#2b2d30] hover:bg-[#35383d] text-[11px] text-white border border-[#43474e]/50 cursor-pointer"
             >
-              <M3Icon name="lock" size={14} />
-              <span className="hidden md:inline">{t.connectGitHub}</span>
+              <M3Icon name="account_circle" size={14} className="text-[#a8c7fa]" />
+              <span>{t.connectGitHub}</span>
             </button>
           )}
         </div>
       </header>
 
-      {/* Global Mouse Drag Overlay to prevent iframe event interception */}
-      {isDragging && (
-        <div
-          className={`fixed inset-0 z-50 select-none bg-transparent ${
-            isDragging === 'terminal' ? 'cursor-row-resize' : 'cursor-col-resize'
-          }`}
-        />
-      )}
-
-      {/* Main Layout Area */}
+      {/* Main IDE Body */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left VS Code Activity Bar */}
         <nav className="w-12 bg-[#121316] border-r border-[#43474e]/30 flex flex-col items-center py-2 shrink-0 select-none">
@@ -1178,6 +1390,7 @@ export default function App() {
               <Sidebar
                 tree={tree}
                 activeFilePath={activeFilePath}
+                files={files}
                 t={t}
                 onSelectFile={handleSelectFile}
                 onUploadZip={handleUploadZip}
@@ -1185,9 +1398,7 @@ export default function App() {
                 onCreateFile={handleCreateFile}
                 onCreateFolder={handleCreateFolder}
                 onDeleteNode={handleDeleteNode}
-                onRenameNode={() => {}}
-                onLoadTemplate={handleLoadTemplate}
-                onExplainCode={() => {}}
+                onRenameNode={handleRenameNode}
               />
             )}
 
@@ -1217,6 +1428,7 @@ export default function App() {
                 t={t}
                 isCleanZipImport={isCleanZipImport}
                 isLoadingRepo={isLoadingRepo}
+                repoLoadProgress={repoLoadProgress}
                 onConnectOAuth={handleConnectOAuth}
                 onConnectToken={handleConnectToken}
                 onDisconnect={handleDisconnect}
@@ -1266,6 +1478,7 @@ export default function App() {
                   onCloseTab={handleCloseTab}
                   onUpdateContent={handleUpdateContent}
                   onSaveFile={() => addGitLog(`Saved file: ${activeFilePath}`)}
+                  onFindInFiles={() => setActivePanel('search')}
                   targetLine={targetSearchLine}
                   isMaximized={viewMode === 'code'}
                   onMaximize={() => setViewMode(viewMode === 'code' ? 'split' : 'code')}
@@ -1288,7 +1501,7 @@ export default function App() {
               </div>
             )}
 
-            {/* Live Preview Pane (HTML Viewer) */}
+            {/* Live Preview Pane (Markdown, SVG, Vector XML, and HTML Viewer) */}
             {(viewMode === 'preview' || viewMode === 'split') && (
               <div
                 style={{
@@ -1298,6 +1511,8 @@ export default function App() {
               >
                 <Preview
                   files={files}
+                  activeFile={files[activeFilePath] || null}
+                  activeFilePath={activeFilePath}
                   t={t}
                   onConsoleMessage={handlePreviewConsole}
                   isMaximized={viewMode === 'preview'}
@@ -1332,6 +1547,8 @@ export default function App() {
           )}
         </div>
       </div>
+
+      {sessionRecoveryModal}
     </div>
   );
 }
