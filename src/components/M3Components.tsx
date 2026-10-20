@@ -40,6 +40,13 @@ export interface M3ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElem
   loading?: boolean;
 }
 
+// Register Material 3 Web Components from Material ESM / @material/web
+import '@material/web/button/filled-button.js';
+import '@material/web/button/outlined-button.js';
+import '@material/web/button/elevated-button.js';
+import '@material/web/iconbutton/icon-button.js';
+import '@material/web/ripple/ripple.js';
+
 export function M3Button({
   children,
   variant = 'filled',
@@ -52,12 +59,12 @@ export function M3Button({
   ...props
 }: M3ButtonProps) {
   const baseClasses =
-    'inline-flex items-center justify-center font-medium transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-[0.98]';
+    'm3-morph-btn inline-flex items-center justify-center font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none';
 
   const sizeClasses = {
-    sm: 'text-xs px-3 py-1.5 rounded-full gap-1.5',
-    md: 'text-sm px-4 py-2 rounded-full gap-2',
-    lg: 'text-base px-5 py-2.5 rounded-full gap-2.5',
+    sm: 'text-xs px-3.5 py-1.5 gap-1.5',
+    md: 'text-sm px-4 py-2 gap-2',
+    lg: 'text-base px-5 py-2.5 gap-2.5',
   }[size];
 
   const variantClasses = {
@@ -126,7 +133,7 @@ export function M3IconButton({
     <button
       aria-label={label}
       title={label}
-      className={`inline-flex items-center justify-center rounded-full transition-all duration-150 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${sizeClasses} ${variantClasses} ${className}`}
+      className={`m3-icon-morph-btn inline-flex items-center justify-center cursor-pointer disabled:opacity-25 disabled:cursor-not-allowed disabled:pointer-events-none disabled:shadow-none ${sizeClasses} ${variantClasses} ${className}`}
       disabled={disabled}
       {...props}
     >

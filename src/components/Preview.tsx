@@ -4,10 +4,18 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { VFile, generatePreviewHtml, getFileExtension } from '../utils/fileSystem';
+import {
+  VFile,
+  generatePreviewHtml,
+  getFileExtension,
+  isFontExtension,
+  isAudioExtension,
+  isVideoExtension,
+} from '../utils/fileSystem';
 import { isAndroidVectorDrawable, parseAndroidVectorXml, ParsedVectorDrawable } from '../utils/vectorParser';
 import { M3Icon, M3IconButton } from './M3Components';
 import { Translations, TRANSLATIONS } from '../utils/i18n';
+import { FontSpecimenViewer, MediaPlayer } from './BinaryFileViewers';
 
 interface PreviewProps {
   files: Record<string, VFile>;
@@ -131,8 +139,12 @@ export function Preview({
     (fileExt === 'xml' || resolvedActiveFile?.name.endsWith('.xml')) &&
     resolvedActiveFile?.content &&
     isAndroidVectorDrawable(resolvedActiveFile.content);
+  const isFont = isFontExtension(fileExt);
+  const isAudio = isAudioExtension(fileExt);
+  const isVideo = isVideoExtension(fileExt);
+  const isMedia = isAudio || isVideo;
 
-  const supportsDedicatedPreview = isMarkdown || isSvg || isVectorXml;
+  const supportsDedicatedPreview = isMarkdown || isSvg || isVectorXml || isFont || isMedia;
 
   // View mode: 'file' (markdown/svg/vector) vs 'webapp' (index.html)
   const [previewTab, setPreviewTab] = useState<'file' | 'webapp'>('file');
@@ -275,7 +287,19 @@ export function Preview({
                 }`}
               >
                 <M3Icon
-                  name={isMarkdown ? 'article' : isVectorXml ? 'polyline' : 'draw'}
+                  name={
+                    isMarkdown
+                      ? 'article'
+                      : isVectorXml
+                      ? 'polyline'
+                      : isSvg
+                      ? 'draw'
+                      : isFont
+                      ? 'font_download'
+                      : isAudio
+                      ? 'audiotrack'
+                      : 'videocam'
+                  }
                   size={14}
                 />
                 <span className="truncate max-w-[130px]">
@@ -283,7 +307,13 @@ export function Preview({
                     ? t.markdownPreview
                     : isVectorXml
                     ? t.vectorPreview
-                    : 'SVG'}
+                    : isSvg
+                    ? 'SVG'
+                    : isFont
+                    ? 'Font Specimen'
+                    : isAudio
+                    ? 'Audio Player'
+                    : 'Video Player'}
                 </span>
               </button>
               <button
@@ -491,8 +521,18 @@ export function Preview({
           </div>
         )}
 
-        {/* Case D: Standard Sandboxed Web App Preview */}
-        {(previewTab === 'webapp' || (!isMarkdown && !isSvg && !isVectorXml)) && (
+        {/* Case D: Font Specimen (.ttf, .otf, .woff, .woff2, .eot) */}
+        {previewTab === 'file' && isFont && resolvedActiveFile && (
+          <FontSpecimenViewer file={resolvedActiveFile} t={t} />
+        )}
+
+        {/* Case E: Media Playback (.mp3, .ogg, .wav, .mp4, .webm, .mkv) */}
+        {previewTab === 'file' && isMedia && resolvedActiveFile && (
+          <MediaPlayer file={resolvedActiveFile} t={t} />
+        )}
+
+        {/* Case F: Standard Sandboxed Web App Preview */}
+        {(previewTab === 'webapp' || !supportsDedicatedPreview) && (
           <div
             style={{ width: getViewportWidth() }}
             className="h-full bg-white transition-all duration-300 shadow-2xl overflow-hidden flex flex-col"

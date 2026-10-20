@@ -1,129 +1,131 @@
-# ZipStudio Pro: Markdown & Vector Previews, Context Menus, Resizing & Session Recovery
+# Media Playback, Font Specimen Viewer, MD3E Animations & Source Control Commit History
 
-Upgrade ZipStudio with multi-format live previews (Markdown, SVG, and Android Vector Drawables), a full file-system context menu with mobile long-press support, productivity hotkeys, complete mobile viewport and scrolling repair, dynamic Source Control sidebar resizing, live repository loading ETA, and an uncommitted session restore prompt.
+A comprehensive upgrade to stabilize all binary asset formats (.mp3, .ttf, .otf, .mp4, etc.), add rich interactive media and font players, implement Material Design 3 Expressive entry/exit animations for menus and dialogs, enforce Undo/Redo button availability states, and display complete GitHub repository commit history in Source Control.
+
+---
 
 ### User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The following architectural and user experience decisions have been aligned based on your preferences:
-> - **Session Persistence**: On page startup, ZipStudio will detect any unsaved or uncommitted work from previous sessions and present a prompt allowing you to restore your workspace or start fresh.
-> - **Android Vector & SVG Previews**: Render Android Vector Drawable `.xml` files by converting vector paths to interactive SVGs with zoom and pan controls alongside native SVG rendering.
-> - **Context Menu Trigger**: 500ms touch-and-hold with haptic touch feel on mobile devices, and standard right-click on desktop.
-> - **Template Cleanup**: Completely removes the redundant starter templates to streamline the sidebar.
+> - **Font Previews**: Fonts (.ttf, .otf, .woff, .woff2) will be rendered in a dedicated typography specimen viewer in both the Editor and Preview panes, featuring custom sample text input, a live font size slider, an alphabet glyph specimen grid, and a typography waterfall.
+> - **Media Playback**: Audio (.mp3, .ogg, .wav) and video (.mp4, .webm, .mkv) files will use a tailored Material 3 media player with responsive playback controls, duration, track title, and format badge.
+> - **Binary Crash Prevention**: All media and font extensions will be registered in `isBinaryExtension` and `getMimeType`, preventing raw binary decoding errors and memory spikes.
+> - **Source Control History**: Will fetch and display the remote GitHub repository's actual commit log (`/repos/:owner/:repo/commits`), showing commit SHA, message, author name, timestamp, and branch details.
 
 ---
 
 ### 1. Overview & Core Concept
 
-ZipStudio is a browser-native web IDE and GitHub repository manager for editing, previewing, and committing zip archives and remote repositories. This update resolves usability friction points and adds requested capabilities:
+1. **Crash Prevention & Safe Binary Handling**:
+   - Update `isBinaryExtension` and `getMimeType` to support all font types (`ttf`, `otf`, `woff`, `woff2`, `eot`) and media types (`mp3`, `wav`, `ogg`, `mp4`, `webm`, `mkv`, `aac`, `flac`, `m4a`).
+   - Fix `gitService.ts` blob fetching to detect all binary types using a centralized extension matcher and construct proper data URLs (`data:audio/mp3;base64,...`, `data:font/ttf;base64,...`, `data:video/mp4;base64,...`) instead of falling back to text decoding or `data:image/` URLs.
 
-1. **Multi-Format Previews**: Adds dedicated preview engines for GitHub-flavored Markdown (`.md`), Scalable Vector Graphics (`.svg`), and Android Vector Drawables (`.xml`), featuring interactive pan, zoom, and background grid toggling.
-2. **File Explorer Context Menu**: Right-click on desktop or 500ms long-press on mobile brings up a context menu with "Add File" (for folders), "Rename", "Delete", "Download", and a detailed "Properties" modal.
-3. **Productivity Hotkeys & Editor Controls**: `Ctrl+Shift+F` for Find in Files, `Ctrl+Z` for Undo, `Ctrl+Y` / `Ctrl+Shift+Z` for Redo, and `Ctrl+Shift+K` / `Ctrl+D` for Delete Line, backed by dedicated toolbar buttons.
-4. **Mobile Layout & Scroll Fixes**: Replaces rigid viewport bounds with dynamic `100dvh` flex columns, ensuring the bottom tab bar is always 100% visible and internal views scroll with smooth touch gestures.
-5. **Dynamic Source Control Sizing**: Fixes hardcoded width constraints in the GitHub panel so Source Control expands and contracts dynamically with the mouse-resizable sidebar.
-6. **Repository Loading with ETA**: Shows file-by-file loading progress, percentage completed, and a live remaining-time countdown during remote tree downloads.
-7. **Uncommitted Session History Recovery**: Auto-saves workspace snapshots to browser storage and displays a session restoration dialog upon reload.
+2. **Interactive Font Specimen Viewer**:
+   - When a font file is selected, dynamically load and register the font using standard Web Font APIs (`@font-face` with base64 data URL).
+   - Display font metadata (format, size, font name).
+   - Editable live preview sentence ("The quick brown fox jumps over the lazy dog").
+   - Font scale slider (12px to 96px).
+   - Character matrix displaying Uppercase (A-Z), Lowercase (a-z), Numerals (0-9), and Symbols (!@#$%...).
+   - Typographic scale waterfall (12px, 14px, 16px, 20px, 24px, 32px, 48px, 64px).
+
+3. **Playable Audio & Video Player**:
+   - Provide an integrated player directly within the Editor and Preview panes.
+   - For audio: track title, audio player controls, duration, file size, and animated waveform effect.
+   - For video: standard responsive video player container with native controls and format indicator.
+
+4. **MD3E Spring Animations for Dialogs & Context Menu**:
+   - Enhance the right-click/long-press context menu with Material 3 Expressive spring animation: `scale(0.92) -> scale(1.0)` with `opacity: 0 -> 1` and `cubic-bezier(0.34, 1.56, 0.64, 1)`.
+   - Upgrade modal dialogs (Session Restore, Rename, Delete confirmation) with MD3E backdrop blur and expressive scale/bounce transitions.
+
+5. **Undo/Redo Button Disabled State**:
+   - Track `historyPointer` and `historyStack.length` in `Editor.tsx`.
+   - Grey out Undo (`opacity-30 cursor-not-allowed disabled:pointer-events-none`) when pointer is at 0.
+   - Grey out Redo (`opacity-30 cursor-not-allowed disabled:pointer-events-none`) when pointer is at the top of the stack.
+
+6. **Source Control Remote Commit History**:
+   - Add GitHub API integration to fetch commits from `/repos/:owner/:repo/commits`.
+   - Display commit author, avatar, relative date, full commit message, and short commit hash.
+   - Provide fallback to local session commits when offline or unauthenticated.
 
 ---
 
 ### 2. User Experience & Visual Design
 
-#### A. Multi-Format Live Preview
-- **Markdown (`.md`)**: Rendered using a clean GFM stylesheet with formatted headings, code syntax blocks, task lists, blockquotes, and tables. Includes a toggle to switch between rendered view and raw source.
-- **SVG Graphics (`.svg`)**: Interactive viewport rendering with Zoom In, Zoom Out, 100% Reset, and Fit-to-Screen controls, plus a dark/checkerboard background switcher.
-- **Android Vector Drawables (`.xml`)**: Automatically detects `<vector>` XML root elements, parses `android:viewportWidth`, `android:viewportHeight`, `android:pathData`, `android:fillColor`, and `android:strokeColor`, and translates them into an interactive SVG preview with zoom/pan and vector inspection.
-- **Web App Mode**: For HTML/JS/CSS projects, the existing sandboxed iframe preview remains active with console log streaming.
-
-#### B. File Explorer Context Menu & Modals
-- **Trigger**: Desktop secondary click (`contextmenu`) or 500ms continuous press on touch devices.
-- **Menu Actions**:
-  - `Add File` (visible only on folder nodes): Opens inline file creation under that directory.
-  - `Rename`: Opens an inline prompt to rename the node and updates all open tabs and paths.
-  - `Delete`: Displays a confirmation prompt before cleanly pruning the file or folder subtree.
-  - `Download`: Immediately downloads the selected file, or packages the folder as a standalone `.zip`.
-  - `Properties`: Opens a modal displaying File Name, Relative Path, MIME/Format, File Size (bytes & formatted KB), Line Count, and Last Modified timestamp.
-
-#### C. Mobile Viewport & Ergonomics
-- Fixed container using `h-[100dvh] max-h-[100dvh] overflow-hidden` preventing the browser URL bar from pushing the bottom navigation offscreen.
-- Pinned bottom tab bar with `pb-safe h-16` ensuring tap targets satisfy the $44 \times 44\text{px}$ touch standard.
-- Inner view containers configured with `overflow-y-auto overscroll-contain` to enable smooth vertical finger scrolling on phones and tablets.
-
-#### D. Productivity Hotkeys & Action Bar
-- Added quick action buttons in the editor header:
-  - **Undo** (`Ctrl+Z`)
-  - **Redo** (`Ctrl+Y` / `Ctrl+Shift+Z`)
-  - **Delete Line** (`Ctrl+Shift+K` / `Ctrl+D`)
-  - **Find in Files** (`Ctrl+Shift+F`)
-- Line numbers remain accurately aligned with the editor text during rapid scrolling and editing.
-
-#### E. Repository Loading Progress & ETA
-- When downloading remote repository trees from GitHub:
-  - Visual progress bar with percentage indicator.
-  - Live throughput and ETA counter: *"Loading repository: 24 / 80 files (30%) · Estimated: ~3s remaining"*.
-
-#### F. Session Recovery Modal
-- Upon startup, if an uncommitted session is detected:
-  - A modal banner notifies: *"Unsaved session from [Time] ([X] files). Would you like to resume your work?"*
-  - Actions: `[Restore Workspace]` (restores files and active tab) or `[Start Fresh]` (dismisses).
-
----
-
-### 3. Key Product Decisions & Trade-Offs
-
-- **Android Vector XML Parsing**:
-  - *Chosen Approach*: Client-side XML DOM parsing that extracts `<vector>`, `<path>`, and `<group>` elements and renders them directly via an inline SVG renderer.
-  - *Why*: Zero external heavyweight dependencies, instant rendering, and full compatibility with Android Studio vector assets without server processing.
-- **Client Storage for Session History**:
-  - *Chosen Approach*: Debounced local session snapshots (1s debounce) storing active files, diffs, open tabs, and timestamps.
-  - *Why*: Eliminates accidental data loss when the browser refreshes or disconnects from GitHub, while honoring user preference for a clear startup restoration prompt.
-- **Source Control Sidebar Sizing**:
-  - *Chosen Approach*: Remove hardcoded `w-80` classes from `GitHubPanel` and inherit the parent's `sidebarWidth` state (`180px` to `520px`).
-  - *Why*: Allows users to extend or minimize the sidebar freely, with Source Control, Explorer, and Search respecting the user's chosen layout.
-- **Templates Removal**:
-  - *Chosen Approach*: Completely strip template modals, button references, and default boilerplate templates.
-  - *Why*: Declutters the workspace header and file explorer so users can focus on their own code, imported zip files, and GitHub repositories.
-
----
-
-### 4. Technical Architecture & Data Strategy
-
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                          ZipStudio Workspace                           │
+│ Editor Header: active file tab, lang badge, Undo [disabled] Redo [off]  │
 ├────────────────────────────────────────────────────────────────────────┤
-│ Top App Bar: App Name | Active Repo | Language (EN/ZH/MY) | Commit     │
-├──────────────┬─────────────────────────────┬───────────────────────────┤
-│ Activity Bar │ Resizable Sidebar           │ Editor & Preview Panes    │
-│  [Explorer]  │  • File Tree (Context Menu) │  • Code Editor (Hotkeys)  │
-│  [Search]    │  • Search in Code           │  • Multi-Format Preview:  │
-│  [Git Sync]  │  • GitHub Source Control    │    - Markdown (.md)       │
-│              │    (Matches Sidebar Width)  │    - SVG (.svg)           │
-│              │                             │    - Vector XML (.xml)    │
-│              │                             │    - Sandboxed Web App    │
-├──────────────┴─────────────────────────────┴───────────────────────────┤
-│ Mouse Resizable Terminal & Console Logs (Ctrl+` or Bottom Handle)       │
-├────────────────────────────────────────────────────────────────────────┤
-│ Background Services: Session Storage Autosave | Loading ETA Estimator  │
+│                                                                        │
+│   ┌──────────────────────────────────────────────────────────────┐     │
+│   │  Font Specimen Viewer / Media Player Card                    │     │
+│   │                                                              │     │
+│   │  Aa  Inter-Bold.ttf (142 KB)                                 │     │
+│   │  Sample: [ The quick brown fox jumps over the lazy dog   ]   │     │
+│   │  Size: [ ───●────────────────── ] 36px                       │     │
+│   │                                                              │     │
+│   │  ABCDEFGHIJKLMNOPQRSTUVWXYZ                                  │     │
+│   │  abcdefghijklmnopqrstuvwxyz 0123456789                       │     │
+│   └──────────────────────────────────────────────────────────────┘     │
+│                                                                        │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### State & Storage Flow
-1. **Workspace Store**:
-   - `files: Record<string, VFile>`
-   - `baseFiles: Record<string, VFile>`
-   - `activeFilePath: string | null`
-   - `openTabs: string[]`
-   - `sidebarWidth: number`
-   - `terminalHeight: number`
-2. **Context Menu State**:
-   - `contextMenu: { visible: boolean, x: number, y: number, node: FileTreeNode | null }`
-   - `propertiesModalNode: FileTreeNode | null`
-   - `renameModalNode: FileTreeNode | null`
-3. **Session Persistence Store (`localStorage`)**:
-   - Key: `zipstudio_saved_session`
-   - Fields: `files`, `baseFiles`, `activeFilePath`, `openTabs`, `timestamp`, `repoName`
-   - Debounced save: triggers 1000ms after the last file modification.
-4. **Android Vector Engine**:
-   - Parses `<vector android:width="..." android:height="..." android:viewportWidth="..." android:viewportHeight="...">`
-   - Maps child `<path android:pathData="..." android:fillColor="..." android:strokeColor="..." android:strokeWidth="...">` to SVG `<path d="..." fill="..." stroke="..." stroke-width="..." />`.
+- **Right-Click Context Menu**:
+  - Spring-morph entry from cursor position.
+  - Smooth rounded-2xl container (`rounded-2xl shadow-2xl border border-[#43474e]/40`).
+- **Modal Dialogs**:
+  - MD3E dialog scale curve `cubic-bezier(0.34, 1.56, 0.64, 1)`.
+
+---
+
+### 3. Technical Architecture & File Changes
+
+```
+┌────────────────────────┐      ┌──────────────────────────────┐
+│     gitService.ts      │ ───► │        fileSystem.ts         │
+│  Centralized binary    │      │  MIME & binary detection     │
+│  fetching & commit API │      │  (.mp3, .otf, .ttf, .mp4)    │
+└────────────────────────┘      └──────────────────────────────┘
+            │                                  │
+            ▼                                  ▼
+┌────────────────────────┐      ┌──────────────────────────────┐
+│       Editor.tsx       │      │         Preview.tsx          │
+│  - Font Specimen View  │      │  - Audio & Video Player      │
+│  - Audio/Video Player  │      │  - Font Specimen Rendering   │
+│  - Undo/Redo States    │      │  - MD3E Animation Transitions│
+└────────────────────────┘      └──────────────────────────────┘
+            │                                  │
+            ▼                                  ▼
+┌────────────────────────┐      ┌──────────────────────────────┐
+│     Sidebar.tsx        │      │      GitHubPanel.tsx         │
+│  - MD3E Context Menu   │      │  - Repo Commit History API   │
+│  - Animated Dialogs    │      │  - Remote Commit Cards       │
+└────────────────────────┘      └──────────────────────────────┘
+```
+
+1. **`src/utils/fileSystem.ts`**:
+   - Add `.otf`, `.ttf`, `.woff`, `.woff2`, `.eot`, `.mp3`, `.wav`, `.ogg`, `.mp4`, `.webm`, `.mkv`, `.flac`, `.aac` to `isBinaryExtension` and `getMimeType`.
+2. **`src/utils/gitService.ts`**:
+   - Fix `fetchRepoTree` binary regex to include `.otf`, `.woff`, `.woff2`, `.mp4`, `.webm`, `.ogg`, `.mkv`.
+   - Build MIME-accurate data URLs (`getMimeType(ext)`).
+   - Add `fetchRepoCommits(owner, repo, branch)` to fetch remote GitHub commit history.
+3. **`src/components/Editor.tsx`**:
+   - Provide integrated font specimen and media playback cards for binary files.
+   - Maintain `canUndo` / `canRedo` state and disable buttons when stacks are empty.
+4. **`src/components/Preview.tsx`**:
+   - Support dedicated previews for fonts and audio/video files in addition to Markdown and SVG/Vector.
+5. **`src/components/Sidebar.tsx`**:
+   - Add MD3E spring physics animations to the context menu and rename/properties modals.
+6. **`src/components/GitHubPanel.tsx`**:
+   - Upgrade the History view to fetch and display the repository's real commit timeline with commit hashes, author info, and commit messages.
+
+---
+
+### 4. Verification Plan
+
+1. **Compilation**: Run `compile_applet` and `lint_applet` to ensure TypeScript builds cleanly with zero errors.
+2. **Font Preview Test**: Verify `.ttf` and `.otf` files open smoothly in Editor and Preview without crashing, displaying the interactive font specimen and glyphs.
+3. **Audio/Video Playback Test**: Verify `.mp3`, `.mp4`, `.ogg`, and `.webm` files display an interactive player with working controls.
+4. **Undo/Redo States**: Verify Undo and Redo buttons are greyed out (`disabled`) when no undo or redo actions are available, and become enabled as changes are made.
+5. **Animations**: Test right-click and mobile long-press context menu entry transitions and dialog animations.
+6. **Commit History**: Verify Source Control displays the repository's remote commit history.

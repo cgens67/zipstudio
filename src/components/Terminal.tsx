@@ -33,6 +33,7 @@ interface TerminalProps {
   isMaximized?: boolean;
   onToggleMaximize?: () => void;
   onMinimize?: () => void;
+  isMobile?: boolean;
 }
 
 export function Terminal({
@@ -51,6 +52,7 @@ export function Terminal({
   isMaximized = false,
   onToggleMaximize,
   onMinimize,
+  isMobile = false,
 }: TerminalProps) {
   const [activeTab, setActiveTab] = useState<'terminal' | 'console' | 'git' | 'problems'>('terminal');
   const [internalMaximized, setInternalMaximized] = useState(false);
@@ -75,17 +77,16 @@ export function Terminal({
     terminalBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [history, logs, gitLogs]);
 
-  const handleCommandSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const rawCmd = inputVal.trim();
-    if (!rawCmd) return;
+  const executeCommand = (rawCmd: string) => {
+    const trimmed = rawCmd.trim();
+    if (!trimmed) return;
 
-    setCommandHistory((prev) => [...prev, rawCmd]);
+    setCommandHistory((prev) => [...prev, trimmed]);
     setHistoryIndex(-1);
     setInputVal('');
 
-    const newHistory = [...history, `$ ${rawCmd}`];
-    const parts = rawCmd.split(' ');
+    const newHistory = [...history, `$ ${trimmed}`];
+    const parts = trimmed.split(' ');
     const cmd = parts[0].toLowerCase();
     const args = parts.slice(1);
 
@@ -191,6 +192,11 @@ export function Terminal({
     setHistory(newHistory);
   };
 
+  const handleCommandSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    executeCommand(inputVal);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowUp') {
       e.preventDefault();
@@ -223,11 +229,15 @@ export function Terminal({
 
   return (
     <div
-      style={{ height: maximized ? '75vh' : `${height}px` }}
-      className="bg-[#18191c] border-t border-[#43474e]/40 flex flex-col transition-[height] duration-150 select-none relative shrink-0"
+      style={isMobile ? undefined : { height: maximized ? '75vh' : `${height}px` }}
+      className={`bg-[#18191c] flex flex-col select-none relative ${
+        isMobile
+          ? 'h-full w-full flex-1 min-h-0'
+          : 'border-t border-[#43474e]/40 transition-[height] duration-150 shrink-0'
+      }`}
     >
-      {/* Mouse Drag Resize Handle on Top Edge */}
-      {onResizeStart && (
+      {/* Mouse Drag Resize Handle on Top Edge (Desktop only) */}
+      {!isMobile && onResizeStart && (
         <div
           onMouseDown={onResizeStart}
           title={t.resizeTerminal}
@@ -238,8 +248,8 @@ export function Terminal({
       )}
 
       {/* Terminal Header Tabs Bar */}
-      <div className="h-9 px-3 bg-[#1e1f22] border-b border-[#43474e]/30 flex items-center justify-between text-xs shrink-0">
-        <div className="flex items-center gap-1 h-full">
+      <div className="h-9 px-2 bg-[#1e1f22] border-b border-[#43474e]/30 flex items-center justify-between text-xs shrink-0 overflow-x-auto no-scrollbar gap-2">
+        <div className="flex items-center gap-1 h-full shrink-0">
           <button
             onClick={() => setActiveTab('terminal')}
             className={`px-3 py-1.5 font-medium flex items-center gap-1.5 border-b-2 cursor-pointer transition-colors ${
@@ -373,16 +383,43 @@ export function Terminal({
                 {line}
               </div>
             ))}
-            <form onSubmit={handleCommandSubmit} className="flex items-center gap-2 mt-2">
-              <span className="text-[#a8c7fa] font-bold">zipstudio:~$</span>
+            {/* Quick Command Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-2 pb-1">
+              {['ls', 'git status', 'git log', 'pwd', 'npm test', 'build', 'clear', 'help'].map((cmd) => (
+                <button
+                  key={cmd}
+                  type="button"
+                  onClick={() => executeCommand(cmd)}
+                  className="px-2.5 py-1 rounded-full bg-[#2b2d30] hover:bg-[#383a3e] active:scale-95 text-[#a8c7fa] text-[11px] font-mono border border-[#43474e]/40 shrink-0 cursor-pointer transition-all"
+                >
+                  {cmd}
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={handleCommandSubmit} className="flex items-center gap-2 mt-1.5 bg-[#121316] rounded-xl px-2.5 py-1.5 border border-[#43474e]/40">
+              <span className="text-[#a8c7fa] font-bold text-xs select-none shrink-0">zipstudio:~$</span>
               <input
                 type="text"
                 value={inputVal}
                 onChange={(e) => setInputVal(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={t.typeCommandPrompt}
-                className="flex-1 bg-transparent border-none text-[#e2e2e6] focus:outline-none font-mono text-xs"
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
+                className="flex-1 bg-transparent border-none text-[#e2e2e6] focus:outline-none font-mono text-xs min-w-0"
               />
+              {inputVal.trim() && (
+                <button
+                  type="submit"
+                  className="w-7 h-7 rounded-full bg-[#a8c7fa] text-[#003062] flex items-center justify-center shrink-0 cursor-pointer active:scale-90 transition-transform"
+                  title="Run command"
+                >
+                  <M3Icon name="arrow_forward" size={16} />
+                </button>
+              )}
             </form>
             <div ref={terminalBottomRef} />
           </div>

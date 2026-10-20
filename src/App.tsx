@@ -404,6 +404,15 @@ export default function App() {
           diffs: [],
         }))
       );
+
+      // Fetch repository commit history
+      try {
+        const repoCommits = await client.getRepoCommits(owner, repoName, branch);
+        setCommits(repoCommits);
+        addGitLog(`Loaded ${repoCommits.length} commits from ${repo.fullName}@${branch}`);
+      } catch (commitErr: any) {
+        console.warn('Failed loading commits:', commitErr);
+      }
     } catch (err: any) {
       addGitLog(`Failed loading repository tree: ${err.message}`);
     } finally {
@@ -513,6 +522,21 @@ export default function App() {
     return computeWorkingTreeChanges(baseFiles, files);
   }, [baseFiles, files]);
 
+  // Refresh commit history on demand
+  const handleRefreshCommits = async () => {
+    if (!githubToken || !selectedRepo) return;
+    try {
+      const [owner, repoName] = selectedRepo.fullName.split('/');
+      const client = new GitHubApiClient(githubToken);
+      addGitLog(`Refreshing commit history for ${selectedRepo.fullName}@${activeBranch}...`);
+      const repoCommits = await client.getRepoCommits(owner, repoName, activeBranch);
+      setCommits(repoCommits);
+      addGitLog(`Refreshed ${repoCommits.length} commits for ${activeBranch}.`);
+    } catch (err: any) {
+      addGitLog(`Commit refresh notice: ${err.message}`);
+    }
+  };
+
   // Commit and Push changes
   const handleCommitAndPush = async (message: string) => {
     if (!githubToken || !selectedRepo) {
@@ -536,13 +560,36 @@ export default function App() {
       const [owner, repoName] = selectedRepo.fullName.split('/');
       const client = new GitHubApiClient(githubToken);
 
+      // Only upload and include files that actually changed
+      let filesToCommit: Record<string, VFile> = {};
+      const deletedPaths: string[] = [];
+
+      if (isCleanZipImport) {
+        filesToCommit = files;
+      } else {
+        for (const diff of diffs) {
+          if (diff.status === 'deleted') {
+            deletedPaths.push(diff.path);
+          } else if (files[diff.path]) {
+            filesToCommit[diff.path] = files[diff.path];
+          }
+        }
+
+        if (Object.keys(filesToCommit).length === 0 && deletedPaths.length === 0) {
+          addGitLog('Working tree clean. There are no changes to commit.');
+          alert('Working tree clean. There are no changes to commit.');
+          return;
+        }
+      }
+
       const commitSha = await client.commitAndPushFiles(
         owner,
         repoName,
         activeBranch,
         message,
-        files,
-        isCleanZipImport
+        filesToCommit,
+        isCleanZipImport,
+        deletedPaths
       );
 
       const commit: GitCommit = {
@@ -556,7 +603,7 @@ export default function App() {
         },
         timestamp: Date.now(),
         branch: activeBranch,
-        filesChanged: diffs.length || Object.keys(files).length,
+        filesChanged: diffs.length || Object.keys(filesToCommit).length,
       };
 
       setCommits((prev) => [commit, ...prev]);
@@ -1060,6 +1107,7 @@ export default function App() {
                 activeFilePath={activeFilePath}
                 files={files}
                 t={t}
+                currentLang={currentLang}
                 onSelectTab={setActiveFilePath}
                 onCloseTab={handleCloseTab}
                 onUpdateContent={handleUpdateContent}
@@ -1121,6 +1169,7 @@ export default function App() {
                 onSwitchBranch={handleSwitchBranch}
                 onCreateBranch={handleCreateBranch}
                 onCommitAndPush={handleCommitAndPush}
+                onRefreshCommits={handleRefreshCommits}
                 onCreatePullRequest={handleCreatePullRequest}
                 onSubmitPRReview={handleSubmitPRReview}
               />
@@ -1140,6 +1189,7 @@ export default function App() {
                 onClearGitLogs={() => setGitLogs([])}
                 onClose={() => setMobileTab('editor')}
                 t={t}
+                isMobile={true}
               />
             </div>
           )}
@@ -1438,6 +1488,7 @@ export default function App() {
                 onSwitchBranch={handleSwitchBranch}
                 onCreateBranch={handleCreateBranch}
                 onCommitAndPush={handleCommitAndPush}
+                onRefreshCommits={handleRefreshCommits}
                 onCreatePullRequest={handleCreatePullRequest}
                 onSubmitPRReview={handleSubmitPRReview}
               />
@@ -1474,6 +1525,7 @@ export default function App() {
                   activeFilePath={activeFilePath}
                   files={files}
                   t={t}
+                  currentLang={currentLang}
                   onSelectTab={setActiveFilePath}
                   onCloseTab={handleCloseTab}
                   onUpdateContent={handleUpdateContent}

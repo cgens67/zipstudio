@@ -555,7 +555,7 @@ export function Sidebar({
         <div
           style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
           onClick={(e) => e.stopPropagation()}
-          className="fixed z-50 w-48 bg-[#1e1f22] border border-[#43474e]/60 rounded-xl shadow-2xl py-1 text-xs text-[#e2e2e6] select-none backdrop-blur-md"
+          className="fixed z-50 w-48 bg-[#1e1f22] border border-[#43474e]/60 rounded-xl shadow-2xl py-1 text-xs text-[#e2e2e6] select-none backdrop-blur-md m3-menu-spring"
         >
           <div className="px-3 py-1.5 text-[11px] font-mono text-[#a8c7fa] border-b border-[#43474e]/30 truncate font-semibold">
             {contextMenu.node.name}
@@ -610,7 +610,7 @@ export function Sidebar({
       {/* Rename Modal Dialog */}
       {renameNode && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#1e1f22] border border-[#43474e]/60 rounded-2xl w-full max-w-sm p-4 shadow-2xl">
+          <div className="bg-[#1e1f22] border border-[#43474e]/60 rounded-2xl w-full max-w-sm p-4 shadow-2xl m3-dialog-bounce">
             <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
               <M3Icon name="edit" size={18} className="text-[#a8c7fa]" />
               <span>{renameNode.isFolder ? t.renameFolder : t.renameFile}</span>
@@ -647,7 +647,7 @@ export function Sidebar({
       {/* Properties Modal Dialog */}
       {propertiesNode && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#1e1f22] border border-[#43474e]/60 rounded-2xl w-full max-w-md p-5 shadow-2xl">
+          <div className="bg-[#1e1f22] border border-[#43474e]/60 rounded-2xl w-full max-w-md p-5 shadow-2xl m3-dialog-bounce">
             <div className="flex items-center justify-between border-b border-[#43474e]/30 pb-3 mb-4">
               <div className="flex items-center gap-2">
                 <M3Icon

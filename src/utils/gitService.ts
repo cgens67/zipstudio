@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { isBinaryExtension, getMimeType } from './fileSystem';
+
 export interface VFileRef {
   path: string;
   name: string;
@@ -10,6 +12,8 @@ export interface VFileRef {
   isBinary: boolean;
   size: number;
   lastModified: number;
+  mode?: string;
+  sha?: string;
 }
 
 export interface GitCommit {
@@ -387,6 +391,33 @@ export class GitHubApiClient {
     });
   }
 
+  async getRepoCommits(owner: string, repo: string, branch?: string): Promise<GitCommit[]> {
+    const query = branch ? `?sha=${encodeURIComponent(branch)}&per_page=30` : '?per_page=30';
+    try {
+      const data: any[] = await this.request(`/repos/${owner}/${repo}/commits${query}`);
+      return data.map((item: any) => ({
+        id: item.sha,
+        shortId: item.sha.substring(0, 7),
+        message: item.commit?.message?.split('\n')[0] || 'Commit',
+        author: {
+          name: item.commit?.author?.name || item.author?.login || 'Developer',
+          email: item.commit?.author?.email || 'dev@example.com',
+          avatarUrl:
+            item.author?.avatar_url ||
+            `https://api.dicebear.com/7.x/bottts/svg?seed=${item.commit?.author?.name || 'Developer'}`,
+        },
+        timestamp: new Date(
+          item.commit?.author?.date || item.commit?.committer?.date || Date.now()
+        ).getTime(),
+        branch: branch || 'main',
+        filesChanged: item.stats?.total || 1,
+      }));
+    } catch (err: any) {
+      console.warn(`Could not load commits for ${owner}/${repo}:`, err.message);
+      return [];
+    }
+  }
+
   async fetchRepoTree(
     owner: string,
     repo: string,
@@ -430,14 +461,14 @@ export class GitHubApiClient {
 
               const path = blobItem.path;
               const name = path.split('/').pop() || path;
-              const isBinary =
-                blobItem.path.match(/\.(png|jpg|jpeg|gif|webp|ico|bmp|woff|woff2|ttf|mp3|pdf|zip)$/i) !== null;
+              const ext = name.split('.').pop() || '';
+              const isBinary = isBinaryExtension(ext);
 
               let content = '';
               if (blobRes.encoding === 'base64') {
                 if (isBinary) {
-                  const ext = name.split('.').pop() || 'png';
-                  content = `data:image/${ext};base64,${blobRes.content.replace(/\s/g, '')}`;
+                  const mime = getMimeType(ext);
+                  content = `data:${mime};base64,${blobRes.content.replace(/\s/g, '')}`;
                 } else {
                   // Decode base64 to text (handles UTF-8)
                   try {
@@ -448,7 +479,13 @@ export class GitHubApiClient {
                         .join('')
                     );
                   } catch {
-                    content = atob(blobRes.content.replace(/\s/g, ''));
+                    try {
+                      content = atob(blobRes.content.replace(/\s/g, ''));
+                    } catch {
+                      // Fallback as binary data URL if decoding fails
+                      const mime = getMimeType(ext);
+                      content = `data:${mime};base64,${blobRes.content.replace(/\s/g, '')}`;
+                    }
                   }
                 }
               } else {
@@ -462,6 +499,8 @@ export class GitHubApiClient {
                 isBinary,
                 size: blobRes.size || content.length,
                 lastModified: Date.now(),
+                mode: blobItem.mode || (name === 'gradlew' || path.endsWith('.sh') ? '100755' : '100644'),
+                sha: blobItem.sha,
               };
             } catch (blobErr) {
               console.warn(`Failed to fetch blob ${blobItem.path}:`, blobErr);
@@ -494,7 +533,8 @@ export class GitHubApiClient {
     branch: string,
     message: string,
     changedFiles: Record<string, VFileRef>,
-    cleanOverwrite = false
+    cleanOverwrite = false,
+    deletedPaths: string[] = []
   ): Promise<string> {
     // 1. Get latest commit SHA on branch
     const refData: any = await this.request(`/repos/${owner}/${repo}/git/ref/heads/${branch}`);
@@ -504,32 +544,79 @@ export class GitHubApiClient {
     const commitData: any = await this.request(`/repos/${owner}/${repo}/git/commits/${parentCommitSha}`);
     const baseTreeSha = commitData.tree.sha;
 
-    // 3. Create tree items for changed files
-    const treeItems = [];
-    for (const [filePath, file] of Object.entries(changedFiles)) {
-      if (file.isBinary && file.content.startsWith('data:')) {
-        const base64Data = file.content.substring(file.content.indexOf(',') + 1);
-        const blobRes: any = await this.request(`/repos/${owner}/${repo}/git/blobs`, {
-          method: 'POST',
-          body: JSON.stringify({ content: base64Data, encoding: 'base64' }),
-        });
+    // 3. Separate binary files that require blob creation
+    const entries = Object.entries(changedFiles);
+    const binaryEntries = entries.filter(
+      ([, file]) => file.isBinary && file.content.startsWith('data:')
+    );
+    const textEntries = entries.filter(
+      ([, file]) => !file.isBinary || !file.content.startsWith('data:')
+    );
+
+    // Upload binary blobs in parallel batches of 6 for speed
+    const uploadedBlobMap = new Map<string, string>();
+    const batchSize = 6;
+    for (let i = 0; i < binaryEntries.length; i += batchSize) {
+      const batch = binaryEntries.slice(i, i + batchSize);
+      await Promise.all(
+        batch.map(async ([filePath, file]) => {
+          const base64Data = file.content.substring(file.content.indexOf(',') + 1);
+          const blobRes: any = await this.request(`/repos/${owner}/${repo}/git/blobs`, {
+            method: 'POST',
+            body: JSON.stringify({ content: base64Data, encoding: 'base64' }),
+          });
+          uploadedBlobMap.set(filePath, blobRes.sha);
+        })
+      );
+    }
+
+    // 4. Create tree items for changed files
+    const treeItems: any[] = [];
+
+    // Handle deleted files (setting sha to null tells GitHub to remove the path from base_tree)
+    for (const delPath of deletedPaths) {
+      treeItems.push({
+        path: delPath,
+        mode: '100644',
+        type: 'blob',
+        sha: null,
+      });
+    }
+
+    // Handle text files
+    for (const [filePath, file] of textEntries) {
+      const mode =
+        file.mode ||
+        (file.name === 'gradlew' || filePath.endsWith('.sh') || filePath.endsWith('.bash')
+          ? '100755'
+          : '100644');
+      treeItems.push({
+        path: filePath,
+        mode,
+        type: 'blob',
+        content: file.content,
+      });
+    }
+
+    // Handle binary files with their uploaded blob SHAs
+    for (const [filePath, file] of binaryEntries) {
+      const blobSha = uploadedBlobMap.get(filePath);
+      if (blobSha) {
+        const mode =
+          file.mode ||
+          (file.name === 'gradlew' || filePath.endsWith('.sh') || filePath.endsWith('.bash')
+            ? '100755'
+            : '100644');
         treeItems.push({
           path: filePath,
-          mode: '100644',
+          mode,
           type: 'blob',
-          sha: blobRes.sha,
-        });
-      } else {
-        treeItems.push({
-          path: filePath,
-          mode: '100644',
-          type: 'blob',
-          content: file.content,
+          sha: blobSha,
         });
       }
     }
 
-    // 4. Create new tree.
+    // 5. Create new tree.
     // When cleanOverwrite is true, omit base_tree so that previous files in the repo are completely replaced!
     const treePayload: any = { tree: treeItems };
     if (!cleanOverwrite) {
@@ -541,7 +628,7 @@ export class GitHubApiClient {
       body: JSON.stringify(treePayload),
     });
 
-    // 5. Create commit
+    // 6. Create commit
     const newCommit: any = await this.request(`/repos/${owner}/${repo}/git/commits`, {
       method: 'POST',
       body: JSON.stringify({
@@ -551,7 +638,7 @@ export class GitHubApiClient {
       }),
     });
 
-    // 6. Update branch reference
+    // 7. Update branch reference
     await this.request(`/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
       method: 'PATCH',
       body: JSON.stringify({

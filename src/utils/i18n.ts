@@ -199,6 +199,12 @@ export interface Translations {
   hideTerminal: string;
   showTerminal: string;
   fileCountLabel: string;
+  findInFile: string;
+  replaceInFile: string;
+  nextMatch: string;
+  prevMatch: string;
+  noMatches: string;
+  syntaxHighlighting: string;
 }
 
 export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
@@ -396,6 +402,12 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     hideTerminal: 'Hide Terminal',
     showTerminal: 'Show Terminal',
     fileCountLabel: 'File Count',
+    findInFile: 'Find in file',
+    replaceInFile: 'Replace in file',
+    nextMatch: 'Next Match (Enter)',
+    prevMatch: 'Previous Match (Shift+Enter)',
+    noMatches: 'No matches',
+    syntaxHighlighting: 'Syntax Highlighting',
   },
   'zh-CN': {
     appName: 'ZipStudio',
@@ -591,6 +603,12 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     hideTerminal: '隐藏终端',
     showTerminal: '显示终端',
     fileCountLabel: '文件数量',
+    findInFile: '在当前文件中查找',
+    replaceInFile: '替换当前文件内容',
+    nextMatch: '下一个匹配 (Enter)',
+    prevMatch: '上一个匹配 (Shift+Enter)',
+    noMatches: '无匹配结果',
+    syntaxHighlighting: '代码高亮',
   },
   ms: {
     appName: 'ZipStudio',
@@ -786,5 +804,11 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     hideTerminal: 'Sembunyikan Terminal',
     showTerminal: 'Tunjukkan Terminal',
     fileCountLabel: 'Jumlah Fail',
+    findInFile: 'Cari dalam fail',
+    replaceInFile: 'Ganti dalam fail',
+    nextMatch: 'Padanan Seterusnya (Enter)',
+    prevMatch: 'Padanan Sebelumnya (Shift+Enter)',
+    noMatches: 'Tiada padanan',
+    syntaxHighlighting: 'Penyerlah Sintaks',
   },
 };

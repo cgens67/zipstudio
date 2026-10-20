@@ -43,6 +43,7 @@ interface GitHubPanelProps {
   onCommitAndPush: (message: string) => Promise<void>;
   onCreatePullRequest: (title: string, head: string, base: string, body: string) => Promise<void>;
   onSubmitPRReview: (prId: number, state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED', body: string) => Promise<void>;
+  onRefreshCommits?: () => Promise<void>;
 }
 
 export function GitHubPanel({
@@ -72,6 +73,7 @@ export function GitHubPanel({
   onCommitAndPush,
   onCreatePullRequest,
   onSubmitPRReview,
+  onRefreshCommits,
 }: GitHubPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState<'changes' | 'branches' | 'prs' | 'commits'>('changes');
   const [commitMessage, setCommitMessage] = useState('');
@@ -79,6 +81,8 @@ export function GitHubPanel({
   const [isConnectingToken, setIsConnectingToken] = useState(false);
   const [tokenError, setTokenError] = useState<string>('');
   const [selectedDiff, setSelectedDiff] = useState<FileDiff | null>(null);
+  const [copiedSha, setCopiedSha] = useState<string | null>(null);
+  const [isRefreshingCommits, setIsRefreshingCommits] = useState(false);
 
   // Authentication inputs
   const [patInput, setPatInput] = useState('');
@@ -618,19 +622,100 @@ export function GitHubPanel({
 
         {/* COMMITS HISTORY TAB */}
         {activeSubTab === 'commits' && (
-          <div className="space-y-2">
-            {commits.map((c) => (
-              <div key={c.id} className="p-2.5 rounded-lg bg-[#2b2d30] border border-[#43474e]/40 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-white truncate max-w-[180px]">{c.message}</span>
-                  <span className="text-[10px] font-mono text-[#a8c7fa]">{c.shortId}</span>
+          <div className="space-y-3">
+            {/* Header explaining commit history */}
+            <div className="p-3 rounded-xl bg-[#1e1f22] border border-[#43474e]/40 shadow-xs flex items-center justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                  <M3Icon name="history" size={16} className="text-[#a8c7fa]" />
+                  <span>Repository Commit History</span>
                 </div>
-                <div className="flex items-center justify-between text-[10px] text-[#8e9199]">
-                  <span>{c.author.name}</span>
-                  <span>{new Date(c.timestamp).toLocaleDateString()}</span>
-                </div>
+                <p className="text-[11px] text-[#8e9199] mt-0.5">
+                  Live timeline of commits from {selectedRepo ? selectedRepo.fullName : 'workspace'} on branch{' '}
+                  <span className="text-[#a8c7fa] font-mono">{activeBranch}</span>
+                </p>
               </div>
-            ))}
+
+              <button
+                onClick={async () => {
+                  if (onRefreshCommits) {
+                    setIsRefreshingCommits(true);
+                    try {
+                      await onRefreshCommits();
+                    } finally {
+                      setIsRefreshingCommits(false);
+                    }
+                  } else {
+                    await onLoadRepoFiles();
+                  }
+                }}
+                disabled={isRefreshingCommits}
+                title="Refresh commit history from remote repository"
+                className="p-1.5 rounded-lg bg-[#2b2d30] hover:bg-[#383a3e] text-[#a8c7fa] transition-colors cursor-pointer shrink-0 disabled:opacity-40"
+              >
+                <M3Icon name={isRefreshingCommits ? 'sync' : 'refresh'} size={16} className={isRefreshingCommits ? 'animate-spin' : ''} />
+              </button>
+            </div>
+
+            {commits.length === 0 ? (
+              <div className="text-center py-8 text-xs text-[#8e9199] bg-[#1e1f22]/50 rounded-xl border border-[#43474e]/30 p-4">
+                <M3Icon name="history_toggle_off" size={32} className="mx-auto mb-2 text-[#a8c7fa]/40" />
+                <p className="font-medium text-white mb-1">No commits recorded yet</p>
+                <p className="text-[11px] text-[#8e9199] max-w-xs mx-auto">
+                  Connect a GitHub repository to load its commit history, or stage and commit changes above to build your timeline.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {commits.map((c) => (
+                  <div
+                    key={c.id}
+                    className="p-3 rounded-xl bg-[#2b2d30] border border-[#43474e]/40 hover:border-[#a8c7fa]/40 transition-all space-y-2 shadow-xs"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 min-w-0">
+                        {c.author.avatarUrl ? (
+                          <img
+                            src={c.author.avatarUrl}
+                            alt={c.author.name}
+                            className="w-6 h-6 rounded-full bg-[#1e1f22] border border-[#43474e]/40 shrink-0 mt-0.5 object-cover"
+                          />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-[#00468b]/40 text-[#a8c7fa] flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">
+                            {c.author.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-white break-words leading-snug">
+                            {c.message}
+                          </p>
+                          <div className="flex items-center gap-1.5 text-[10px] text-[#8e9199] mt-1 font-mono">
+                            <span className="text-[#c4c6d0]">{c.author.name}</span>
+                            <span>•</span>
+                            <span>{new Date(c.timestamp).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(c.id);
+                            setCopiedSha(c.id);
+                            setTimeout(() => setCopiedSha(null), 2000);
+                          }}
+                          title="Copy commit SHA"
+                          className="px-2 py-0.5 rounded bg-[#1e1f22] hover:bg-[#121316] text-[10px] font-mono text-[#a8c7fa] border border-[#43474e]/50 flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <M3Icon name={copiedSha === c.id ? 'check' : 'content_copy'} size={11} />
+                          <span>{c.shortId}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -638,7 +723,7 @@ export function GitHubPanel({
       {/* Visual File Diff Modal */}
       {selectedDiff && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-2xl w-full max-h-[80vh] flex flex-col shadow-2xl overflow-hidden">
+          <div className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-2xl w-full max-h-[80vh] flex flex-col shadow-2xl overflow-hidden m3-dialog-bounce">
             <div className="p-3 bg-[#2b2d30] border-b border-[#43474e] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <M3Icon name="difference" size={18} className="text-[#a8c7fa]" />
@@ -687,7 +772,7 @@ export function GitHubPanel({
       {/* Review Pull Request Dialog */}
       {activePRToReview && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-lg w-full p-5 shadow-2xl">
+          <div className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-lg w-full p-5 shadow-2xl m3-dialog-bounce">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-white">{t.reviewPRTitle} #{activePRToReview.number}</h3>
               <M3IconButton
@@ -738,7 +823,7 @@ export function GitHubPanel({
       {/* Create New Repo Modal */}
       {showNewRepoModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <form onSubmit={handleCreateRepoSubmit} className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-3">
+          <form onSubmit={handleCreateRepoSubmit} className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-3 m3-dialog-bounce">
             <h3 className="text-sm font-semibold text-white">{t.createRepoTitle}</h3>
             <input
               type="text"
@@ -779,7 +864,7 @@ export function GitHubPanel({
       {/* Create New Branch Modal */}
       {showNewBranchModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <form onSubmit={handleCreateBranchSubmit} className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-3">
+          <form onSubmit={handleCreateBranchSubmit} className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-3 m3-dialog-bounce">
             <h3 className="text-sm font-semibold text-white">{t.createBranchTitle}</h3>
             <p className="text-xs text-[#c4c6d0]">{t.branchFrom}: <span className="text-[#a8c7fa] font-mono">{activeBranch}</span></p>
             <input
@@ -805,7 +890,7 @@ export function GitHubPanel({
       {/* Create New Pull Request Modal */}
       {showNewPRModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <form onSubmit={handleCreatePRSubmit} className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-3">
+          <form onSubmit={handleCreatePRSubmit} className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-3 m3-dialog-bounce">
             <h3 className="text-sm font-semibold text-white">{t.newPR}</h3>
             <div className="flex items-center gap-2 text-xs">
               <select

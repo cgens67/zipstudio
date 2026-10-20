@@ -12,6 +12,8 @@ export interface VFile {
   isBinary: boolean;
   size: number;
   lastModified: number;
+  mode?: string; // Git mode ('100644' or '100755')
+  sha?: string;
 }
 
 export interface FileTreeNode {
@@ -64,57 +66,305 @@ export function getFileExtension(path: string): string {
  * Detects language syntax for a given extension.
  */
 export function getLanguageFromExt(ext: string): string {
-  switch (ext) {
+  switch (ext.toLowerCase()) {
     case 'html':
     case 'htm':
+    case 'xhtml':
       return 'html';
     case 'css':
-    case 'scss':
-    case 'less':
       return 'css';
+    case 'scss':
+    case 'sass':
+      return 'scss';
+    case 'less':
+      return 'less';
     case 'js':
     case 'mjs':
     case 'cjs':
       return 'javascript';
     case 'ts':
     case 'mts':
+    case 'cts':
       return 'typescript';
     case 'jsx':
       return 'jsx';
     case 'tsx':
       return 'tsx';
     case 'json':
+    case 'json5':
+    case 'jsonc':
+    case 'map':
       return 'json';
     case 'md':
     case 'markdown':
+    case 'mdown':
+    case 'mkd':
       return 'markdown';
     case 'svg':
+      return 'svg';
     case 'xml':
+    case 'xaml':
+    case 'plist':
+    case 'atom':
+    case 'rss':
       return 'xml';
     case 'py':
+    case 'pyw':
+    case 'pyx':
       return 'python';
+    case 'java':
+      return 'java';
+    case 'kt':
+    case 'kts':
+      return 'kotlin';
+    case 'c':
+    case 'h':
+      return 'c';
+    case 'cpp':
+    case 'cc':
+    case 'cxx':
+    case 'hpp':
+    case 'hh':
+    case 'hxx':
+      return 'cpp';
+    case 'cs':
+      return 'csharp';
+    case 'go':
+      return 'go';
+    case 'rs':
+      return 'rust';
+    case 'php':
+    case 'phtml':
+      return 'php';
+    case 'rb':
+    case 'erb':
+      return 'ruby';
+    case 'swift':
+      return 'swift';
+    case 'dart':
+      return 'dart';
+    case 'lua':
+      return 'lua';
+    case 'r':
+    case 'rmd':
+      return 'r';
+    case 'sql':
+      return 'sql';
+    case 'sh':
+    case 'bash':
+    case 'zsh':
+    case 'fish':
+      return 'bash';
+    case 'bat':
+    case 'cmd':
+      return 'batch';
+    case 'ps1':
+    case 'psm1':
+      return 'powershell';
     case 'yml':
     case 'yaml':
       return 'yaml';
-    case 'sh':
-    case 'bash':
-      return 'bash';
+    case 'toml':
+      return 'toml';
+    case 'ini':
+    case 'cfg':
+    case 'conf':
+    case 'properties':
+      return 'properties';
+    case 'gradle':
+      return 'gradle';
+    case 'vue':
+      return 'vue';
+    case 'svelte':
+      return 'svelte';
+    case 'astro':
+      return 'astro';
+    case 'graphql':
+    case 'gql':
+      return 'graphql';
+    case 'csv':
+      return 'csv';
+    case 'tsv':
+      return 'tsv';
+    case 'log':
+      return 'log';
+    case 'txt':
+      return 'text';
     default:
-      return 'plaintext';
+      return ext ? ext.toLowerCase() : 'plaintext';
   }
 }
 
 /**
- * Checks if a file path is a binary asset (image, font, audio, etc.).
+ * Accurately detects language syntax for any file path or filename,
+ * including dotfiles (.gitignore, .env) and extensionless files (Dockerfile, Makefile).
+ */
+export function getLanguageFromFile(pathOrName: string): string {
+  const fileName = getFileName(pathOrName).toLowerCase();
+
+  // Special filename checks
+  if (fileName.startsWith('dockerfile')) return 'dockerfile';
+  if (fileName.startsWith('makefile') || fileName === 'gnumakefile') return 'makefile';
+  if (fileName === 'jenkinsfile') return 'groovy';
+  if (fileName === 'procfile') return 'procfile';
+  if (fileName === 'gemfile' || fileName === 'rakefile') return 'ruby';
+  if (fileName === 'cmakelists.txt') return 'cmake';
+  if (fileName === 'cargo.toml') return 'toml';
+  if (fileName === 'license' || fileName === 'licence' || fileName === 'copying') return 'markdown';
+
+  // Dotfiles
+  if (fileName === '.gitignore' || fileName === '.gitattributes' || fileName === '.gitmodules' || fileName === '.gitkeep') {
+    return 'git';
+  }
+  if (fileName.startsWith('.env')) return 'dotenv';
+  if (fileName === '.editorconfig') return 'editorconfig';
+  if (fileName === '.prettierrc' || fileName === '.eslintrc' || fileName === '.babelrc') return 'json';
+
+  const ext = getFileExtension(fileName);
+  return getLanguageFromExt(ext);
+}
+
+/**
+ * MIME type mapping for web assets, media, fonts, and documents.
+ */
+export function getMimeType(ext: string): string {
+  switch (ext.toLowerCase()) {
+    // Fonts
+    case 'ttf':
+      return 'font/ttf';
+    case 'otf':
+      return 'font/otf';
+    case 'woff':
+      return 'font/woff';
+    case 'woff2':
+      return 'font/woff2';
+    case 'eot':
+      return 'application/vnd.ms-fontobject';
+
+    // Audio
+    case 'mp3':
+      return 'audio/mpeg';
+    case 'wav':
+      return 'audio/wav';
+    case 'ogg':
+    case 'oga':
+      return 'audio/ogg';
+    case 'aac':
+      return 'audio/aac';
+    case 'flac':
+      return 'audio/flac';
+    case 'm4a':
+      return 'audio/mp4';
+
+    // Video
+    case 'mp4':
+      return 'video/mp4';
+    case 'webm':
+      return 'video/webm';
+    case 'mkv':
+      return 'video/x-matroska';
+    case 'ogv':
+      return 'video/ogg';
+
+    // Images
+    case 'png':
+      return 'image/png';
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'gif':
+      return 'image/gif';
+    case 'webp':
+      return 'image/webp';
+    case 'svg':
+      return 'image/svg+xml';
+    case 'ico':
+      return 'image/x-icon';
+    case 'bmp':
+      return 'image/bmp';
+
+    // Web text & scripts
+    case 'html':
+    case 'htm':
+      return 'text/html';
+    case 'css':
+      return 'text/css';
+    case 'js':
+    case 'mjs':
+      return 'application/javascript';
+    case 'xml':
+      return 'application/xml';
+    case 'txt':
+      return 'text/plain';
+
+    // Documents & Archives & Binaries
+    case 'pdf':
+      return 'application/pdf';
+    case 'zip':
+      return 'application/zip';
+    case 'jar':
+      return 'application/java-archive';
+    case 'war':
+    case 'ear':
+      return 'application/java-archive';
+    case 'apk':
+      return 'application/vnd.android.package-archive';
+    case 'aab':
+      return 'application/octet-stream';
+    case 'tar':
+      return 'application/x-tar';
+    case 'gz':
+      return 'application/gzip';
+    case '7z':
+      return 'application/x-7z-compressed';
+    case 'json':
+      return 'application/json';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+/**
+ * Checks if a file path is a font asset.
+ */
+export function isFontExtension(ext: string): boolean {
+  return ['ttf', 'otf', 'woff', 'woff2', 'eot'].includes(ext.toLowerCase());
+}
+
+/**
+ * Checks if a file path is an audio asset.
+ */
+export function isAudioExtension(ext: string): boolean {
+  return ['mp3', 'wav', 'ogg', 'oga', 'aac', 'flac', 'm4a', 'opus'].includes(ext.toLowerCase());
+}
+
+/**
+ * Checks if a file path is a video asset.
+ */
+export function isVideoExtension(ext: string): boolean {
+  return ['mp4', 'webm', 'mkv', 'ogv', 'mov', 'avi'].includes(ext.toLowerCase());
+}
+
+/**
+ * Checks if a file path is an image asset.
+ */
+export function isImageExtension(ext: string): boolean {
+  return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'bmp', 'tiff', 'cur'].includes(ext.toLowerCase());
+}
+
+/**
+ * Checks if a file path is a binary asset (image, font, audio, video, archive, compiled code, etc.).
  */
 export function isBinaryExtension(ext: string): boolean {
   const binaryExts = [
-    'png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'bmp', 'tiff',
+    'png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'bmp', 'tiff', 'cur',
     'woff', 'woff2', 'ttf', 'otf', 'eot',
-    'mp3', 'wav', 'ogg', 'mp4', 'webm',
-    'pdf', 'zip', 'gz', 'tar'
+    'mp3', 'wav', 'ogg', 'oga', 'aac', 'flac', 'm4a', 'opus',
+    'mp4', 'webm', 'mkv', 'ogv', 'mov', 'avi',
+    'pdf', 'zip', 'gz', 'tar', 'bz2', 'xz', '7z', 'rar',
+    'jar', 'war', 'ear', 'apk', 'aab', 'class', 'so', 'dylib', 'dll', 'exe', 'bin', 'dex'
   ];
-  return binaryExts.includes(ext);
+  return binaryExts.includes(ext.toLowerCase());
 }
 
 /**
@@ -236,13 +486,22 @@ export async function extractZipInBrowser(zipData: ArrayBuffer | Blob): Promise<
       size = new Blob([content]).size;
     }
 
+    let mode = '100644';
+    const fileName = getFileName(normalizedPath);
+    if ((zipEntry as any).unixPermissions && ((zipEntry as any).unixPermissions & 0o111) !== 0) {
+      mode = '100755';
+    } else if (fileName === 'gradlew' || normalizedPath.endsWith('.sh') || normalizedPath.endsWith('.bash')) {
+      mode = '100755';
+    }
+
     files[normalizedPath] = {
       path: normalizedPath,
-      name: getFileName(normalizedPath),
+      name: fileName,
       content,
       isBinary,
       size,
       lastModified: zipEntry.date.getTime() || Date.now(),
+      mode,
     };
   }
 
@@ -272,44 +531,6 @@ export async function packageZipFromFiles(files: Record<string, VFile>): Promise
   });
 }
 
-/**
- * Returns MIME type based on extension.
- */
-export function getMimeType(ext: string): string {
-  switch (ext) {
-    case 'html':
-    case 'htm':
-      return 'text/html';
-    case 'css':
-      return 'text/css';
-    case 'js':
-    case 'mjs':
-      return 'application/javascript';
-    case 'json':
-      return 'application/json';
-    case 'png':
-      return 'image/png';
-    case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg';
-    case 'gif':
-      return 'image/gif';
-    case 'svg':
-      return 'image/svg+xml';
-    case 'webp':
-      return 'image/webp';
-    case 'ico':
-      return 'image/x-icon';
-    case 'woff':
-      return 'font/woff';
-    case 'woff2':
-      return 'font/woff2';
-    case 'ttf':
-      return 'font/ttf';
-    default:
-      return 'text/plain';
-  }
-}
 
 /**
  * Generates an isolated HTML document for live preview, inlining relative CSS, JS, and image references.
