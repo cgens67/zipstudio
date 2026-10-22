@@ -26,6 +26,7 @@ import {
 import { STARTER_TEMPLATES } from './utils/starterTemplates';
 import { SupportedLanguage, TRANSLATIONS } from './utils/i18n';
 import { M3Icon, M3Button } from './components/M3Components';
+import { M3Switch } from './components/M3Switch';
 import { Sidebar } from './components/Sidebar';
 import { SearchPanel } from './components/SearchPanel';
 import { Editor } from './components/Editor';
@@ -134,6 +135,22 @@ export default function App() {
 
   // Unsaved session persistence & prompt state
   const [pendingSession, setPendingSession] = useState<SavedSession | null>(null);
+  const [backupBeforeRestore, setBackupBeforeRestore] = useState(true);
+
+  // In-UI Alert & Modal Dialog state (eliminates external browser alert/dialogs)
+  const [inUiAlert, setInUiAlert] = useState<{
+    title: string;
+    message: string;
+    type?: 'info' | 'error' | 'success' | 'warning';
+  } | null>(null);
+
+  const triggerAlert = (
+    title: string,
+    message: string,
+    type: 'info' | 'error' | 'success' | 'warning' = 'info'
+  ) => {
+    setInUiAlert({ title, message, type });
+  };
 
   // Terminal & Preview Logs
   const [logs, setLogs] = useState<ConsoleLogEntry[]>([]);
@@ -172,14 +189,26 @@ export default function App() {
     }
   }, []);
 
-  // Debounced auto-save session
+  // Debounced auto-save session (safely omits heavy binary data to stay well under browser 5MB quota)
   useEffect(() => {
     if (pendingSession) return;
     const timer = setTimeout(() => {
       try {
+        const sanitizedFiles: Record<string, VFile> = {};
+        for (const [path, f] of Object.entries(files)) {
+          if (f.isBinary || f.size > 30000 || f.content.length > 30000) {
+            sanitizedFiles[path] = {
+              ...f,
+              content: '', // omit multi-megabyte base64 data from localStorage
+            };
+          } else {
+            sanitizedFiles[path] = f;
+          }
+        }
+
         const session: SavedSession = {
           savedAt: Date.now(),
-          files,
+          files: sanitizedFiles,
           openTabs,
           activeFilePath,
           repoName: selectedRepo?.fullName,
@@ -187,7 +216,7 @@ export default function App() {
         };
         localStorage.setItem('zipstudio_workspace_session', JSON.stringify(session));
       } catch (e) {
-        console.warn('Failed auto-saving session:', e);
+        console.warn('Failed auto-saving session (storage quota):', e);
       }
     }, 1200);
 
@@ -196,6 +225,24 @@ export default function App() {
 
   const handleRestoreSession = () => {
     if (!pendingSession) return;
+    if (backupBeforeRestore && Object.keys(files).length > 0) {
+      try {
+        const sanitizedFiles: Record<string, VFile> = {};
+        for (const [path, f] of Object.entries(files)) {
+          if (f.isBinary || f.size > 30000 || f.content.length > 30000) {
+            sanitizedFiles[path] = { ...f, content: '' };
+          } else {
+            sanitizedFiles[path] = f;
+          }
+        }
+        localStorage.setItem(
+          `zipstudio_backup_${Date.now()}`,
+          JSON.stringify({ files: sanitizedFiles, timestamp: Date.now() })
+        );
+      } catch (e) {
+        console.warn('Backup error:', e);
+      }
+    }
     setFiles(pendingSession.files);
     setBaseFiles(pendingSession.files);
     if (pendingSession.openTabs && pendingSession.openTabs.length > 0) {
@@ -288,8 +335,10 @@ export default function App() {
       const data = await res.json();
 
       if (!data.configured) {
-        alert(
-          'GitHub OAuth CLIENT_ID is not configured in server environment variables.\n\nPlease enter a GitHub Personal Access Token (PAT) with "repo" scope to connect immediately.'
+        triggerAlert(
+          'OAuth Not Configured',
+          'GitHub OAuth CLIENT_ID is not configured in server environment variables.\n\nPlease enter a GitHub Personal Access Token (PAT) with "repo" scope to connect immediately.',
+          'warning'
         );
         return;
       }
@@ -301,7 +350,7 @@ export default function App() {
       );
 
       if (!authWindow) {
-        alert('Popup was blocked by your browser. Please allow popups to connect your GitHub account.');
+        triggerAlert('Popup Blocked', 'Popup was blocked by your browser. Please allow popups to connect your GitHub account.', 'warning');
       }
     } catch (err: any) {
       addGitLog(`OAuth initiation error: ${err.message}`);
@@ -454,7 +503,7 @@ export default function App() {
   // Create repository on GitHub
   const handleCreateRepo = async (name: string, description: string, isPrivate: boolean) => {
     if (!githubToken) {
-      alert('Please connect your GitHub account first.');
+      triggerAlert('GitHub Account Required', 'Please connect your GitHub account first.', 'info');
       return;
     }
     try {
@@ -466,7 +515,7 @@ export default function App() {
       addGitLog(`Repository "${newRepo.fullName}" created successfully on GitHub.`);
     } catch (err: any) {
       addGitLog(`Error creating repo: ${err.message}`);
-      alert(`Failed to create repository on GitHub: ${err.message}`);
+      triggerAlert('Create Repository Failed', `Failed to create repository on GitHub: ${err.message}`, 'error');
     }
   };
 
@@ -513,7 +562,7 @@ export default function App() {
       addGitLog(`Branch "${branchName}" created on GitHub and set as active.`);
     } catch (err: any) {
       addGitLog(`Error creating branch: ${err.message}`);
-      alert(`Failed to create branch: ${err.message}`);
+      triggerAlert('Create Branch Failed', `Failed to create branch: ${err.message}`, 'error');
     }
   };
 
@@ -577,7 +626,7 @@ export default function App() {
 
         if (Object.keys(filesToCommit).length === 0 && deletedPaths.length === 0) {
           addGitLog('Working tree clean. There are no changes to commit.');
-          alert('Working tree clean. There are no changes to commit.');
+          triggerAlert('Working Tree Clean', 'There are no changes to commit.', 'info');
           return;
         }
       }
@@ -614,7 +663,7 @@ export default function App() {
       );
     } catch (err: any) {
       addGitLog(`Commit error: ${err.message}`);
-      alert(`Failed to commit & push to GitHub: ${err.message}`);
+      triggerAlert('Commit Failed', `Failed to commit & push to GitHub: ${err.message}`, 'error');
     }
   };
 
@@ -730,7 +779,7 @@ export default function App() {
       const count = Object.keys(extracted).length;
 
       if (count === 0) {
-        alert(t.emptyArchiveAlert);
+        triggerAlert('Empty Archive', t.emptyArchiveAlert, 'warning');
         return;
       }
 
@@ -763,7 +812,7 @@ export default function App() {
       );
     } catch (err: any) {
       console.error('Extraction error:', err);
-      alert(`${t.extractFailed}: ${err.message}`);
+      triggerAlert('Extraction Failed', `${t.extractFailed}: ${err.message}`, 'error');
     }
   };
 
@@ -782,7 +831,7 @@ export default function App() {
       URL.revokeObjectURL(url);
       addGitLog(`Exported .zip archive: ${a.download}`);
     } catch (err: any) {
-      alert(`${t.exportFailed}: ${err.message}`);
+      triggerAlert('Export Failed', `${t.exportFailed}: ${err.message}`, 'error');
     }
   };
 
@@ -823,7 +872,7 @@ export default function App() {
   const handleCreateFile = (path: string) => {
     const normalized = normalizePath(path);
     if (files[normalized]) {
-      alert(t.fileAlreadyExists);
+      triggerAlert('File Already Exists', t.fileAlreadyExists, 'warning');
       return;
     }
     const newFile: VFile = {
@@ -868,7 +917,7 @@ export default function App() {
     if (!normNew || normOld === normNew) return;
 
     if (files[normNew]) {
-      alert(t.fileAlreadyExists);
+      triggerAlert('File Already Exists', t.fileAlreadyExists, 'warning');
       return;
     }
 
@@ -943,7 +992,7 @@ export default function App() {
       const pattern = isRegex ? searchQuery : searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       regex = new RegExp(pattern, caseSensitive ? 'g' : 'gi');
     } catch {
-      alert(t.invalidRegex);
+      triggerAlert('Invalid Search Pattern', t.invalidRegex, 'error');
       return;
     }
 
@@ -1028,12 +1077,74 @@ export default function App() {
           </div>
         </div>
 
+        {/* M3Switch from material-esm/material */}
+        <div className="bg-[#121316] p-3 rounded-xl border border-[#43474e]/40 my-3">
+          <M3Switch
+            selected={backupBeforeRestore}
+            onChange={setBackupBeforeRestore}
+            label="Backup current workspace"
+            sublabel="Preserve existing files before applying restored session"
+          />
+        </div>
+
         <div className="flex gap-2 justify-end mt-4">
           <M3Button variant="text" size="sm" onClick={handleDiscardSession}>
             {t.startFresh}
           </M3Button>
           <M3Button variant="filled" size="sm" icon="restore" onClick={handleRestoreSession}>
             {t.restoreSession}
+          </M3Button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  // In-UI Alert & Notification Dialog (Material 3 Expressive, replacing external browser alert)
+  const inUiAlertModal = inUiAlert ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn">
+      <div className="bg-[#1e1f22] border border-[#a8c7fa]/40 rounded-2xl p-5 max-w-sm w-full shadow-2xl m3-dialog-bounce space-y-3">
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+              inUiAlert.type === 'error'
+                ? 'bg-[#690005]/40 border border-[#ff8585]/40 text-[#ff8585]'
+                : inUiAlert.type === 'warning'
+                ? 'bg-[#e09b00]/30 border border-[#ffd54f]/40 text-[#ffd54f]'
+                : inUiAlert.type === 'success'
+                ? 'bg-[#1b5e20]/40 border border-[#b4f3b7]/40 text-[#b4f3b7]'
+                : 'bg-[#00468b]/40 border border-[#a8c7fa]/40 text-[#a8c7fa]'
+            }`}
+          >
+            <M3Icon
+              name={
+                inUiAlert.type === 'error'
+                  ? 'error'
+                  : inUiAlert.type === 'warning'
+                  ? 'warning'
+                  : inUiAlert.type === 'success'
+                  ? 'check_circle'
+                  : 'info'
+              }
+              size={24}
+            />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-white">{inUiAlert.title}</h3>
+            <p className="text-xs text-[#8e9199] mt-0.5">ZipStudio Notice</p>
+          </div>
+        </div>
+
+        <p className="text-xs text-[#c4c6d0] leading-relaxed whitespace-pre-wrap">
+          {inUiAlert.message}
+        </p>
+
+        <div className="flex justify-end pt-2">
+          <M3Button
+            variant="filled"
+            size="sm"
+            onClick={() => setInUiAlert(null)}
+          >
+            {t.close || 'OK'}
           </M3Button>
         </div>
       </div>
@@ -1080,119 +1191,107 @@ export default function App() {
           </div>
         </header>
 
-        {/* Mobile Main Body View (Full-Screen View Switching) */}
+        {/* Mobile Main Body View (Instant Tab Switching via Preserved Mounting) */}
         <main className="flex-1 min-h-0 overflow-hidden relative flex flex-col">
-          {mobileTab === 'files' && (
-            <div className="flex-1 w-full h-full overflow-y-auto flex flex-col">
-              <Sidebar
-                tree={tree}
-                activeFilePath={activeFilePath}
-                files={files}
-                t={t}
-                onSelectFile={handleSelectFile}
-                onUploadZip={handleUploadZip}
-                onExportZip={handleExportZip}
-                onCreateFile={handleCreateFile}
-                onCreateFolder={handleCreateFolder}
-                onDeleteNode={handleDeleteNode}
-                onRenameNode={handleRenameNode}
-              />
-            </div>
-          )}
+          <div className={`flex-1 w-full h-full overflow-y-auto flex flex-col ${mobileTab === 'files' ? '' : 'hidden'}`}>
+            <Sidebar
+              tree={tree}
+              activeFilePath={activeFilePath}
+              files={files}
+              t={t}
+              onSelectFile={handleSelectFile}
+              onUploadZip={handleUploadZip}
+              onExportZip={handleExportZip}
+              onCreateFile={handleCreateFile}
+              onCreateFolder={handleCreateFolder}
+              onDeleteNode={handleDeleteNode}
+              onRenameNode={handleRenameNode}
+            />
+          </div>
 
-          {mobileTab === 'editor' && (
-            <div className="flex-1 w-full h-full overflow-hidden flex flex-col">
-              <Editor
-                openTabs={openTabs}
-                activeFilePath={activeFilePath}
-                files={files}
-                t={t}
-                currentLang={currentLang}
-                onSelectTab={setActiveFilePath}
-                onCloseTab={handleCloseTab}
-                onUpdateContent={handleUpdateContent}
-                onSaveFile={() => addGitLog(`Saved file: ${activeFilePath}`)}
-                onFindInFiles={() => setMobileTab('search')}
-                targetLine={targetSearchLine}
-              />
-            </div>
-          )}
+          <div className={`flex-1 w-full h-full overflow-hidden flex flex-col ${mobileTab === 'editor' ? '' : 'hidden'}`}>
+            <Editor
+              openTabs={openTabs}
+              activeFilePath={activeFilePath}
+              files={files}
+              t={t}
+              currentLang={currentLang}
+              onSelectTab={setActiveFilePath}
+              onCloseTab={handleCloseTab}
+              onUpdateContent={handleUpdateContent}
+              onSaveFile={() => addGitLog(`Saved file: ${activeFilePath}`)}
+              onFindInFiles={() => setMobileTab('search')}
+              targetLine={targetSearchLine}
+            />
+          </div>
 
-          {mobileTab === 'preview' && (
-            <div className="flex-1 w-full h-full overflow-hidden flex flex-col">
-              <Preview
-                files={files}
-                activeFile={files[activeFilePath] || null}
-                activeFilePath={activeFilePath}
-                t={t}
-                onConsoleMessage={handlePreviewConsole}
-              />
-            </div>
-          )}
+          <div className={`flex-1 w-full h-full overflow-hidden flex flex-col ${mobileTab === 'preview' ? '' : 'hidden'}`}>
+            <Preview
+              files={files}
+              activeFile={files[activeFilePath] || null}
+              activeFilePath={activeFilePath}
+              t={t}
+              onConsoleMessage={handlePreviewConsole}
+            />
+          </div>
 
-          {mobileTab === 'search' && (
-            <div className="flex-1 w-full h-full overflow-hidden flex flex-col">
-              <SearchPanel
-                files={files}
-                t={t}
-                onSelectResult={handleSelectSearchResult}
-                onReplaceAll={handleReplaceAllInCode}
-                onClose={() => setMobileTab('editor')}
-              />
-            </div>
-          )}
+          <div className={`flex-1 w-full h-full overflow-hidden flex flex-col ${mobileTab === 'search' ? '' : 'hidden'}`}>
+            <SearchPanel
+              files={files}
+              t={t}
+              onSelectResult={handleSelectSearchResult}
+              onReplaceAll={handleReplaceAllInCode}
+              onClose={() => setMobileTab('editor')}
+            />
+          </div>
 
-          {mobileTab === 'git' && (
-            <div className="flex-1 w-full h-full overflow-hidden flex flex-col">
-              <GitHubPanel
-                isAuthenticated={isAuthenticated}
-                user={githubUser}
-                repos={repos}
-                selectedRepo={selectedRepo}
-                branches={branches}
-                activeBranch={activeBranch}
-                diffs={diffs}
-                commits={commits}
-                pullRequests={pullRequests}
-                oauthConfigured={oauthConfigured}
-                callbackUrl={callbackUrl}
-                t={t}
-                isCleanZipImport={isCleanZipImport}
-                isLoadingRepo={isLoadingRepo}
-                repoLoadProgress={repoLoadProgress}
-                onConnectOAuth={handleConnectOAuth}
-                onConnectToken={handleConnectToken}
-                onDisconnect={handleDisconnect}
-                onSelectRepo={handleSelectRepo}
-                onLoadRepoFiles={handleLoadRepoFilesExplicit}
-                onCreateRepo={handleCreateRepo}
-                onSwitchBranch={handleSwitchBranch}
-                onCreateBranch={handleCreateBranch}
-                onCommitAndPush={handleCommitAndPush}
-                onRefreshCommits={handleRefreshCommits}
-                onCreatePullRequest={handleCreatePullRequest}
-                onSubmitPRReview={handleSubmitPRReview}
-              />
-            </div>
-          )}
+          <div className={`flex-1 w-full h-full overflow-hidden flex flex-col ${mobileTab === 'git' ? '' : 'hidden'}`}>
+            <GitHubPanel
+              isAuthenticated={isAuthenticated}
+              user={githubUser}
+              repos={repos}
+              selectedRepo={selectedRepo}
+              branches={branches}
+              activeBranch={activeBranch}
+              diffs={diffs}
+              commits={commits}
+              pullRequests={pullRequests}
+              oauthConfigured={oauthConfigured}
+              callbackUrl={callbackUrl}
+              t={t}
+              isCleanZipImport={isCleanZipImport}
+              isLoadingRepo={isLoadingRepo}
+              repoLoadProgress={repoLoadProgress}
+              onConnectOAuth={handleConnectOAuth}
+              onConnectToken={handleConnectToken}
+              onDisconnect={handleDisconnect}
+              onSelectRepo={handleSelectRepo}
+              onLoadRepoFiles={handleLoadRepoFilesExplicit}
+              onCreateRepo={handleCreateRepo}
+              onSwitchBranch={handleSwitchBranch}
+              onCreateBranch={handleCreateBranch}
+              onCommitAndPush={handleCommitAndPush}
+              onRefreshCommits={handleRefreshCommits}
+              onCreatePullRequest={handleCreatePullRequest}
+              onSubmitPRReview={handleSubmitPRReview}
+            />
+          </div>
 
-          {mobileTab === 'terminal' && (
-            <div className="flex-1 w-full h-full overflow-hidden flex flex-col">
-              <Terminal
-                files={files}
-                logs={logs}
-                gitLogs={gitLogs}
-                activeBranch={activeBranch}
-                branches={branches}
-                commits={commits}
-                onClearLogs={() => setLogs([])}
-                onClearGitLogs={() => setGitLogs([])}
-                onClose={() => setMobileTab('editor')}
-                t={t}
-                isMobile={true}
-              />
-            </div>
-          )}
+          <div className={`flex-1 w-full h-full overflow-hidden flex flex-col ${mobileTab === 'terminal' ? '' : 'hidden'}`}>
+            <Terminal
+              files={files}
+              logs={logs}
+              gitLogs={gitLogs}
+              activeBranch={activeBranch}
+              branches={branches}
+              commits={commits}
+              onClearLogs={() => setLogs([])}
+              onClearGitLogs={() => setGitLogs([])}
+              onClose={() => setMobileTab('editor')}
+              t={t}
+              isMobile={true}
+            />
+          </div>
         </main>
 
         {/* Mobile Bottom Navigation Bar */}
@@ -1270,6 +1369,7 @@ export default function App() {
         </nav>
 
         {sessionRecoveryModal}
+        {inUiAlertModal}
       </div>
     );
   }
@@ -1601,6 +1701,7 @@ export default function App() {
       </div>
 
       {sessionRecoveryModal}
+      {inUiAlertModal}
     </div>
   );
 }

@@ -20,6 +20,7 @@
     "express": "^4.21.2",
     "jszip": "^3.10.2",
     "lucide-react": "^0.546.0",
+    "material": "material-esm/material",
     "motion": "^12.23.24",
     "prismjs": "^1.30.0",
     "react": "^19.0.1",

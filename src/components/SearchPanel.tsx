@@ -4,7 +4,8 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { M3Icon, M3IconButton } from './M3Components';
+import { M3Icon, M3IconButton, M3Button } from './M3Components';
+import { M3Switch } from './M3Switch';
 import { VFile } from '../utils/fileSystem';
 import { Translations, TRANSLATIONS } from '../utils/i18n';
 
@@ -106,6 +107,10 @@ export function SearchPanel({
     return searchResults.reduce((acc, r) => acc + r.matches.length, 0);
   }, [searchResults]);
 
+  const [showReplaceConfirm, setShowReplaceConfirm] = useState(false);
+  const [preserveCasing, setPreserveCasing] = useState(false);
+  const [createBackup, setCreateBackup] = useState(true);
+
   const toggleFileCollapse = (filePath: string) => {
     setCollapsedFiles((prev) => ({
       ...prev,
@@ -114,10 +119,13 @@ export function SearchPanel({
   };
 
   const handleExecuteReplaceAll = () => {
-    if (!searchQuery.trim()) return;
-    if (confirm(`Replace all ${totalMatches} occurrences across ${searchResults.length} files?`)) {
-      onReplaceAll(searchQuery, replaceQuery, caseSensitive, useRegex);
-    }
+    if (!searchQuery.trim() || totalMatches === 0) return;
+    setShowReplaceConfirm(true);
+  };
+
+  const handleConfirmReplaceAll = () => {
+    setShowReplaceConfirm(false);
+    onReplaceAll(searchQuery, replaceQuery, caseSensitive, useRegex);
   };
 
   return (
@@ -336,6 +344,76 @@ export function SearchPanel({
           </div>
         )}
       </div>
+
+      {/* In-UI Replace All Confirmation Dialog with Material 3 Expressive Switch */}
+      {showReplaceConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#1e1f22] border border-[#a8c7fa]/40 rounded-2xl w-full max-w-sm p-5 shadow-2xl m3-dialog-bounce space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#00468b]/40 border border-[#a8c7fa]/30 flex items-center justify-center text-[#a8c7fa] shrink-0">
+                <M3Icon name="find_replace" size={24} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-white">Batch Replace</h3>
+                <p className="text-xs text-[#8e9199] truncate font-mono mt-0.5">
+                  {totalMatches} {totalMatches === 1 ? 'match' : 'matches'} across {searchResults.length} {searchResults.length === 1 ? 'file' : 'files'}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-[#121316] p-3 rounded-xl border border-[#43474e]/40 space-y-2 text-xs font-mono">
+              <div className="flex items-center gap-2">
+                <span className="text-[#ff8585] font-semibold">-</span>
+                <span className="text-[#8e9199]">Find:</span>
+                <span className="text-white truncate font-bold">&ldquo;{searchQuery}&rdquo;</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[#b4f3b7] font-semibold">+</span>
+                <span className="text-[#8e9199]">Replace:</span>
+                <span className="text-[#a8c7fa] truncate font-bold">&ldquo;{replaceQuery}&rdquo;</span>
+              </div>
+            </div>
+
+            {/* M3Switch options from material-esm/material */}
+            <div className="space-y-3 pt-1">
+              <div className="bg-[#121316] p-3 rounded-xl border border-[#43474e]/40">
+                <M3Switch
+                  selected={preserveCasing}
+                  onChange={setPreserveCasing}
+                  label="Preserve Case"
+                  sublabel="Maintain capitalization across replacement targets"
+                />
+              </div>
+              <div className="bg-[#121316] p-3 rounded-xl border border-[#43474e]/40">
+                <M3Switch
+                  selected={createBackup}
+                  onChange={setCreateBackup}
+                  label="Create Undo History"
+                  sublabel="Track each replaced file for easy undo"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowReplaceConfirm(false)}
+                className="px-3.5 py-1.5 rounded-xl bg-transparent hover:bg-white/5 text-xs text-[#c4c6d0] font-medium transition-colors cursor-pointer"
+              >
+                {t.cancel}
+              </button>
+              <M3Button
+                variant="filled"
+                size="sm"
+                icon="find_replace"
+                onClick={handleConfirmReplaceAll}
+              >
+                Replace All ({totalMatches})
+              </M3Button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

@@ -101,10 +101,25 @@ export interface GitHubRepo {
  * Computes a line-by-line diff between original content and current content.
  */
 export function computeFileDiff(path: string, originalContent: string | null, currentContent: string | null): FileDiff {
+  // Fast path for binary files (data URLs like images, jars, audio, video)
+  const isOrigBinary = originalContent !== null && originalContent.startsWith('data:');
+  const isCurrBinary = currentContent !== null && currentContent.startsWith('data:');
+  if (isOrigBinary || isCurrBinary) {
+    const isAdded = originalContent === null;
+    const isDeleted = currentContent === null;
+    return {
+      path,
+      status: isAdded ? 'added' : isDeleted ? 'deleted' : 'modified',
+      lines: [],
+      additions: isAdded ? 1 : 0,
+      deletions: isDeleted ? 1 : 0,
+    };
+  }
+
   if (originalContent === null && currentContent !== null) {
     // Added file
     const newLines = currentContent.split('\n');
-    const lines: FileDiffLine[] = newLines.map((line, idx) => ({
+    const lines: FileDiffLine[] = newLines.slice(0, 1000).map((line, idx) => ({
       type: 'add',
       newLineNumber: idx + 1,
       content: line,
@@ -121,7 +136,7 @@ export function computeFileDiff(path: string, originalContent: string | null, cu
   if (originalContent !== null && currentContent === null) {
     // Deleted file
     const oldLines = originalContent.split('\n');
-    const lines: FileDiffLine[] = oldLines.map((line, idx) => ({
+    const lines: FileDiffLine[] = oldLines.slice(0, 1000).map((line, idx) => ({
       type: 'delete',
       oldLineNumber: idx + 1,
       content: line,
@@ -137,6 +152,25 @@ export function computeFileDiff(path: string, originalContent: string | null, cu
 
   const oldLines = (originalContent || '').split('\n');
   const newLines = (currentContent || '').split('\n');
+
+  // Fast path for huge text files (> 2000 lines) to prevent freezing the UI
+  if (oldLines.length > 2000 || newLines.length > 2000) {
+    return {
+      path,
+      status: 'modified',
+      lines: [
+        {
+          type: 'normal',
+          oldLineNumber: 1,
+          newLineNumber: 1,
+          content: `[Large file: ${newLines.length} lines. Detailed inline diff truncated for performance]`,
+        },
+      ],
+      additions: Math.max(0, newLines.length - oldLines.length),
+      deletions: Math.max(0, oldLines.length - newLines.length),
+    };
+  }
+
   const diffLines: FileDiffLine[] = [];
   let additions = 0;
   let deletions = 0;

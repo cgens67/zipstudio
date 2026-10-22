@@ -18,6 +18,21 @@
   </head>
   <body class="bg-[#121316] text-[#e2e2e6] selection:bg-[#6750a4]/30 selection:text-white antialiased overflow-hidden">
     <div id="root" class="h-screen w-screen overflow-hidden flex flex-col"></div>
+    <script>
+      // Guard customElements.define to prevent duplicate registration errors (e.g. md-focus-ring)
+      if (typeof window !== 'undefined' && window.customElements) {
+        const origDefine = window.customElements.define.bind(window.customElements);
+        window.customElements.define = function (name, constructor, options) {
+          if (!window.customElements.get(name)) {
+            try {
+              origDefine(name, constructor, options);
+            } catch (e) {
+              console.warn('Custom element already defined:', name);
+            }
+          }
+        };
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

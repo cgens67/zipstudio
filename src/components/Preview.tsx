@@ -11,11 +11,12 @@ import {
   isFontExtension,
   isAudioExtension,
   isVideoExtension,
+  isBinaryExtension,
 } from '../utils/fileSystem';
 import { isAndroidVectorDrawable, parseAndroidVectorXml, ParsedVectorDrawable } from '../utils/vectorParser';
 import { M3Icon, M3IconButton } from './M3Components';
 import { Translations, TRANSLATIONS } from '../utils/i18n';
-import { FontSpecimenViewer, MediaPlayer } from './BinaryFileViewers';
+import { FontSpecimenViewer, MediaPlayer, BinaryAssetViewer } from './BinaryFileViewers';
 
 interface PreviewProps {
   files: Record<string, VFile>;
@@ -143,8 +144,10 @@ export function Preview({
   const isAudio = isAudioExtension(fileExt);
   const isVideo = isVideoExtension(fileExt);
   const isMedia = isAudio || isVideo;
+  const isApk = fileExt === 'apk' || fileExt === 'aab' || fileExt === 'xapk' || fileExt === 'apks';
+  const isBinary = (resolvedActiveFile?.isBinary || isBinaryExtension(fileExt) || isApk) && !isFont && !isMedia;
 
-  const supportsDedicatedPreview = isMarkdown || isSvg || isVectorXml || isFont || isMedia;
+  const supportsDedicatedPreview = isMarkdown || isSvg || isVectorXml || isFont || isMedia || isBinary;
 
   // View mode: 'file' (markdown/svg/vector) vs 'webapp' (index.html)
   const [previewTab, setPreviewTab] = useState<'file' | 'webapp'>('file');
@@ -160,16 +163,20 @@ export function Preview({
     }
   }, [resolvedActiveFile?.path, supportsDedicatedPreview]);
 
-  // Debounced web preview generation
+  // Debounced web preview generation (only needed when viewing webapp)
   useEffect(() => {
+    if (supportsDedicatedPreview && previewTab === 'file') {
+      return;
+    }
+
     const timer = setTimeout(() => {
       const generated = generatePreviewHtml(files);
       setHtmlContent(generated);
       setKey((prev) => prev + 1);
-    }, 250);
+    }, 300);
 
     return () => clearTimeout(timer);
-  }, [files]);
+  }, [files, previewTab, supportsDedicatedPreview]);
 
   // Listen to postMessage from sandboxed iframe
   useEffect(() => {
@@ -298,7 +305,11 @@ export function Preview({
                       ? 'font_download'
                       : isAudio
                       ? 'audiotrack'
-                      : 'videocam'
+                      : isVideo
+                      ? 'videocam'
+                      : isApk
+                      ? 'android'
+                      : 'inventory_2'
                   }
                   size={14}
                 />
@@ -313,7 +324,11 @@ export function Preview({
                     ? 'Font Specimen'
                     : isAudio
                     ? 'Audio Player'
-                    : 'Video Player'}
+                    : isVideo
+                    ? 'Video Player'
+                    : isApk
+                    ? 'Android Package'
+                    : 'Binary Asset'}
                 </span>
               </button>
               <button
@@ -531,7 +546,12 @@ export function Preview({
           <MediaPlayer file={resolvedActiveFile} t={t} />
         )}
 
-        {/* Case F: Standard Sandboxed Web App Preview */}
+        {/* Case F: Binary Asset / Android APK (.apk, .aab, .so, .dex, .jar, etc.) */}
+        {previewTab === 'file' && isBinary && resolvedActiveFile && (
+          <BinaryAssetViewer file={resolvedActiveFile} t={t} />
+        )}
+
+        {/* Case G: Standard Sandboxed Web App Preview */}
         {(previewTab === 'webapp' || !supportsDedicatedPreview) && (
           <div
             style={{ width: getViewportWidth() }}

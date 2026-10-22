@@ -13,6 +13,7 @@
         "express": "^4.21.2",
         "jszip": "^3.10.2",
         "lucide-react": "^0.546.0",
+        "material": "material-esm/material",
         "motion": "^12.23.24",
         "prismjs": "^1.30.0",
         "react": "^19.0.1",
@@ -448,6 +449,8 @@
     "lucide-react": ["lucide-react@0.546.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-Z94u6fKT43lKeYHiVyvyR8fT7pwCzDu7RyMPpTvh054+xahSgj4HFQ+NmflvzdXsoAjYGdCguGaFKYuvq0ThCQ=="],
 
     "magic-string": ["magic-string@0.30.21", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.5" } }, "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ=="],
+
+    "material": ["material@github:material-esm/material#fafed6f", { "dependencies": { "lit": "^3.3.1" } }, "material-esm-material-fafed6f", "sha512-iIWrttmMmfCVEXUuxCPTXel3NCq7vx3fRSt8Z12JP1zuzdW/FPCB5EkUNZT1Ok28r0MFdB6juKTxOx3m3Iereg=="],
 
     "math-intrinsics": ["math-intrinsics@1.1.0", "", {}, "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g=="],
 

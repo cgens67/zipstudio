@@ -12,6 +12,7 @@ import {
   packageSubtreeZip,
 } from '../utils/fileSystem';
 import { M3Icon, M3IconButton } from './M3Components';
+import { M3Switch } from './M3Switch';
 import { Translations, TRANSLATIONS } from '../utils/i18n';
 
 interface SidebarProps {
@@ -65,6 +66,9 @@ export function Sidebar({
   const [propertiesNode, setPropertiesNode] = useState<FileTreeNode | null>(null);
   const [renameNode, setRenameNode] = useState<FileTreeNode | null>(null);
   const [renameInputValue, setRenameInputValue] = useState('');
+  const [deleteConfirmNode, setDeleteConfirmNode] = useState<FileTreeNode | null>(null);
+  const [permanentDelete, setPermanentDelete] = useState(true);
+  const [sidebarError, setSidebarError] = useState<string | null>(null);
 
   // Touch long-press ref for mobile
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -82,6 +86,7 @@ export function Sidebar({
         setContextMenu(null);
         setPropertiesNode(null);
         setRenameNode(null);
+        setDeleteConfirmNode(null);
       }
     };
     document.addEventListener('click', handleDocumentClick);
@@ -212,9 +217,7 @@ export function Sidebar({
 
   const handleDelete = (node: FileTreeNode) => {
     setContextMenu(null);
-    if (window.confirm(t.deleteConfirm)) {
-      onDeleteNode(node.path);
-    }
+    setDeleteConfirmNode(node);
   };
 
   const handleDownload = async (node: FileTreeNode) => {
@@ -232,7 +235,7 @@ export function Sidebar({
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       } catch (err: any) {
-        alert(`${t.exportFailed}: ${err.message}`);
+        setSidebarError(`${t.exportFailed}: ${err.message}`);
       }
     } else {
       // Download single file
@@ -297,8 +300,50 @@ export function Sidebar({
       case 'md':
       case 'markdown':
         return { icon: 'article', color: 'text-[#a8c7fa]' };
-      case 'xml':
-        return { icon: 'polyline', color: 'text-[#3ddc84]' };
+      case 'apk':
+      case 'aab':
+      case 'xapk':
+      case 'apks':
+        return { icon: 'android', color: 'text-[#3ddc84]' };
+      case 'jar':
+      case 'war':
+      case 'ear':
+        return { icon: 'inventory_2', color: 'text-[#e44d26]' };
+      case 'so':
+      case 'dylib':
+      case 'dll':
+      case 'dex':
+        return { icon: 'memory', color: 'text-[#c2e7ff]' };
+      case 'zip':
+      case 'gz':
+      case 'tar':
+      case '7z':
+      case 'rar':
+        return { icon: 'folder_zip', color: 'text-[#ffd54f]' };
+      case 'ttf':
+      case 'otf':
+      case 'woff':
+      case 'woff2':
+      case 'eot':
+        return { icon: 'font_download', color: 'text-[#a8c7fa]' };
+      case 'mp3':
+      case 'wav':
+      case 'ogg':
+      case 'aac':
+      case 'flac':
+      case 'm4a':
+        return { icon: 'audiotrack', color: 'text-[#80cbc4]' };
+      case 'mp4':
+      case 'webm':
+      case 'mkv':
+      case 'mov':
+        return { icon: 'videocam', color: 'text-[#ffb4ab]' };
+      case 'pdf':
+        return { icon: 'picture_as_pdf', color: 'text-[#ffb4ab]' };
+      case 'db':
+      case 'sqlite':
+      case 'sqlite3':
+        return { icon: 'database', color: 'text-[#ffd54f]' };
       default:
         return { icon: 'description', color: 'text-[#8e9199]' };
     }
@@ -728,6 +773,90 @@ export function Sidebar({
                 className="px-4 py-2 bg-[#2b2d30] hover:bg-[#383a3e] text-[#a8c7fa] rounded-xl text-xs font-semibold cursor-pointer transition-colors"
               >
                 {t.close}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-UI Delete Confirmation Dialog with Material 3 Expressive Switch */}
+      {deleteConfirmNode && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#1e1f22] border border-[#ff8585]/40 rounded-2xl w-full max-w-sm p-5 shadow-2xl m3-dialog-bounce space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#690005]/40 border border-[#ff8585]/30 flex items-center justify-center text-[#ff8585] shrink-0">
+                <M3Icon name="delete_forever" size={24} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-white">Delete Confirmation</h3>
+                <p className="text-xs text-[#c4c6d0] truncate font-mono mt-0.5">
+                  /{deleteConfirmNode.path}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-[#8e9199] leading-relaxed">
+              Are you sure you want to delete <span className="text-white font-semibold">{deleteConfirmNode.name}</span>? This action cannot be undone.
+            </p>
+
+            {/* M3Switch from material-esm/material */}
+            <div className="bg-[#121316] p-3 rounded-xl border border-[#43474e]/40">
+              <M3Switch
+                selected={permanentDelete}
+                onChange={setPermanentDelete}
+                label="Permanent delete"
+                sublabel="Remove immediately from the virtual file system"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmNode(null)}
+                className="px-3 py-1.5 rounded-xl bg-transparent hover:bg-white/5 text-xs text-[#c4c6d0] font-medium transition-colors cursor-pointer"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const path = deleteConfirmNode.path;
+                  setDeleteConfirmNode(null);
+                  onDeleteNode(path);
+                }}
+                className="px-4 py-1.5 rounded-xl bg-[#ba1a1a] hover:bg-[#de3730] text-white text-xs font-semibold flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
+              >
+                <M3Icon name="delete" size={16} />
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-UI Error Dialog */}
+      {sidebarError && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#1e1f22] border border-[#ff8585]/40 rounded-2xl w-full max-w-sm p-5 shadow-2xl m3-dialog-bounce space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#690005]/40 border border-[#ff8585]/30 flex items-center justify-center text-[#ff8585] shrink-0">
+                <M3Icon name="error" size={24} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-white">Notice</h3>
+                <p className="text-xs text-[#8e9199] mt-0.5">ZipStudio File System</p>
+              </div>
+            </div>
+            <p className="text-xs text-[#c4c6d0] leading-relaxed whitespace-pre-wrap">
+              {sidebarError}
+            </p>
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setSidebarError(null)}
+                className="px-4 py-2 bg-[#2b2d30] hover:bg-[#383a3e] text-[#a8c7fa] rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+              >
+                {t.close || 'OK'}
               </button>
             </div>
           </div>

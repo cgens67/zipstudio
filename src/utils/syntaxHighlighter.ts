@@ -130,6 +130,11 @@ function escapeHtml(text: string): string {
 export function highlightCode(code: string, language: string): string {
   if (!code) return '';
 
+  // Performance guard: Large files (> 120KB) bypass heavy regex parsing
+  if (code.length > 120000) {
+    return escapeHtml(code);
+  }
+
   const prismLang = getPrismLanguageKey(language);
   const grammar = Prism.languages[prismLang];
 
@@ -138,6 +143,15 @@ export function highlightCode(code: string, language: string): string {
   }
 
   try {
+    // If file is between 50KB and 120KB, highlight first 1500 lines for high performance
+    if (code.length > 50000) {
+      const lines = code.split('\n');
+      if (lines.length > 1200) {
+        const topChunk = lines.slice(0, 1200).join('\n');
+        const restChunk = lines.slice(1200).join('\n');
+        return Prism.highlight(topChunk, grammar, prismLang) + '\n' + escapeHtml(restChunk);
+      }
+    }
     return Prism.highlight(code, grammar, prismLang);
   } catch (err) {
     console.warn(`Prism highlighting failed for ${language}:`, err);

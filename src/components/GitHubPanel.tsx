@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { M3Icon, M3IconButton, M3Button, M3Badge } from './M3Components';
+import { M3Switch } from './M3Switch';
 import {
   GitBranch,
   GitCommit,
@@ -840,15 +841,14 @@ export function GitHubPanel({
               onChange={(e) => setNewRepoDesc(e.target.value)}
               className="w-full bg-[#121316] border border-[#43474e] rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#a8c7fa]"
             />
-            <label className="flex items-center gap-2 text-xs text-[#c4c6d0] cursor-pointer">
-              <input
-                type="checkbox"
-                checked={newRepoPrivate}
-                onChange={(e) => setNewRepoPrivate(e.target.checked)}
-                className="rounded accent-[#a8c7fa]"
+            <div className="bg-[#121316] p-2.5 rounded-xl border border-[#43474e]/40">
+              <M3Switch
+                selected={newRepoPrivate}
+                onChange={setNewRepoPrivate}
+                label={t.privateRepo}
+                sublabel="Only visible to you and authorized collaborators"
               />
-              <span>{t.privateRepo}</span>
-            </label>
+            </div>
             <div className="flex gap-2 pt-2">
               <M3Button variant="tonal" size="sm" type="button" onClick={() => setShowNewRepoModal(false)} className="flex-1">
                 {t.cancel}

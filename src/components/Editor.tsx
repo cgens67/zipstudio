@@ -18,7 +18,7 @@ import { M3Icon, M3IconButton, M3Badge, M3Button } from './M3Components';
 import { explainCodeInPlainEnglish, CodeBlockExplanation } from '../utils/codeExplainer';
 import { Translations, TRANSLATIONS, SupportedLanguage } from '../utils/i18n';
 import { highlightCode } from '../utils/syntaxHighlighter';
-import { FontSpecimenViewer, MediaPlayer } from './BinaryFileViewers';
+import { FontSpecimenViewer, MediaPlayer, BinaryAssetViewer } from './BinaryFileViewers';
 
 interface EditorProps {
   openTabs: string[];
@@ -52,7 +52,7 @@ export function Editor({
   isMaximized,
 }: EditorProps) {
   const activeFile = files[activeFilePath];
-  const [content, setContent] = useState(activeFile?.content || '');
+  const [content, setContent] = useState(activeFile?.isBinary ? '' : (activeFile?.content || ''));
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
   const [plainEnglishMode, setPlainEnglishMode] = useState(false);
   const [fontSize, setFontSize] = useState(13);
@@ -208,16 +208,22 @@ export function Editor({
   // Initialize or restore history when active file changes
   useEffect(() => {
     if (activeFile) {
-      setContent(activeFile.content);
-      if (!historyRef.current[activeFilePath]) {
-        historyRef.current[activeFilePath] = {
-          stack: [activeFile.content],
-          pointer: 0,
-        };
+      if (activeFile.isBinary) {
+        setContent('');
+        setCanUndo(false);
+        setCanRedo(false);
+      } else {
+        setContent(activeFile.content);
+        if (!historyRef.current[activeFilePath]) {
+          historyRef.current[activeFilePath] = {
+            stack: [activeFile.content],
+            pointer: 0,
+          };
+        }
+        const hist = historyRef.current[activeFilePath];
+        setCanUndo(hist ? hist.pointer > 0 : false);
+        setCanRedo(hist ? hist.pointer < hist.stack.length - 1 : false);
       }
-      const hist = historyRef.current[activeFilePath];
-      setCanUndo(hist ? hist.pointer > 0 : false);
-      setCanRedo(hist ? hist.pointer < hist.stack.length - 1 : false);
     }
   }, [activeFilePath, activeFile]);
 
@@ -320,12 +326,17 @@ export function Editor({
     }
   }, [targetLine, activeFilePath, activeFile, lineHeight]);
 
+  const updateTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setContent(val);
+    recordHistory(val);
     if (activeFilePath) {
-      onUpdateContent(activeFilePath, val);
-      recordHistory(val);
+      if (updateTimerRef.current) clearTimeout(updateTimerRef.current);
+      updateTimerRef.current = setTimeout(() => {
+        onUpdateContent(activeFilePath, val);
+      }, 150);
     }
   };
 
@@ -366,13 +377,34 @@ export function Editor({
     setCursorPos({ line: index + 1, col: 1 });
   };
 
-  const lineCount = content.split('\n').length;
+  const lineCount = useMemo(() => {
+    if (!content || activeFile?.isBinary) return 1;
+    let count = 1;
+    for (let i = 0; i < content.length; i++) {
+      if (content.charCodeAt(i) === 10) count++;
+    }
+    return count;
+  }, [content, activeFile?.isBinary]);
 
-  // Trilingual plain language explanation
-  const explanation: CodeBlockExplanation | null =
-    activeFile && !activeFile.isBinary
-      ? explainCodeInPlainEnglish(activeFile.name, content, currentLang)
-      : null;
+  // Virtualized visible line numbers to prevent DOM explosion on large files
+  const viewportHeight = 650;
+  const visibleLineCount = Math.ceil(viewportHeight / lineHeight) + 15;
+  const startLineIndex = Math.max(0, Math.floor(scrollTop / lineHeight) - 5);
+  const endLineIndex = Math.min(lineCount, startLineIndex + visibleLineCount);
+
+  const visibleLineNumbers = useMemo(() => {
+    const list: number[] = [];
+    for (let i = startLineIndex; i < endLineIndex; i++) {
+      list.push(i + 1);
+    }
+    return list;
+  }, [startLineIndex, endLineIndex]);
+
+  // Trilingual plain language explanation (only computed if plainEnglishMode is open)
+  const explanation = useMemo(() => {
+    if (!plainEnglishMode || !activeFile || activeFile.isBinary) return null;
+    return explainCodeInPlainEnglish(activeFile.name, content, currentLang);
+  }, [plainEnglishMode, activeFile?.name, activeFile?.isBinary, content, currentLang]);
 
   if (!activeFile) {
     return (
@@ -596,25 +628,7 @@ export function Editor({
                 </div>
               );
             }
-            return (
-              <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[#121316]">
-                <div className="text-center text-[#c4c6d0] max-w-sm p-6 bg-[#1e1f22] border border-[#43474e]/50 rounded-2xl shadow-xl">
-                  <M3Icon name="inventory_2" size={48} className="mx-auto mb-2 text-[#a8c7fa]" />
-                  <p className="text-sm font-semibold text-white">{activeFile.name}</p>
-                  <p className="text-xs text-[#8e9199] mt-1 font-mono">
-                    {t.binaryAsset} ({formatBytes(activeFile.size)})
-                  </p>
-                  <a
-                    href={activeFile.content}
-                    download={activeFile.name}
-                    className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#2b2d30] hover:bg-[#383a3e] text-[#a8c7fa] rounded-xl text-xs font-semibold transition-colors"
-                  >
-                    <M3Icon name="download" size={16} />
-                    Download Asset
-                  </a>
-                </div>
-              </div>
-            );
+            return <BinaryAssetViewer file={activeFile} t={t} />;
           })()
         ) : (
           <div className="flex-1 flex overflow-hidden relative bg-[#121316]">
@@ -638,24 +652,30 @@ export function Editor({
                   lineHeight: `${lineHeight}px`,
                 }}
               >
-                {Array.from({ length: lineCount }).map((_, i) => {
-                  const lineNum = i + 1;
-                  const isCurrentLine = lineNum === cursorPos.line;
-                  return (
-                    <div
-                      key={lineNum}
-                      onClick={() => jumpToLineIndex(i)}
-                      style={{ height: `${lineHeight}px`, lineHeight: `${lineHeight}px` }}
-                      className={`transition-colors cursor-pointer rounded-xs px-1 hover:text-white hover:bg-white/10 ${
-                        isCurrentLine
-                          ? 'text-[#a8c7fa] font-bold bg-[#a8c7fa]/20'
-                          : 'text-[#6e7179]'
-                      }`}
-                    >
-                      {lineNum}
-                    </div>
-                  );
-                })}
+                <div
+                  style={{
+                    paddingTop: `${startLineIndex * lineHeight}px`,
+                    paddingBottom: `${Math.max(0, (lineCount - endLineIndex) * lineHeight)}px`,
+                  }}
+                >
+                  {visibleLineNumbers.map((lineNum) => {
+                    const isCurrentLine = lineNum === cursorPos.line;
+                    return (
+                      <div
+                        key={lineNum}
+                        onClick={() => jumpToLineIndex(lineNum - 1)}
+                        style={{ height: `${lineHeight}px`, lineHeight: `${lineHeight}px` }}
+                        className={`transition-colors cursor-pointer rounded-xs px-1 hover:text-white hover:bg-white/10 ${
+                          isCurrentLine
+                            ? 'text-[#a8c7fa] font-bold bg-[#a8c7fa]/20'
+                            : 'text-[#6e7179]'
+                        }`}
+                      >
+                        {lineNum}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 

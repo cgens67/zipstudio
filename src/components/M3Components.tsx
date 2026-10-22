@@ -40,13 +40,6 @@ export interface M3ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElem
   loading?: boolean;
 }
 
-// Register Material 3 Web Components from Material ESM / @material/web
-import '@material/web/button/filled-button.js';
-import '@material/web/button/outlined-button.js';
-import '@material/web/button/elevated-button.js';
-import '@material/web/iconbutton/icon-button.js';
-import '@material/web/ripple/ripple.js';
-
 export function M3Button({
   children,
   variant = 'filled',
@@ -186,3 +179,6 @@ export function M3Card({
     </div>
   );
 }
+
+export { M3Switch } from './M3Switch';
+

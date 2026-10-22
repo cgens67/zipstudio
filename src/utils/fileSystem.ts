@@ -189,7 +189,9 @@ export function getLanguageFromExt(ext: string): string {
     case 'log':
       return 'log';
     case 'txt':
-      return 'text';
+    case 'text':
+    case 'unknown':
+      return 'plaintext';
     default:
       return ext ? ext.toLowerCase() : 'plaintext';
   }
@@ -310,7 +312,19 @@ export function getMimeType(ext: string): string {
     case 'apk':
       return 'application/vnd.android.package-archive';
     case 'aab':
+    case 'apks':
+    case 'xapk':
       return 'application/octet-stream';
+    case 'dex':
+      return 'application/octet-stream';
+    case 'so':
+    case 'dylib':
+    case 'dll':
+      return 'application/octet-stream';
+    case 'db':
+    case 'sqlite':
+    case 'sqlite3':
+      return 'application/x-sqlite3';
     case 'tar':
       return 'application/x-tar';
     case 'gz':
@@ -362,7 +376,8 @@ export function isBinaryExtension(ext: string): boolean {
     'mp3', 'wav', 'ogg', 'oga', 'aac', 'flac', 'm4a', 'opus',
     'mp4', 'webm', 'mkv', 'ogv', 'mov', 'avi',
     'pdf', 'zip', 'gz', 'tar', 'bz2', 'xz', '7z', 'rar',
-    'jar', 'war', 'ear', 'apk', 'aab', 'class', 'so', 'dylib', 'dll', 'exe', 'bin', 'dex'
+    'jar', 'war', 'ear', 'apk', 'aab', 'apks', 'xapk', 'class', 'so', 'dylib', 'dll', 'exe', 'bin', 'dex',
+    'dat', 'db', 'sqlite', 'sqlite3', 'o', 'obj', 'lib', 'a', 'pak', 'arsc', 'flat', 'node'
   ];
   return binaryExts.includes(ext.toLowerCase());
 }
