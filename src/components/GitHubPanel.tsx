@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { M3Icon, M3IconButton, M3Button, M3Badge } from './M3Components';
 import { M3Switch } from './M3Switch';
+import { M3Dropdown, DropdownOption } from './M3Dropdown';
 import {
   GitBranch,
   GitCommit,
@@ -323,20 +324,22 @@ export function GitHubPanel({
         </div>
 
         {repos.length > 0 ? (
-          <select
+          <M3Dropdown<string>
+            searchable
+            options={repos.map((r) => ({
+              value: r.fullName,
+              label: r.fullName,
+              description: `default: ${r.defaultBranch}`,
+              icon: r.private ? 'lock' : 'folder_open',
+              iconColor: r.private ? 'text-[#ffd54f]' : 'text-[#a8c7fa]',
+            }))}
             value={selectedRepo?.fullName || ''}
-            onChange={(e) => {
-              const r = repos.find((repo) => repo.fullName === e.target.value);
+            onChange={(val) => {
+              const r = repos.find((repo) => repo.fullName === val);
               if (r) onSelectRepo(r);
             }}
-            className="w-full bg-[#1e1f22] border border-[#43474e]/50 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-[#a8c7fa] font-mono truncate"
-          >
-            {repos.map((r) => (
-              <option key={r.id} value={r.fullName}>
-                {r.fullName} ({r.defaultBranch})
-              </option>
-            ))}
-          </select>
+            placeholder="Select a repository..."
+          />
         ) : (
           <div className="text-xs text-[#8e9199] py-1">
             No repositories found. Click &quot;New Repo&quot; to create one.
@@ -414,17 +417,20 @@ export function GitHubPanel({
           </button>
         </div>
 
-        <select
+        <M3Dropdown<string>
+          searchable
+          icon="fork_right"
+          options={branches.map((b) => ({
+            value: b.name,
+            label: b.name,
+            description: b.name === activeBranch ? 'Active branch' : undefined,
+            icon: 'fork_right',
+            iconColor: b.name === activeBranch ? 'text-[#a8c7fa]' : 'text-[#8e9199]',
+          }))}
           value={activeBranch}
-          onChange={(e) => onSwitchBranch(e.target.value)}
-          className="w-full bg-[#1e1f22] border border-[#43474e]/50 rounded-lg px-2 py-1.5 text-xs text-[#a8c7fa] font-mono font-medium focus:outline-none focus:border-[#a8c7fa]"
-        >
-          {branches.map((b) => (
-            <option key={b.name} value={b.name}>
-              {b.name} {b.name === activeBranch ? '✓' : ''}
-            </option>
-          ))}
-        </select>
+          onChange={(branchName) => onSwitchBranch(branchName)}
+          placeholder="Switch branch..."
+        />
       </div>
 
       {/* Sub Tabs */}
@@ -893,25 +899,35 @@ export function GitHubPanel({
           <form onSubmit={handleCreatePRSubmit} className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-3 m3-dialog-bounce">
             <h3 className="text-sm font-semibold text-white">{t.newPR}</h3>
             <div className="flex items-center gap-2 text-xs">
-              <select
-                value={prHead}
-                onChange={(e) => setPrHead(e.target.value)}
-                className="flex-1 bg-[#121316] border border-[#43474e] rounded p-1.5 text-xs text-[#a8c7fa] font-mono"
-              >
-                {branches.map((b) => (
-                  <option key={b.name} value={b.name}>{b.name}</option>
-                ))}
-              </select>
-              <span className="text-[#8e9199]">into</span>
-              <select
-                value={prBase}
-                onChange={(e) => setPrBase(e.target.value)}
-                className="flex-1 bg-[#121316] border border-[#43474e] rounded p-1.5 text-xs text-white font-mono"
-              >
-                {branches.map((b) => (
-                  <option key={b.name} value={b.name}>{b.name}</option>
-                ))}
-              </select>
+              <div className="flex-1">
+                <M3Dropdown<string>
+                  searchable
+                  size="sm"
+                  label="Head branch"
+                  options={branches.map((b) => ({
+                    value: b.name,
+                    label: b.name,
+                    icon: 'fork_right',
+                  }))}
+                  value={prHead}
+                  onChange={(val) => setPrHead(val)}
+                />
+              </div>
+              <span className="text-[#8e9199] font-medium shrink-0 pt-3">into</span>
+              <div className="flex-1">
+                <M3Dropdown<string>
+                  searchable
+                  size="sm"
+                  label="Base branch"
+                  options={branches.map((b) => ({
+                    value: b.name,
+                    label: b.name,
+                    icon: 'fork_right',
+                  }))}
+                  value={prBase}
+                  onChange={(val) => setPrBase(val)}
+                />
+              </div>
             </div>
             <input
               type="text"

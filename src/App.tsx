@@ -33,6 +33,9 @@ import { Editor } from './components/Editor';
 import { Preview } from './components/Preview';
 import { Terminal, ConsoleLogEntry } from './components/Terminal';
 import { GitHubPanel } from './components/GitHubPanel';
+import { M3Dropdown } from './components/M3Dropdown';
+import { CollabModal } from './components/CollabModal';
+import { collabService, CollabPeer } from './utils/collabService';
 
 interface SavedSession {
   savedAt: number;
@@ -173,6 +176,22 @@ export default function App() {
   const [pullRequests, setPullRequests] = useState<PullRequest[]>([]);
   const [oauthConfigured, setOauthConfigured] = useState(false);
   const [callbackUrl, setCallbackUrl] = useState('');
+
+  // Live Collaboration & Presence State
+  const [isCollabModalOpen, setIsCollabModalOpen] = useState(false);
+  const [collabPeers, setCollabPeers] = useState<CollabPeer[]>([]);
+  const [collabConnected, setCollabConnected] = useState(false);
+
+  // Initialize live collaboration WebSocket on mount
+  useEffect(() => {
+    collabService.connect();
+    const unsubPeers = collabService.onPeers(setCollabPeers);
+    const unsubConn = collabService.onConnection(setCollabConnected);
+    return () => {
+      unsubPeers();
+      unsubConn();
+    };
+  }, []);
 
   // Check saved session on mount
   useEffect(() => {
@@ -1169,16 +1188,31 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* Language Selector */}
-            <select
-              value={currentLang}
-              onChange={(e) => handleLanguageChange(e.target.value as SupportedLanguage)}
-              className="bg-[#121316] border border-[#43474e]/50 rounded-lg px-2 py-1 text-[11px] text-[#a8c7fa] focus:outline-none"
+            {/* Live Collab Trigger Button */}
+            <button
+              onClick={() => setIsCollabModalOpen(true)}
+              className="px-2 py-1 rounded-xl bg-[#2b2d30] hover:bg-[#383a3e] border border-[#43474e]/50 text-[11px] text-[#e2e2e6] flex items-center gap-1 cursor-pointer"
+              title="Live Collaboration"
             >
-              <option value="en">EN</option>
-              <option value="zh-CN">中文</option>
-              <option value="ms">MY</option>
-            </select>
+              <span className={`w-1.5 h-1.5 rounded-full ${collabConnected ? 'bg-[#3ddc84] animate-pulse' : 'bg-[#ff5449]'}`} />
+              <M3Icon name="group" size={13} className="text-[#a8c7fa]" />
+              {collabPeers.length > 0 && (
+                <span className="font-mono text-[10px] text-[#a8c7fa]">+{collabPeers.length}</span>
+              )}
+            </button>
+
+            {/* In-UI Language Dropdown */}
+            <M3Dropdown
+              size="sm"
+              options={[
+                { value: 'en', label: 'EN' },
+                { value: 'zh-CN', label: '中文' },
+                { value: 'ms', label: 'MY' },
+              ]}
+              value={currentLang}
+              onChange={(val) => handleLanguageChange(val as SupportedLanguage)}
+              className="w-18"
+            />
 
             {/* Quick Commit Button */}
             <button
@@ -1434,19 +1468,35 @@ export default function App() {
 
         {/* Right: Actions, Language & Status */}
         <div className="flex items-center gap-2">
-          {/* Language Selector Dropdown */}
-          <div className="flex items-center gap-1 bg-[#121316] px-2 py-0.5 rounded-lg border border-[#43474e]/40">
-            <M3Icon name="translate" size={14} className="text-[#a8c7fa]" />
-            <select
-              value={currentLang}
-              onChange={(e) => handleLanguageChange(e.target.value as SupportedLanguage)}
-              className="bg-transparent text-[11px] text-[#a8c7fa] focus:outline-none cursor-pointer"
-            >
-              <option value="en">English</option>
-              <option value="zh-CN">简体中文</option>
-              <option value="ms">Bahasa Melayu</option>
-            </select>
-          </div>
+          {/* Live Real-Time Collaboration Button */}
+          <button
+            onClick={() => setIsCollabModalOpen(true)}
+            className="px-2.5 py-1 rounded-xl bg-[#1e1f22] hover:bg-[#2b2d30] border border-[#43474e]/50 text-xs text-[#e2e2e6] flex items-center gap-2 transition-colors cursor-pointer"
+            title="Live Real-Time Collaboration & Room Settings"
+          >
+            <span className={`w-2 h-2 rounded-full ${collabConnected ? 'bg-[#3ddc84] animate-pulse' : 'bg-[#ff5449]'}`} />
+            <M3Icon name="group" size={15} className="text-[#a8c7fa]" />
+            <span className="font-semibold hidden md:inline">Live Collab</span>
+            {collabPeers.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-[#00468b] text-[#d6e3ff] font-mono text-[10px] font-bold">
+                +{collabPeers.length}
+              </span>
+            )}
+          </button>
+
+          {/* In-UI Language Selector Dropdown */}
+          <M3Dropdown
+            size="sm"
+            icon="translate"
+            options={[
+              { value: 'en', label: 'English' },
+              { value: 'zh-CN', label: '简体中文' },
+              { value: 'ms', label: 'Bahasa Melayu' },
+            ]}
+            value={currentLang}
+            onChange={(val) => handleLanguageChange(val as SupportedLanguage)}
+            className="w-36"
+          />
 
           {/* Terminal Toggle Button */}
           <button
@@ -1702,6 +1752,13 @@ export default function App() {
 
       {sessionRecoveryModal}
       {inUiAlertModal}
+
+      {/* Live Real-Time Collaboration Modal */}
+      <CollabModal
+        isOpen={isCollabModalOpen}
+        onClose={() => setIsCollabModalOpen(false)}
+        t={t}
+      />
     </div>
   );
 }

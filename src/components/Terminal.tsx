@@ -5,6 +5,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { M3Icon, M3IconButton } from './M3Components';
+import { M3Dropdown, DropdownOption } from './M3Dropdown';
 import { VFile } from '../utils/fileSystem';
 import { GitBranch, GitCommit } from '../utils/gitService';
 import { Translations, TRANSLATIONS } from '../utils/i18n';
@@ -307,17 +308,20 @@ export function Terminal({
         {/* Right Action Icons */}
         <div className="flex items-center gap-1">
           {activeTab === 'console' && (
-            <div className="flex items-center gap-1 mr-2">
-              <select
-                value={logFilter}
-                onChange={(e) => setLogFilter(e.target.value as any)}
-                className="bg-[#121316] border border-[#43474e]/40 rounded px-2 py-0.5 text-[11px] text-[#c4c6d0] focus:outline-none"
-              >
-                <option value="all">{t.allLogs}</option>
-                <option value="error">{t.errorsOnly}</option>
-                <option value="warn">{t.warnings}</option>
-                <option value="log">{t.infoLogs}</option>
-              </select>
+            <div className="flex items-center gap-1.5 mr-2">
+              <div className="w-32">
+                <M3Dropdown<'all' | 'error' | 'warn' | 'log'>
+                  size="sm"
+                  value={logFilter}
+                  onChange={(val) => setLogFilter(val)}
+                  options={[
+                    { value: 'all', label: t.allLogs, icon: 'list' },
+                    { value: 'error', label: t.errorsOnly, icon: 'error', iconColor: 'text-[#f2b8b5]' },
+                    { value: 'warn', label: t.warnings, icon: 'warning', iconColor: 'text-[#ffd54f]' },
+                    { value: 'log', label: t.infoLogs, icon: 'info', iconColor: 'text-[#a8c7fa]' },
+                  ]}
+                />
+              </div>
               <M3IconButton
                 size="sm"
                 icon="block"

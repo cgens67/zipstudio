@@ -19,6 +19,7 @@ import { explainCodeInPlainEnglish, CodeBlockExplanation } from '../utils/codeEx
 import { Translations, TRANSLATIONS, SupportedLanguage } from '../utils/i18n';
 import { highlightCode } from '../utils/syntaxHighlighter';
 import { FontSpecimenViewer, MediaPlayer, BinaryAssetViewer } from './BinaryFileViewers';
+import { collabService, RemoteCursor, FileUpdateEvent } from '../utils/collabService';
 
 interface EditorProps {
   openTabs: string[];
@@ -59,6 +60,11 @@ export function Editor({
   const [wordWrap, setWordWrap] = useState(false);
   const [syntaxHighlighting, setSyntaxHighlighting] = useState(true);
   const [scrollTop, setScrollTop] = useState(0);
+
+  // Live Collaboration state & remote cursors
+  const [remoteCursors, setRemoteCursors] = useState<RemoteCursor[]>([]);
+  const [collabNotice, setCollabNotice] = useState<string | null>(null);
+  const isRemoteUpdatingRef = useRef(false);
 
   // In-file search & replace state
   const [showFindBar, setShowFindBar] = useState(false);
@@ -227,6 +233,43 @@ export function Editor({
     }
   }, [activeFilePath, activeFile]);
 
+  // Real-Time Live Collaboration: remote edits & remote cursors
+  useEffect(() => {
+    const unsubCursors = collabService.onCursors((allCursors) => {
+      const myId = collabService.getProfile().id;
+      const fileCursors = allCursors.filter(
+        (c) => c.filePath === activeFilePath && c.peerId !== myId
+      );
+      setRemoteCursors(fileCursors);
+    });
+
+    const unsubFile = collabService.onFileUpdate((event: FileUpdateEvent) => {
+      if (event.filePath === activeFilePath) {
+        const myId = collabService.getProfile().id;
+        if (event.senderId !== myId) {
+          isRemoteUpdatingRef.current = true;
+          setContent(event.content);
+          onUpdateContent(event.filePath, event.content);
+          setTimeout(() => {
+            isRemoteUpdatingRef.current = false;
+          }, 80);
+
+          if (event.isConflictResolved) {
+            setCollabNotice(event.conflictNote || 'Simultaneous edits reconciled by server');
+          } else {
+            setCollabNotice(`${event.senderName} edited this file`);
+          }
+          setTimeout(() => setCollabNotice(null), 3000);
+        }
+      }
+    });
+
+    return () => {
+      unsubCursors();
+      unsubFile();
+    };
+  }, [activeFilePath, onUpdateContent]);
+
   // Record history snapshot (debounced)
   const recordHistory = useCallback(
     (newVal: string) => {
@@ -337,6 +380,11 @@ export function Editor({
       updateTimerRef.current = setTimeout(() => {
         onUpdateContent(activeFilePath, val);
       }, 150);
+
+      // Real-time simultaneous edit broadcast with conflict resolution
+      if (!isRemoteUpdatingRef.current && !activeFile?.isBinary) {
+        collabService.sendFileEdit(activeFilePath, val);
+      }
     }
   };
 
@@ -344,11 +392,19 @@ export function Editor({
     if (!textareaRef.current) return;
     const text = textareaRef.current.value;
     const selStart = textareaRef.current.selectionStart;
+    const selEnd = textareaRef.current.selectionEnd;
     const lines = text.substring(0, selStart).split('\n');
-    setCursorPos({
-      line: lines.length,
-      col: lines[lines.length - 1].length + 1,
-    });
+    const line = lines.length;
+    const col = lines[lines.length - 1].length + 1;
+    setCursorPos({ line, col });
+
+    // Real-time cursor position broadcast to peers
+    if (activeFilePath && !activeFile?.isBinary) {
+      collabService.sendCursorMove(activeFilePath, line, col, undefined, undefined, {
+        start: selStart,
+        end: selEnd,
+      });
+    }
   };
 
   // Synchronize line gutter and syntax highlighted pre with textarea scroll
@@ -466,6 +522,35 @@ export function Editor({
           <span className="text-[#8e9199] text-[11px] shrink-0 font-mono">
             {lineCount} {t.linesLabel}
           </span>
+
+          {/* Live Collaborators in this file */}
+          {remoteCursors.length > 0 && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#121316] border border-[#43474e]/40 shrink-0">
+              <div className="flex -space-x-1.5 overflow-hidden">
+                {remoteCursors.map((c) => (
+                  <div
+                    key={c.peerId}
+                    style={{ backgroundColor: c.color }}
+                    title={`${c.name} (Line ${c.line})`}
+                    className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-[#001d3d] ring-1 ring-[#1e1f22]"
+                  >
+                    {c.name.charAt(0).toUpperCase()}
+                  </div>
+                ))}
+              </div>
+              <span className="text-[10px] text-[#a8c7fa] font-mono">
+                {remoteCursors.length} {remoteCursors.length === 1 ? 'co-editor' : 'co-editors'}
+              </span>
+            </div>
+          )}
+
+          {/* Conflict resolution / real-time sync notification */}
+          {collabNotice && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#00468b]/50 border border-[#a8c7fa]/40 text-[#a8c7fa] text-[10px] font-medium shrink-0 animate-pulse">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#3ddc84]" />
+              <span>{collabNotice}</span>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
@@ -773,6 +858,47 @@ export function Editor({
                   tabSize: 2,
                 }}
               />
+
+              {/* Live Collaborative Remote Cursors Overlay */}
+              <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
+                {remoteCursors.map((c) => {
+                  const topPos = (c.line - 1) * lineHeight - scrollTop + 12;
+                  const charWidth = fontSize * 0.605;
+                  const leftPos = Math.max(12, (c.col - 1) * charWidth + 12);
+
+                  if (topPos < -40 || topPos > viewportHeight + 100) return null;
+
+                  return (
+                    <div
+                      key={c.peerId}
+                      style={{
+                        transform: `translate3d(${leftPos}px, ${topPos}px, 0)`,
+                        transition: 'transform 0.05s ease-out',
+                      }}
+                      className="absolute top-0 left-0 flex flex-col pointer-events-none will-change-transform z-30 select-none"
+                    >
+                      {/* Name Badge */}
+                      <div
+                        style={{ backgroundColor: c.color }}
+                        className="px-1.5 py-0.2 rounded text-[10px] font-bold text-[#001d3d] shadow-lg flex items-center gap-1 w-max -translate-y-4"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#001d3d] animate-pulse" />
+                        <span>{c.name}</span>
+                      </div>
+
+                      {/* Blinking Caret */}
+                      <div
+                        style={{
+                          backgroundColor: c.color,
+                          height: `${lineHeight}px`,
+                          boxShadow: `0 0 6px ${c.color}`,
+                        }}
+                        className="w-[2px] rounded-full animate-pulse"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
 
               {/* Floating Material 3 In-File Search Bar */}
               {showFindBar && (
