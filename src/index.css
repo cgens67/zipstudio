@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   :root {
     --font-sans: 'Roboto Flex', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -65,32 +67,99 @@
   transition: width 0.2s cubic-bezier(0.2, 0, 0, 1), height 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* Material 3 Expressive Dynamic Shape Morphing Buttons */
-/* Applies to almost every button in the app: subtle, delightful, organic, not too much */
-button:not(.no-morph),
-[role="button"]:not(.no-morph),
-.m3-morph-btn,
-.m3-icon-morph-btn {
+/* ==========================================================================
+   Circular Buttons & Icon Preservation
+   Strictly prevents circular buttons (.rounded-full, media player buttons)
+   from mutating into squircles or boxes on hover or tap.
+   ========================================================================== */
+.rounded-full:not(.m3-play-pause-morph),
+button.rounded-full:not(.m3-play-pause-morph),
+[class*="rounded-full"]:not(.m3-play-pause-morph),
+.no-morph {
+  border-radius: 9999px !important;
+  will-change: transform;
+}
+
+.rounded-full:not(.m3-play-pause-morph):hover,
+.rounded-full:not(.m3-play-pause-morph):active,
+button.rounded-full:not(.m3-play-pause-morph):hover,
+button.rounded-full:not(.m3-play-pause-morph):active,
+[class*="rounded-full"]:not(.m3-play-pause-morph):hover,
+[class*="rounded-full"]:not(.m3-play-pause-morph):active,
+.no-morph:hover,
+.no-morph:active {
+  border-radius: 9999px !important;
+}
+
+button.rounded-full:not(.m3-play-pause-morph):active:not(:disabled),
+[class*="rounded-full"]:not(.m3-play-pause-morph):active:not(:disabled),
+.no-morph:active:not(:disabled) {
+  transform: scale(0.95);
+  border-radius: 9999px !important;
+}
+
+/* Material Design 3 Audio Player Play/Pause Shape-Morphing Button */
+.m3-play-pause-morph {
+  transition: border-radius 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+              transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+              background-color 0.15s ease,
+              box-shadow 0.15s ease !important;
+  will-change: border-radius, transform;
+}
+
+.m3-play-pause-morph.is-paused {
+  border-radius: 9999px !important;
+}
+
+.m3-play-pause-morph.is-playing {
+  border-radius: 14px !important;
+}
+
+.m3-play-pause-morph:active:not(:disabled) {
+  transform: scale(0.92) !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .m3-play-pause-morph:hover:not(:disabled) {
+    transform: scale(1.06);
+  }
+}
+
+/* Material 3 Expressive Dynamic Shape Morphing Buttons (NON-CIRCULAR ONLY) */
+button:not(.no-morph):not(.rounded-full):not([class*="rounded-full"]),
+[role="button"]:not(.no-morph):not(.rounded-full):not([class*="rounded-full"]),
+.m3-morph-btn:not(.rounded-full):not([class*="rounded-full"]),
+.m3-icon-morph-btn:not(.rounded-full):not([class*="rounded-full"]) {
   transition: transform 0.14s cubic-bezier(0.2, 0, 0, 1),
-              border-radius 0.2s cubic-bezier(0.34, 1.3, 0.64, 1),
+              border-radius 0.18s cubic-bezier(0.2, 0, 0, 1),
               background-color 0.15s ease,
               box-shadow 0.15s ease,
               border-color 0.15s ease,
               color 0.15s ease !important;
-  will-change: transform, border-radius;
+  will-change: transform;
 }
 
-/* Subtle, gentle hover shape morph */
-button:not(.no-morph):hover:not(:disabled),
-[role="button"]:not(.no-morph):hover:not(:disabled) {
-  border-radius: 12px;
+/* Subtle, gentle hover shape morph: ONLY on true pointer devices with hover support (eliminates mobile sticky hover) */
+@media (hover: hover) and (pointer: fine) {
+  button:not(.no-morph):not(.rounded-full):not([class*="rounded-full"]):hover:not(:disabled),
+  [role="button"]:not(.no-morph):not(.rounded-full):not([class*="rounded-full"]):hover:not(:disabled) {
+    border-radius: 12px;
+  }
+
+  .m3-morph-btn:not(.rounded-full):not([class*="rounded-full"]):hover:not(:disabled) {
+    border-radius: 12px;
+  }
+
+  .m3-icon-morph-btn:not(.rounded-full):not([class*="rounded-full"]):hover:not(:disabled) {
+    border-radius: 10px;
+  }
 }
 
-/* Controlled, organic squircle shape morph on press: scale(0.965), 8px squircle, not too much */
-button:not(.no-morph):active:not(:disabled),
-[role="button"]:not(.no-morph):active:not(:disabled),
-.m3-morph-btn:active:not(:disabled),
-.m3-icon-morph-btn:active:not(:disabled) {
+/* Controlled, organic squircle shape morph on press: ONLY for non-circular buttons */
+button:not(.no-morph):not(.rounded-full):not([class*="rounded-full"]):active:not(:disabled),
+[role="button"]:not(.no-morph):not(.rounded-full):not([class*="rounded-full"]):active:not(:disabled),
+.m3-morph-btn:not(.rounded-full):not([class*="rounded-full"]):active:not(:disabled),
+.m3-icon-morph-btn:not(.rounded-full):not([class*="rounded-full"]):active:not(:disabled) {
   transform: scale(0.965) !important;
   border-radius: 8px !important;
 }
@@ -99,23 +168,9 @@ button:not(.no-morph):active:not(:disabled),
   border-radius: 16px;
   position: relative;
 }
-.m3-morph-btn:hover:not(:disabled) {
-  border-radius: 12px;
-}
-.m3-morph-btn:active:not(:disabled) {
-  border-radius: 8px !important;
-  transform: scale(0.965) !important;
-}
 
 .m3-icon-morph-btn {
   border-radius: 12px;
-}
-.m3-icon-morph-btn:hover:not(:disabled) {
-  border-radius: 10px;
-}
-.m3-icon-morph-btn:active:not(:disabled) {
-  border-radius: 7px !important;
-  transform: scale(0.94) !important;
 }
 
 /* Prism Dark Theme for Code Syntax Highlighting */
@@ -177,14 +232,11 @@ button:not(.no-morph):active:not(:disabled),
   font-style: italic;
 }
 
-/* Material Design 3 Expressive (MD3E) Animations for Menus and Dialogs */
-@keyframes m3MenuSpringIn {
+/* Material Design 3 Expressive Smooth Dialog & Menu Animations (Strictly Zero Bounce) */
+@keyframes m3MenuSmoothIn {
   0% {
     opacity: 0;
-    transform: scale(0.88) translateY(-6px);
-  }
-  70% {
-    transform: scale(1.02) translateY(1px);
+    transform: scale(0.96) translateY(-4px);
   }
   100% {
     opacity: 1;
@@ -192,13 +244,10 @@ button:not(.no-morph):active:not(:disabled),
   }
 }
 
-@keyframes m3DialogBounceIn {
+@keyframes m3DialogSmoothIn {
   0% {
     opacity: 0;
-    transform: scale(0.90) translateY(12px);
-  }
-  65% {
-    transform: scale(1.018) translateY(-2px);
+    transform: scale(0.96) translateY(6px);
   }
   100% {
     opacity: 1;
@@ -206,13 +255,78 @@ button:not(.no-morph):active:not(:disabled),
   }
 }
 
-.m3-menu-spring {
-  animation: m3MenuSpringIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+.m3-menu-spring,
+.m3-menu-smooth {
+  animation: m3MenuSmoothIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   transform-origin: top left;
 }
 
-.m3-dialog-bounce {
-  animation: m3DialogBounceIn 0.26s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+/* Both .m3-dialog-bounce and .m3-dialog-smooth are now completely smooth with zero bounce */
+.m3-dialog-bounce,
+.m3-dialog-smooth {
+  animation: m3DialogSmoothIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Material Design 3 Fluid Dialog Transitions (Entrance & Exit) */
+.m3-dialog-backdrop {
+  transition: opacity 0.22s cubic-bezier(0.2, 0, 0, 1) !important;
+  will-change: opacity;
+}
+.m3-dialog-backdrop.entering {
+  opacity: 1 !important;
+}
+.m3-dialog-backdrop.exiting {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.m3-dialog-surface {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.22s cubic-bezier(0.2, 0, 0, 1) !important;
+  will-change: transform, opacity;
+}
+.m3-dialog-surface.entering {
+  opacity: 1 !important;
+  transform: scale(1) translateY(0) !important;
+}
+.m3-dialog-surface.exiting {
+  opacity: 0 !important;
+  transform: scale(0.95) translateY(8px) !important;
+  pointer-events: none !important;
+}
+
+/* Material Design 3 Smooth Dialog Exit & Backdrop Fade Animations (Keyframe fallback) */
+@keyframes m3DialogSmoothOut {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+}
+
+@keyframes m3BackdropFadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes m3BackdropFadeOut {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.m3-dialog-smooth-out {
+  animation: m3DialogSmoothOut 0.22s cubic-bezier(0.2, 0, 0, 1) forwards !important;
+}
+
+.m3-backdrop-fade-in {
+  animation: m3BackdropFadeIn 0.22s ease-out forwards;
+}
+
+.m3-backdrop-fade-out {
+  animation: m3BackdropFadeOut 0.22s ease-in forwards !important;
 }
 
 /* Material 3 Switch Component tokens: strictly dark theme blue & charcoal, never baseline purple (#6750a4) */
@@ -261,4 +375,191 @@ md-switch {
   --md-ripple-pressed-color: #a8c7fa !important;
   --md-ripple-focus-color: #a8c7fa !important;
 }
+
+/* ==========================================================================
+   Material Design 3 Light Mode Styles
+   Triggered via html.light or [data-theme="light"]
+   ========================================================================== */
+html.light {
+  color-scheme: light;
+}
+
+html.light body {
+  background-color: #f7f9fe !important;
+  color: #191c20 !important;
+}
+
+/* Light Mode Surfaces & Panels */
+html.light .bg-\[\#121316\],
+html.light [class~="bg-[#121316]"] {
+  background-color: #f0f2f8 !important;
+}
+
+html.light .bg-\[\#141518\],
+html.light [class~="bg-[#141518]"] {
+  background-color: #edf0f7 !important;
+}
+
+html.light .bg-\[\#18191c\],
+html.light [class~="bg-[#18191c]"] {
+  background-color: #f5f6fb !important;
+}
+
+html.light .bg-\[\#1e1f22\],
+html.light [class~="bg-[#1e1f22]"] {
+  background-color: #ffffff !important;
+}
+
+html.light .bg-\[\#2b2d30\],
+html.light [class~="bg-[#2b2d30]"] {
+  background-color: #e8ebf3 !important;
+}
+
+html.light .bg-\[\#383a3e\],
+html.light [class~="bg-[#383a3e]"] {
+  background-color: #dfe2ec !important;
+}
+
+/* Light Mode Borders */
+html.light [class~="border-[#43474e]"],
+html.light [class*="border-[#43474e]/"] {
+  border-color: #d8dae5 !important;
+}
+
+/* Light Mode Typography */
+html.light [class~="text-[#e2e2e6]"],
+html.light [class~="text-[#c4c6d0]"],
+html.light [class~="text-white"]:not(.text-white-fixed):not(.no-light-invert) {
+  color: #191c20 !important;
+}
+
+html.light [class~="text-[#8e9199]"] {
+  color: #5d6168 !important;
+}
+
+/* Light Mode Primary Blue Text */
+html.light [class~="text-[#a8c7fa]"] {
+  color: #0b57d0 !important;
+}
+
+/* Light Mode Scrollbars */
+html.light ::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.38);
+}
+
+/* Light Mode Switch Component */
+html.light md-switch {
+  --md-sys-color-primary: #0b57d0 !important;
+  --md-sys-color-on-primary: #ffffff !important;
+  --md-sys-color-primary-container: #d3e3fd !important;
+  --md-sys-color-surface: #ffffff !important;
+  --md-sys-color-outline: #74777f !important;
+
+  --md-switch-selected-handle-color: #ffffff !important;
+  --md-switch-selected-track-color: #0b57d0 !important;
+  --md-switch-selected-icon-color: #0b57d0 !important;
+
+  --md-switch-unselected-track-color: #e0e2ec !important;
+  --md-switch-unselected-handle-color: #74777f !important;
+  --md-switch-unselected-icon-color: #ffffff !important;
+}
+
+/* ==========================================================================
+   Code Editor Syntax Highlighting & Transparent Typing Surface
+   CRITICAL: Textarea MUST be completely transparent so syntax pre is visible
+   ========================================================================== */
+.editor-textarea,
+html.light .editor-textarea,
+html.dark .editor-textarea {
+  background-color: transparent !important;
+  background: transparent !important;
+}
+
+/* In light mode, editor viewport and code container are clean white */
+html.light .editor-viewport,
+html.light .editor-code-container {
+  background-color: #ffffff !important;
+}
+
+html.light .editor-gutter {
+  background-color: #f6f8fa !important;
+  border-color: #d0d7de !important;
+  color: #656d76 !important;
+}
+
+/* Caret colors */
+html.light .editor-textarea {
+  caret-color: #0969da !important;
+}
+
+html.dark .editor-textarea {
+  caret-color: #a8c7fa !important;
+}
+
+/* Light Mode Syntax Highlighting Tokens */
+html.light .editor-pre {
+  color: #1f2328 !important;
+}
+
+html.light .token.comment,
+html.light .token.prolog,
+html.light .token.doctype,
+html.light .token.cdata {
+  color: #6e7781 !important;
+  font-style: italic;
+}
+
+html.light .token.punctuation {
+  color: #24292f !important;
+}
+
+html.light .token.string,
+html.light .token.char,
+html.light .token.attr-value {
+  color: #0a6640 !important;
+}
+
+html.light .token.keyword,
+html.light .token.atrule,
+html.light .token.tag {
+  color: #cf222e !important;
+  font-weight: 600;
+}
+
+html.light .token.function,
+html.light .token.class-name {
+  color: #8250df !important;
+  font-weight: 600;
+}
+
+html.light .token.variable,
+html.light .token.property,
+html.light .token.attr-name {
+  color: #953800 !important;
+}
+
+html.light .token.number,
+html.light .token.boolean {
+  color: #0550ae !important;
+}
+
+html.light .token.operator,
+html.light .token.entity,
+html.light .token.url {
+  color: #0550ae !important;
+}
+
+html.light .token.regex,
+html.light .token.important {
+  color: #116329 !important;
+}
+
 

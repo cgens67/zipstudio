@@ -33,9 +33,10 @@ import { Editor } from './components/Editor';
 import { Preview } from './components/Preview';
 import { Terminal, ConsoleLogEntry } from './components/Terminal';
 import { GitHubPanel } from './components/GitHubPanel';
-import { M3Dropdown } from './components/M3Dropdown';
 import { CollabModal } from './components/CollabModal';
 import { collabService, CollabPeer } from './utils/collabService';
+import { SettingsModal, EditorSettings, DEFAULT_SETTINGS } from './components/SettingsModal';
+import { processDroppedDataTransfer } from './utils/dragDropHandler';
 
 interface SavedSession {
   savedAt: number;
@@ -181,6 +182,126 @@ export default function App() {
   const [isCollabModalOpen, setIsCollabModalOpen] = useState(false);
   const [collabPeers, setCollabPeers] = useState<CollabPeer[]>([]);
   const [collabConnected, setCollabConnected] = useState(false);
+
+  // App & Editor Settings state (persisted to localStorage)
+  const [settings, setSettings] = useState<EditorSettings>(() => {
+    try {
+      const saved = localStorage.getItem('zipstudio_settings');
+      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
+    } catch {
+      return DEFAULT_SETTINGS;
+    }
+  });
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Drag & Drop Folders and ZIP Archives
+  const [isDragOver, setIsDragOver] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  // Theme synchronization effect (Dark, Light, System)
+  useEffect(() => {
+    try {
+      localStorage.setItem('zipstudio_settings', JSON.stringify(settings));
+    } catch (e) {
+      console.warn('Failed saving settings:', e);
+    }
+
+    const applyTheme = () => {
+      const isLight =
+        settings.theme === 'light' ||
+        (settings.theme === 'system' && !window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+      if (isLight) {
+        document.documentElement.classList.add('light');
+        document.documentElement.classList.remove('dark');
+      } else {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      }
+    };
+
+    applyTheme();
+
+    if (settings.theme === 'system') {
+      const mql = window.matchMedia('(prefers-color-scheme: dark)');
+      const handler = () => applyTheme();
+      mql.addEventListener('change', handler);
+      return () => mql.removeEventListener('change', handler);
+    }
+  }, [settings]);
+
+  // Drag and drop event listeners
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragOver(true);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDragOver(false);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDragOver(false);
+
+    try {
+      const result = await processDroppedDataTransfer(e.dataTransfer);
+      if (result.fileCount === 0) {
+        triggerAlert('No Files Found', 'No files could be extracted from the dropped item.', 'warning');
+        return;
+      }
+
+      // Merge dropped files into workspace
+      setFiles((prev) => ({
+        ...prev,
+        ...result.files,
+      }));
+
+      const keys = Object.keys(result.files);
+      const defaultFile = result.files['index.html'] ? 'index.html' : keys[0];
+      if (defaultFile) {
+        setActiveFilePath(defaultFile);
+        setOpenTabs((prev) => Array.from(new Set([...prev, defaultFile])));
+      }
+
+      const msg = `Imported ${result.fileCount} file(s)${
+        result.folderCount > 0 ? ` across ${result.folderCount} folder(s)` : ''
+      }${result.zipCount > 0 ? ` (including ${result.zipCount} ZIP archive${result.zipCount > 1 ? 's' : ''})` : ''} into workspace.`;
+
+      addGitLog(msg);
+      triggerAlert('Files Imported', msg, 'info');
+    } catch (err: any) {
+      console.error('Drag and drop import failed:', err);
+      triggerAlert('Import Error', `Failed to import dropped files: ${err.message}`, 'error');
+    }
+  };
+
+  const handleResetWorkspace = () => {
+    setFiles({});
+    setBaseFiles({});
+    setOpenTabs([]);
+    setActiveFilePath('');
+    localStorage.removeItem('zipstudio_workspace_session');
+    addGitLog('Cleared workspace and local storage cache.');
+    triggerAlert('Workspace Reset', 'All workspace files have been cleared.', 'info');
+  };
 
   // Initialize live collaboration WebSocket on mount
   useEffect(() => {
@@ -519,10 +640,29 @@ export default function App() {
     }
   };
 
-  // Create repository on GitHub
+  // Create repository on GitHub or locally
   const handleCreateRepo = async (name: string, description: string, isPrivate: boolean) => {
     if (!githubToken) {
-      triggerAlert('GitHub Account Required', 'Please connect your GitHub account first.', 'info');
+      const newRepo: GitHubRepo = {
+        id: Date.now(),
+        name,
+        fullName: `workspace/${name}`,
+        description: description || 'Local workspace repository',
+        private: isPrivate,
+        defaultBranch: 'main',
+        htmlUrl: '#',
+        updatedAt: new Date().toISOString(),
+      };
+      setRepos((prev) => [newRepo, ...prev.filter((r) => r.fullName !== newRepo.fullName)]);
+      setSelectedRepo(newRepo);
+      setActiveBranch('main');
+      setBranches([{ name: 'main', isCurrent: true, isDefault: true, commitSha: 'HEAD' }]);
+      addGitLog(`Initialized new local workspace repository "${newRepo.fullName}".`);
+      triggerAlert(
+        t?.repoCreatedSuccess || 'Repository Created',
+        `Repository "${name}" initialized successfully as your active workspace repository.`,
+        'success'
+      );
       return;
     }
     try {
@@ -532,9 +672,15 @@ export default function App() {
       setRepos((prev) => [newRepo, ...prev]);
       await handleSelectRepo(newRepo);
       addGitLog(`Repository "${newRepo.fullName}" created successfully on GitHub.`);
+      triggerAlert(
+        t?.repoCreatedSuccess || 'Repository Created',
+        `Repository "${newRepo.fullName}" created successfully on GitHub!`,
+        'success'
+      );
     } catch (err: any) {
       addGitLog(`Error creating repo: ${err.message}`);
       triggerAlert('Create Repository Failed', `Failed to create repository on GitHub: ${err.message}`, 'error');
+      throw err;
     }
   };
 
@@ -1170,54 +1316,70 @@ export default function App() {
     </div>
   ) : null;
 
+  // Full-Screen Drag and Drop Overlay
+  const dragOverlay = isDragOver ? (
+    <div className="fixed inset-0 z-50 pointer-events-none bg-[#001d3d]/85 backdrop-blur-md flex flex-col items-center justify-center p-6 border-4 border-dashed border-[#a8c7fa] m3-dialog-smooth text-white select-none">
+      <div className="w-20 h-20 rounded-full bg-[#00468b]/70 border-2 border-[#a8c7fa] flex items-center justify-center text-[#a8c7fa] mb-4 shadow-2xl animate-pulse">
+        <M3Icon name="folder_zip" size={42} />
+      </div>
+      <h2 className="text-xl font-bold mb-2 text-[#a8c7fa]">{t.dragFolderNotice}</h2>
+      <p className="text-xs text-[#c4c6d0] max-w-sm text-center leading-relaxed">
+        {t.clearWorkspaceDesc}
+      </p>
+    </div>
+  ) : null;
+
   // -----------------------------------------------------------------
   // DEDICATED MOBILE USER INTERFACE
   // -----------------------------------------------------------------
   if (isMobile) {
     return (
-      <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] flex flex-col bg-[#121316] text-[#e2e2e6] overflow-hidden select-none">
+      <div
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] flex flex-col bg-[#f8fafd] dark:bg-[#121316] text-[#191c20] dark:text-[#e2e2e6] overflow-hidden select-none"
+      >
         {/* Mobile Top Header */}
-        <header className="h-12 px-3 bg-[#1e1f22] border-b border-[#43474e]/40 flex items-center justify-between shrink-0">
+        <header className="h-12 px-3 bg-white dark:bg-[#1e1f22] border-b border-[#d8dae5] dark:border-[#43474e]/40 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 truncate">
-            <M3Icon name="folder_zip" size={20} className="text-[#a8c7fa]" />
-            <span className="font-bold text-xs text-[#a8c7fa]">{t.appName}</span>
-            <span className="text-[#43474e]">/</span>
-            <span className="text-[11px] font-mono text-white truncate max-w-[100px]">
+            <M3Icon name="folder_zip" size={20} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
+            <span className="font-bold text-xs text-[#0b57d0] dark:text-[#a8c7fa]">{t.appName}</span>
+            <span className="text-[#d8dae5] dark:text-[#43474e]">/</span>
+            <span className="text-[11px] font-mono text-[#191c20] dark:text-white truncate max-w-[100px]">
               {selectedRepo?.name || 'repo'}
             </span>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* Settings Screen Trigger Button */}
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="w-8 h-8 rounded-xl bg-[#f0f2f8] dark:bg-[#2b2d30] hover:bg-[#e4e7ef] dark:hover:bg-[#383a3e] border border-[#d8dae5] dark:border-[#43474e]/50 text-[#191c20] dark:text-[#e2e2e6] flex items-center justify-center cursor-pointer transition-colors shadow-xs"
+              title={t.settingsLabel}
+            >
+              <M3Icon name="settings" size={17} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
+            </button>
+
             {/* Live Collab Trigger Button */}
             <button
               onClick={() => setIsCollabModalOpen(true)}
-              className="px-2 py-1 rounded-xl bg-[#2b2d30] hover:bg-[#383a3e] border border-[#43474e]/50 text-[11px] text-[#e2e2e6] flex items-center gap-1 cursor-pointer"
-              title="Live Collaboration"
+              className="px-2 py-1 rounded-xl bg-[#f0f2f8] dark:bg-[#2b2d30] hover:bg-[#e4e7ef] dark:hover:bg-[#383a3e] border border-[#d8dae5] dark:border-[#43474e]/50 text-[11px] text-[#191c20] dark:text-[#e2e2e6] flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+              title={t.liveCollaboration}
             >
               <span className={`w-1.5 h-1.5 rounded-full ${collabConnected ? 'bg-[#3ddc84] animate-pulse' : 'bg-[#ff5449]'}`} />
-              <M3Icon name="group" size={13} className="text-[#a8c7fa]" />
+              <M3Icon name="group" size={13} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
               {collabPeers.length > 0 && (
-                <span className="font-mono text-[10px] text-[#a8c7fa]">+{collabPeers.length}</span>
+                <span className="font-mono text-[10px] text-[#0b57d0] dark:text-[#a8c7fa]">+{collabPeers.length}</span>
               )}
             </button>
 
-            {/* In-UI Language Dropdown */}
-            <M3Dropdown
-              size="sm"
-              options={[
-                { value: 'en', label: 'EN' },
-                { value: 'zh-CN', label: '中文' },
-                { value: 'ms', label: 'MY' },
-              ]}
-              value={currentLang}
-              onChange={(val) => handleLanguageChange(val as SupportedLanguage)}
-              className="w-18"
-            />
 
             {/* Quick Commit Button */}
             <button
               onClick={() => setMobileTab('git')}
-              className="px-2 py-1 rounded-lg bg-[#00468b]/40 hover:bg-[#00468b]/60 border border-[#a8c7fa]/40 text-[#a8c7fa] text-[11px] font-semibold flex items-center gap-1 cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-[#0b57d0] dark:bg-[#00468b]/40 hover:bg-[#0842a0] dark:hover:bg-[#00468b]/60 border border-[#0b57d0] dark:border-[#a8c7fa]/40 text-white dark:text-[#a8c7fa] text-[11px] font-semibold flex items-center gap-1 cursor-pointer shadow-xs"
             >
               <M3Icon name="cloud_upload" size={14} />
               <span>{t.commit}</span>
@@ -1250,6 +1412,7 @@ export default function App() {
               files={files}
               t={t}
               currentLang={currentLang}
+              settings={settings}
               onSelectTab={setActiveFilePath}
               onCloseTab={handleCloseTab}
               onUpdateContent={handleUpdateContent}
@@ -1330,7 +1493,7 @@ export default function App() {
 
         {/* Mobile Bottom Navigation Bar */}
         <nav
-          className="bg-[#1e1f22] border-t border-[#43474e]/40 flex items-center justify-around shrink-0 px-1 z-30"
+          className="bg-white dark:bg-[#1e1f22] border-t border-[#d8dae5] dark:border-[#43474e]/40 flex items-center justify-around shrink-0 px-1 z-30 shadow-lg"
           style={{
             height: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))',
             paddingBottom: 'env(safe-area-inset-bottom, 0px)',
@@ -1339,7 +1502,7 @@ export default function App() {
           <button
             onClick={() => setMobileTab('files')}
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer transition-colors ${
-              mobileTab === 'files' ? 'text-[#a8c7fa]' : 'text-[#8e9199]'
+              mobileTab === 'files' ? 'text-[#0b57d0] dark:text-[#a8c7fa] font-semibold' : 'text-[#5d6168] dark:text-[#8e9199]'
             }`}
           >
             <M3Icon name="folder_zip" size={20} />
@@ -1349,7 +1512,7 @@ export default function App() {
           <button
             onClick={() => setMobileTab('editor')}
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer transition-colors ${
-              mobileTab === 'editor' ? 'text-[#a8c7fa]' : 'text-[#8e9199]'
+              mobileTab === 'editor' ? 'text-[#0b57d0] dark:text-[#a8c7fa] font-semibold' : 'text-[#5d6168] dark:text-[#8e9199]'
             }`}
           >
             <M3Icon name="code" size={20} />
@@ -1359,7 +1522,7 @@ export default function App() {
           <button
             onClick={() => setMobileTab('preview')}
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer transition-colors ${
-              mobileTab === 'preview' ? 'text-[#a8c7fa]' : 'text-[#8e9199]'
+              mobileTab === 'preview' ? 'text-[#0b57d0] dark:text-[#a8c7fa] font-semibold' : 'text-[#5d6168] dark:text-[#8e9199]'
             }`}
           >
             <M3Icon name="visibility" size={20} />
@@ -1369,7 +1532,7 @@ export default function App() {
           <button
             onClick={() => setMobileTab('search')}
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer transition-colors ${
-              mobileTab === 'search' ? 'text-[#a8c7fa]' : 'text-[#8e9199]'
+              mobileTab === 'search' ? 'text-[#0b57d0] dark:text-[#a8c7fa] font-semibold' : 'text-[#5d6168] dark:text-[#8e9199]'
             }`}
           >
             <M3Icon name="search" size={20} />
@@ -1379,13 +1542,13 @@ export default function App() {
           <button
             onClick={() => setMobileTab('git')}
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer transition-colors relative ${
-              mobileTab === 'git' ? 'text-[#a8c7fa]' : 'text-[#8e9199]'
+              mobileTab === 'git' ? 'text-[#0b57d0] dark:text-[#a8c7fa] font-semibold' : 'text-[#5d6168] dark:text-[#8e9199]'
             }`}
           >
             <M3Icon name="sync" size={20} />
             <span className="text-[10px] mt-0.5">{t.sourceControl}</span>
             {diffs.length > 0 && (
-              <span className="absolute top-1 right-3 w-4 h-4 rounded-full bg-[#a8c7fa] text-[#003062] font-bold text-[9px] flex items-center justify-center">
+              <span className="absolute top-1 right-3 w-4 h-4 rounded-full bg-[#0b57d0] dark:bg-[#a8c7fa] text-white dark:text-[#003062] font-bold text-[9px] flex items-center justify-center">
                 {diffs.length}
               </span>
             )}
@@ -1394,7 +1557,7 @@ export default function App() {
           <button
             onClick={() => setMobileTab('terminal')}
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer transition-colors ${
-              mobileTab === 'terminal' ? 'text-[#a8c7fa]' : 'text-[#8e9199]'
+              mobileTab === 'terminal' ? 'text-[#0b57d0] dark:text-[#a8c7fa] font-semibold' : 'text-[#5d6168] dark:text-[#8e9199]'
             }`}
           >
             <M3Icon name="terminal" size={20} />
@@ -1404,6 +1567,32 @@ export default function App() {
 
         {sessionRecoveryModal}
         {inUiAlertModal}
+
+        {/* Live Real-Time Collaboration Modal */}
+        <CollabModal
+          isOpen={isCollabModalOpen}
+          onClose={() => setIsCollabModalOpen(false)}
+          t={t}
+        />
+
+        {/* Settings Modal */}
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          settings={settings}
+          onUpdateSettings={(newSettings) => setSettings((prev) => ({ ...prev, ...newSettings }))}
+          onResetWorkspace={handleResetWorkspace}
+          currentLang={currentLang}
+          onLanguageChange={handleLanguageChange}
+          fileCount={Object.keys(files).length}
+          t={t}
+          selectedRepo={selectedRepo}
+          activeBranch={activeBranch}
+          isAuthenticated={isAuthenticated}
+          onCreateRepo={handleCreateRepo}
+        />
+
+        {dragOverlay}
       </div>
     );
   }
@@ -1412,33 +1601,39 @@ export default function App() {
   // DESKTOP FULL-FEATURED IDE
   // -----------------------------------------------------------------
   return (
-    <div className="h-screen w-screen flex flex-col bg-[#121316] text-[#e2e2e6] overflow-hidden select-none">
+    <div
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className="h-screen w-screen flex flex-col bg-[#f8fafd] dark:bg-[#121316] text-[#191c20] dark:text-[#e2e2e6] overflow-hidden select-none"
+    >
       {/* Top VS Code Style Menu Bar */}
-      <header className="h-9 px-3 bg-[#1e1f22] border-b border-[#43474e]/40 flex items-center justify-between shrink-0 text-xs">
+      <header className="h-9 px-3 bg-white dark:bg-[#1e1f22] border-b border-[#d8dae5] dark:border-[#43474e]/40 flex items-center justify-between shrink-0 text-xs">
         {/* Left: Branding & Breadcrumb */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 font-bold tracking-wide text-[#a8c7fa]">
+          <div className="flex items-center gap-1.5 font-bold tracking-wide text-[#0b57d0] dark:text-[#a8c7fa]">
             <M3Icon name="folder_zip" size={18} />
             <span>{t.appName}</span>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 text-[#8e9199]">
+          <div className="hidden sm:flex items-center gap-2 text-[#74777f] dark:text-[#8e9199]">
             <span>/</span>
-            <span className="text-white font-mono">{selectedRepo?.name || 'local-workspace'}</span>
+            <span className="text-[#191c20] dark:text-white font-mono">{selectedRepo?.name || 'local-workspace'}</span>
             <span>/</span>
-            <span className="text-[#a8c7fa] font-mono text-[11px] bg-[#121316] px-1.5 py-0.5 rounded border border-[#43474e]/40">
+            <span className="text-[#0b57d0] dark:text-[#a8c7fa] font-mono text-[11px] bg-[#f0f4f9] dark:bg-[#121316] px-1.5 py-0.5 rounded border border-[#d8dae5] dark:border-[#43474e]/40 font-semibold">
               {activeBranch}
             </span>
           </div>
         </div>
 
         {/* Center: Quick View Mode Toggles */}
-        <div className="flex items-center bg-[#121316] rounded-lg p-0.5 border border-[#43474e]/40">
+        <div className="flex items-center bg-[#f0f2f8] dark:bg-[#121316] rounded-lg p-0.5 border border-[#d8dae5] dark:border-[#43474e]/40">
           <button
             title={t.codeOnly}
             onClick={() => setViewMode('code')}
             className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer ${
-              viewMode === 'code' ? 'bg-[#2b2d30] text-[#a8c7fa]' : 'text-[#8e9199] hover:text-white'
+              viewMode === 'code' ? 'bg-white dark:bg-[#2b2d30] text-[#0b57d0] dark:text-[#a8c7fa] shadow-xs' : 'text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white'
             }`}
           >
             <M3Icon name="code" size={14} />
@@ -1448,7 +1643,7 @@ export default function App() {
             title={t.splitEditorPreview}
             onClick={() => setViewMode('split')}
             className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer ${
-              viewMode === 'split' ? 'bg-[#2b2d30] text-[#a8c7fa]' : 'text-[#8e9199] hover:text-white'
+              viewMode === 'split' ? 'bg-white dark:bg-[#2b2d30] text-[#0b57d0] dark:text-[#a8c7fa] shadow-xs' : 'text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white'
             }`}
           >
             <M3Icon name="vertical_split" size={14} />
@@ -1458,7 +1653,7 @@ export default function App() {
             title={t.previewOnly}
             onClick={() => setViewMode('preview')}
             className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer ${
-              viewMode === 'preview' ? 'bg-[#2b2d30] text-[#a8c7fa]' : 'text-[#8e9199] hover:text-white'
+              viewMode === 'preview' ? 'bg-white dark:bg-[#2b2d30] text-[#0b57d0] dark:text-[#a8c7fa] shadow-xs' : 'text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white'
             }`}
           >
             <M3Icon name="visibility" size={14} />
@@ -1471,39 +1666,36 @@ export default function App() {
           {/* Live Real-Time Collaboration Button */}
           <button
             onClick={() => setIsCollabModalOpen(true)}
-            className="px-2.5 py-1 rounded-xl bg-[#1e1f22] hover:bg-[#2b2d30] border border-[#43474e]/50 text-xs text-[#e2e2e6] flex items-center gap-2 transition-colors cursor-pointer"
-            title="Live Real-Time Collaboration & Room Settings"
+            className="px-2.5 py-1 rounded-xl bg-[#f0f2f8] dark:bg-[#1e1f22] hover:bg-[#e4e7ef] dark:hover:bg-[#2b2d30] border border-[#d8dae5] dark:border-[#43474e]/50 text-xs text-[#191c20] dark:text-[#e2e2e6] flex items-center gap-2 transition-colors cursor-pointer"
+            title={t.liveCollaboration}
           >
             <span className={`w-2 h-2 rounded-full ${collabConnected ? 'bg-[#3ddc84] animate-pulse' : 'bg-[#ff5449]'}`} />
-            <M3Icon name="group" size={15} className="text-[#a8c7fa]" />
-            <span className="font-semibold hidden md:inline">Live Collab</span>
+            <M3Icon name="group" size={15} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
+            <span className="font-semibold hidden md:inline">{t.collabTab}</span>
             {collabPeers.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-[#00468b] text-[#d6e3ff] font-mono text-[10px] font-bold">
+              <span className="px-1.5 py-0.2 rounded-full bg-[#d3e3fd] dark:bg-[#00468b] text-[#041e49] dark:text-[#d6e3ff] font-mono text-[10px] font-bold">
                 +{collabPeers.length}
               </span>
             )}
           </button>
 
-          {/* In-UI Language Selector Dropdown */}
-          <M3Dropdown
-            size="sm"
-            icon="translate"
-            options={[
-              { value: 'en', label: 'English' },
-              { value: 'zh-CN', label: '简体中文' },
-              { value: 'ms', label: 'Bahasa Melayu' },
-            ]}
-            value={currentLang}
-            onChange={(val) => handleLanguageChange(val as SupportedLanguage)}
-            className="w-36"
-          />
+
+          {/* Settings Button */}
+          <button
+            title={t.settingsLabel}
+            onClick={() => setIsSettingsOpen(true)}
+            className="p-1 rounded hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer flex items-center gap-1 text-[11px] text-[#5d6168] dark:text-[#8e9199] hover:text-[#0b57d0] dark:hover:text-[#a8c7fa]"
+          >
+            <M3Icon name="settings" size={16} />
+            <span className="hidden sm:inline">{t.settingsLabel}</span>
+          </button>
 
           {/* Terminal Toggle Button */}
           <button
             title={showTerminal ? t.hideTerminal : t.showTerminal}
             onClick={() => setShowTerminal(!showTerminal)}
-            className={`p-1 rounded hover:bg-white/5 transition-colors cursor-pointer flex items-center gap-1 text-[11px] ${
-              showTerminal ? 'text-[#a8c7fa]' : 'text-[#8e9199]'
+            className={`p-1 rounded hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer flex items-center gap-1 text-[11px] ${
+              showTerminal ? 'text-[#0b57d0] dark:text-[#a8c7fa]' : 'text-[#5d6168] dark:text-[#8e9199]'
             }`}
           >
             <M3Icon name="terminal" size={16} />
@@ -1578,6 +1770,18 @@ export default function App() {
               </span>
             )}
           </button>
+
+          {/* Settings Button at bottom of Activity Bar */}
+          <div className="mt-auto flex flex-col items-center gap-1 mb-2">
+            <button
+              aria-label="Settings"
+              title="IDE Settings"
+              onClick={() => setIsSettingsOpen(true)}
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-[#8e9199] hover:text-[#a8c7fa] hover:bg-white/5 transition-colors cursor-pointer"
+            >
+              <M3Icon name="settings" size={22} />
+            </button>
+          </div>
         </nav>
 
         {/* Collapsible & Mouse Resizable Sidebar Content Area */}
@@ -1676,6 +1880,7 @@ export default function App() {
                   files={files}
                   t={t}
                   currentLang={currentLang}
+                  settings={settings}
                   onSelectTab={setActiveFilePath}
                   onCloseTab={handleCloseTab}
                   onUpdateContent={handleUpdateContent}
@@ -1759,6 +1964,25 @@ export default function App() {
         onClose={() => setIsCollabModalOpen(false)}
         t={t}
       />
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settings={settings}
+        onUpdateSettings={(newSettings) => setSettings((prev) => ({ ...prev, ...newSettings }))}
+        onResetWorkspace={handleResetWorkspace}
+        currentLang={currentLang}
+        onLanguageChange={handleLanguageChange}
+        fileCount={Object.keys(files).length}
+        t={t}
+        selectedRepo={selectedRepo}
+        activeBranch={activeBranch}
+        isAuthenticated={isAuthenticated}
+        onCreateRepo={handleCreateRepo}
+      />
+
+      {dragOverlay}
     </div>
   );
 }

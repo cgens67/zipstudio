@@ -12,6 +12,7 @@ import {
   getRandomCollabColor,
 } from '../utils/collabService';
 import { Translations } from '../utils/i18n';
+import { useDialogAnimation } from '../utils/useDialogAnimation';
 
 interface CollabModalProps {
   isOpen: boolean;
@@ -40,6 +41,8 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
   const [copiedLink, setCopiedLink] = useState(false);
   const [activeTab, setActiveTab] = useState<'peers' | 'conflicts' | 'settings'>('peers');
 
+  const { isRendered, triggerClose, backdropClass, dialogClass } = useDialogAnimation(isOpen, onClose, 220);
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -59,7 +62,7 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
     };
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isRendered) return null;
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,8 +85,14 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden m3-dialog-bounce flex flex-col max-h-[85vh]">
+    <div
+      className={`fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 ${backdropClass}`}
+      onClick={triggerClose}
+    >
+      <div
+        className={`bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${dialogClass}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Modal Header */}
         <div className="px-5 py-4 border-b border-[#43474e]/40 flex items-center justify-between bg-[#18191c]">
           <div className="flex items-center gap-2.5">
@@ -92,7 +101,9 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-white">Live Real-Time Collaboration</h3>
+                <h3 className="text-sm font-bold text-white">
+                  {t?.liveCollaboration || 'Live Real-Time Collaboration'}
+                </h3>
                 <span
                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                     isConnected
@@ -115,7 +126,7 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
           </div>
 
           <button
-            onClick={onClose}
+            onClick={triggerClose}
             className="p-1 rounded-lg text-[#8e9199] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
           >
             <M3Icon name="close" size={18} />
@@ -380,13 +391,13 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
         {/* Modal Footer */}
         <div className="px-5 py-3 border-t border-[#43474e]/30 bg-[#18191c] flex items-center justify-between text-xs">
           <span className="text-[#8e9199] font-mono text-[11px]">
-            WebSocket Status: {isConnected ? 'Connected (Zero-lag)' : 'Reconnecting...'}
+            WebSocket Status: {isConnected ? 'Connected' : 'Connecting...'}
           </span>
           <button
-            onClick={onClose}
+            onClick={triggerClose}
             className="px-4 py-1.5 rounded-xl bg-[#2b2d30] hover:bg-[#383a3e] text-white font-medium cursor-pointer transition-colors"
           >
-            Done
+            {t?.done || 'Done'}
           </button>
         </div>
       </div>

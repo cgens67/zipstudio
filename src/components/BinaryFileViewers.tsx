@@ -112,7 +112,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
               activeTab === 'sample' ? 'bg-[#2b2d30] text-[#a8c7fa]' : 'text-[#8e9199] hover:text-white'
             }`}
           >
-            Sample Text
+            {t?.sampleTextTab || 'Sample Text'}
           </button>
           <button
             onClick={() => setActiveTab('glyphs')}
@@ -120,7 +120,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
               activeTab === 'glyphs' ? 'bg-[#2b2d30] text-[#a8c7fa]' : 'text-[#8e9199] hover:text-white'
             }`}
           >
-            Glyph Matrix
+            {t?.glyphMatrixTab || 'Glyph Matrix'}
           </button>
           <button
             onClick={() => setActiveTab('waterfall')}
@@ -128,7 +128,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
               activeTab === 'waterfall' ? 'bg-[#2b2d30] text-[#a8c7fa]' : 'text-[#8e9199] hover:text-white'
             }`}
           >
-            Type Waterfall
+            {t?.waterfallTab || 'Type Waterfall'}
           </button>
         </div>
       </div>
@@ -138,21 +138,21 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
         {/* Sample Text Input */}
         <div className="flex-1 min-w-[240px]">
           <label className="text-[11px] font-semibold uppercase text-[#8e9199] block mb-1">
-            Custom Preview Text
+            {t?.customPreviewText || 'Custom Preview Text'}
           </label>
           <input
             type="text"
             value={sampleText}
             onChange={(e) => setSampleText(e.target.value)}
             className="w-full bg-[#121316] border border-[#43474e] rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-[#a8c7fa]"
-            placeholder="Type custom text..."
+            placeholder={t?.typeCustomText || 'Type custom text...'}
           />
         </div>
 
         {/* Font Size Slider */}
         <div className="w-48">
           <div className="flex justify-between items-center mb-1">
-            <span className="text-[11px] font-semibold uppercase text-[#8e9199]">Size</span>
+            <span className="text-[11px] font-semibold uppercase text-[#8e9199]">{t?.sizeLabel || 'Size'}</span>
             <span className="font-mono text-[#a8c7fa] font-bold">{fontSize}px</span>
           </div>
           <input
@@ -168,7 +168,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
         {/* Letter Spacing */}
         <div className="w-36">
           <div className="flex justify-between items-center mb-1">
-            <span className="text-[11px] font-semibold uppercase text-[#8e9199]">Spacing</span>
+            <span className="text-[11px] font-semibold uppercase text-[#8e9199]">{t?.spacingLabel || 'Spacing'}</span>
             <span className="font-mono text-[#a8c7fa]">{letterSpacing}px</span>
           </div>
           <input
@@ -186,7 +186,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
           <M3Switch
             selected={isItalic}
             onChange={setIsItalic}
-            label="Italic Style"
+            label={t?.italicStyle || 'Italic Style'}
           />
           <button
             onClick={() => {
@@ -198,7 +198,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
             className="px-3 py-1.5 rounded-xl bg-[#121316] text-[#8e9199] border border-[#43474e] hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-xs"
           >
             <M3Icon name="restart_alt" size={15} />
-            Reset
+            {t?.reset || 'Reset'}
           </button>
         </div>
       </div>
@@ -227,7 +227,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
           {/* Uppercase */}
           <div>
             <div className="text-xs font-semibold uppercase text-[#8e9199] mb-2 tracking-wider">
-              Uppercase Characters (A-Z)
+              {t?.uppercaseChars || 'Uppercase Characters (A-Z)'}
             </div>
             <div className="grid grid-cols-6 sm:grid-cols-9 md:grid-cols-13 gap-2">
               {uppercaseChars.map((ch) => (
@@ -245,7 +245,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
           {/* Lowercase */}
           <div>
             <div className="text-xs font-semibold uppercase text-[#8e9199] mb-2 tracking-wider">
-              Lowercase Characters (a-z)
+              {t?.lowercaseChars || 'Lowercase Characters (a-z)'}
             </div>
             <div className="grid grid-cols-6 sm:grid-cols-9 md:grid-cols-13 gap-2">
               {lowercaseChars.map((ch) => (
@@ -263,7 +263,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
           {/* Numbers */}
           <div>
             <div className="text-xs font-semibold uppercase text-[#8e9199] mb-2 tracking-wider">
-              Numerals (0-9)
+              {t?.numericChars || 'Numerals (0-9)'}
             </div>
             <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
               {numberChars.map((ch) => (
@@ -337,7 +337,7 @@ function formatTime(seconds: number): string {
  * Integrated In-UI Audio and Video Player with Real Web Audio Soundwaves,
  * Scrubber, Volume, Loop, and Fullscreen Controls (No browser default player UI).
  */
-export function MediaPlayer({ file }: BinaryViewerProps) {
+export function MediaPlayer({ file, t }: BinaryViewerProps) {
   const ext = getFileExtension(file.name).toLowerCase();
   const isAudio = isAudioExtension(ext);
   const isVideo = isVideoExtension(ext);
@@ -749,7 +749,7 @@ export function MediaPlayer({ file }: BinaryViewerProps) {
               <div className="flex items-center justify-between text-[11px] z-10 select-none">
                 <span className="text-[#8e9199] font-mono flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-[#b4f3b7] animate-pulse' : 'bg-[#6e7179]'}`} />
-                  {isPlaying ? 'Live Audio Spectrum (Web Audio API)' : 'Audio Ready'}
+                  {isPlaying ? (t?.liveSpectrum || 'Live Audio Spectrum (Web Audio API)') : (t?.audioReady || 'Audio Ready')}
                 </span>
 
                 <div className="flex items-center gap-2 bg-[#1e1f22]/80 backdrop-blur-md px-2 py-0.5 rounded-lg border border-[#43474e]/40">
@@ -759,7 +759,7 @@ export function MediaPlayer({ file }: BinaryViewerProps) {
                       visualizerMode === 'spectrum' ? 'text-[#a8c7fa] bg-[#00468b]/40' : 'text-[#8e9199]'
                     }`}
                   >
-                    Bars
+                    {t?.barsMode || 'Bars'}
                   </button>
                   <button
                     onClick={() => setVisualizerMode('wave')}
@@ -767,7 +767,7 @@ export function MediaPlayer({ file }: BinaryViewerProps) {
                       visualizerMode === 'wave' ? 'text-[#a8c7fa] bg-[#00468b]/40' : 'text-[#8e9199]'
                     }`}
                   >
-                    Wave
+                    {t?.waveMode || 'Wave'}
                   </button>
                 </div>
               </div>
@@ -826,27 +826,28 @@ export function MediaPlayer({ file }: BinaryViewerProps) {
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => handleSkip(-10)}
-                  title="Replay 10 seconds"
+                  title={t?.replayTenSec || 'Replay 10 seconds'}
                   className="w-9 h-9 rounded-xl bg-[#2b2d30] hover:bg-[#383a3e] text-[#c4c6d0] hover:text-white flex items-center justify-center cursor-pointer transition-colors"
                 >
                   <M3Icon name="replay_10" size={18} />
                 </button>
 
+                {/* Material 3 Expressive Play/Pause Morphing Button (Circle <-> Squircle) */}
                 <button
                   onClick={togglePlay}
-                  title={isPlaying ? 'Pause' : 'Play'}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center cursor-pointer shadow-lg transition-transform ${
-                    isPlaying
-                      ? 'bg-[#a8c7fa] text-[#003062] hover:scale-105'
-                      : 'bg-[#a8c7fa] text-[#003062] hover:scale-105'
-                  }`}
+                  title={isPlaying ? (t?.pause || 'Pause') : (t?.play || 'Play')}
+                  className={`m3-play-pause-morph ${isPlaying ? 'is-playing' : 'is-paused'} w-12 h-12 flex items-center justify-center cursor-pointer shadow-lg bg-[#a8c7fa] text-[#003062]`}
                 >
-                  <M3Icon name={isPlaying ? 'pause' : 'play_arrow'} size={28} />
+                  <M3Icon
+                    name={isPlaying ? 'pause' : 'play_arrow'}
+                    size={28}
+                    className="transition-transform duration-200"
+                  />
                 </button>
 
                 <button
                   onClick={() => handleSkip(10)}
-                  title="Forward 10 seconds"
+                  title={t?.forwardTenSec || 'Forward 10 seconds'}
                   className="w-9 h-9 rounded-xl bg-[#2b2d30] hover:bg-[#383a3e] text-[#c4c6d0] hover:text-white flex items-center justify-center cursor-pointer transition-colors"
                 >
                   <M3Icon name="forward_10" size={18} />
@@ -857,7 +858,7 @@ export function MediaPlayer({ file }: BinaryViewerProps) {
               <div className="flex items-center gap-2 bg-[#121316] px-3 py-1.5 rounded-xl border border-[#43474e]/40">
                 <button
                   onClick={toggleMute}
-                  title={isMuted ? 'Unmute' : 'Mute'}
+                  title={isMuted ? (t?.unmute || 'Unmute') : (t?.mute || 'Mute')}
                   className="text-[#8e9199] hover:text-white cursor-pointer"
                 >
                   <M3Icon
@@ -880,7 +881,7 @@ export function MediaPlayer({ file }: BinaryViewerProps) {
               <M3Switch
                 selected={isLooping}
                 onChange={handleLoopChange}
-                label="Loop"
+                label={t?.loopLabel || 'Loop'}
               />
             </div>
           </div>

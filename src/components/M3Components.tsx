@@ -61,11 +61,15 @@ export function M3Button({
   }[size];
 
   const variantClasses = {
-    filled: 'bg-[#a8c7fa] text-[#003062] hover:bg-[#c2e7ff] hover:shadow-md active:bg-[#a8c7fa]',
-    tonal: 'bg-[#2b2d30] text-[#e2e2e6] hover:bg-[#383a3e] border border-[#43474e]/40',
-    outlined: 'bg-transparent text-[#a8c7fa] border border-[#43474e] hover:bg-[#a8c7fa]/10 hover:border-[#a8c7fa]',
-    text: 'bg-transparent text-[#a8c7fa] hover:bg-[#a8c7fa]/10',
-    danger: 'bg-[#ffb4ab] text-[#690005] hover:bg-[#ffdad6] active:bg-[#ffb4ab]',
+    filled:
+      'bg-[#0b57d0] text-white hover:bg-[#0842a0] hover:shadow-md active:bg-[#063380] dark:bg-[#a8c7fa] dark:text-[#003062] dark:hover:bg-[#c2e7ff] dark:active:bg-[#a8c7fa]',
+    tonal:
+      'bg-[#f0f2f8] text-[#191c20] hover:bg-[#e4e7ef] border border-[#d8dae5] dark:bg-[#2b2d30] dark:text-[#e2e2e6] dark:hover:bg-[#383a3e] dark:border-[#43474e]/40',
+    outlined:
+      'bg-transparent text-[#0b57d0] border border-[#d8dae5] hover:bg-[#0b57d0]/10 hover:border-[#0b57d0] dark:text-[#a8c7fa] dark:border-[#43474e] dark:hover:bg-[#a8c7fa]/10 dark:hover:border-[#a8c7fa]',
+    text: 'bg-transparent text-[#0b57d0] hover:bg-[#0b57d0]/10 dark:text-[#a8c7fa] dark:hover:bg-[#a8c7fa]/10',
+    danger:
+      'bg-[#ba1a1a] text-white hover:bg-[#93000a] dark:bg-[#ffb4ab] dark:text-[#690005] dark:hover:bg-[#ffdad6]',
   }[variant];
 
   return (
@@ -116,10 +120,11 @@ export function M3IconButton({
   }[size];
 
   const variantClasses = {
-    standard: 'text-[#c4c6d0] hover:text-white hover:bg-white/10 active:bg-white/15',
-    filled: 'bg-[#a8c7fa] text-[#003062] hover:bg-[#c2e7ff]',
-    tonal: 'bg-[#2b2d30] text-[#e2e2e6] hover:bg-[#383a3e]',
-    outlined: 'border border-[#43474e] text-[#e2e2e6] hover:bg-white/5',
+    standard:
+      'text-[#5d6168] hover:text-[#191c20] hover:bg-black/5 active:bg-black/10 dark:text-[#c4c6d0] dark:hover:text-white dark:hover:bg-white/10 dark:active:bg-white/15',
+    filled: 'bg-[#0b57d0] text-white hover:bg-[#0842a0] dark:bg-[#a8c7fa] dark:text-[#003062] dark:hover:bg-[#c2e7ff]',
+    tonal: 'bg-[#f0f2f8] text-[#191c20] hover:bg-[#e4e7ef] dark:bg-[#2b2d30] dark:text-[#e2e2e6] dark:hover:bg-[#383a3e]',
+    outlined: 'border border-[#d8dae5] text-[#191c20] hover:bg-black/5 dark:border-[#43474e] dark:text-[#e2e2e6] dark:hover:bg-white/5',
   }[variant];
 
   return (
@@ -145,11 +150,16 @@ export function M3Badge({
   className?: string;
 }) {
   const colorClasses = {
-    primary: 'bg-[#00468b] text-[#d6e3ff] border border-[#a8c7fa]/30',
-    secondary: 'bg-[#2b2d30] text-[#c4c6d0] border border-[#43474e]',
-    success: 'bg-[#0f5223] text-[#b4f3b7] border border-[#308745]',
-    warning: 'bg-[#5b3f00] text-[#ffdf9e] border border-[#9b6f00]',
-    error: 'bg-[#690005] text-[#ffdad6] border border-[#ba1a1a]',
+    primary:
+      'bg-[#d3e3fd] text-[#041e49] border border-[#0b57d0]/20 dark:bg-[#00468b] dark:text-[#d6e3ff] dark:border-[#a8c7fa]/30',
+    secondary:
+      'bg-[#f0f2f8] text-[#191c20] border border-[#d8dae5] dark:bg-[#2b2d30] dark:text-[#c4c6d0] dark:border-[#43474e]',
+    success:
+      'bg-[#c4eed0] text-[#072711] border border-[#1b873f]/20 dark:bg-[#0f5223] dark:text-[#b4f3b7] dark:border-[#308745]',
+    warning:
+      'bg-[#ffdf99] text-[#261900] border border-[#7e5700]/20 dark:bg-[#5b3f00] dark:text-[#ffdf9e] dark:border-[#9b6f00]',
+    error:
+      'bg-[#ffdad6] text-[#410002] border border-[#ba1a1a]/20 dark:bg-[#690005] dark:text-[#ffdad6] dark:border-[#ba1a1a]',
   }[variant];
 
   return (

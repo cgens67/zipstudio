@@ -35,6 +35,13 @@ interface EditorProps {
   currentLang?: SupportedLanguage;
   onMaximize?: () => void;
   isMaximized?: boolean;
+  settings?: {
+    fontSize?: number;
+    wordWrap?: boolean;
+    lineNumbers?: boolean;
+    tabSize?: number;
+    fontFamily?: string;
+  };
 }
 
 export function Editor({
@@ -51,15 +58,27 @@ export function Editor({
   currentLang = 'en',
   onMaximize,
   isMaximized,
+  settings,
 }: EditorProps) {
   const activeFile = files[activeFilePath];
   const [content, setContent] = useState(activeFile?.isBinary ? '' : (activeFile?.content || ''));
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
   const [plainEnglishMode, setPlainEnglishMode] = useState(false);
-  const [fontSize, setFontSize] = useState(13);
-  const [wordWrap, setWordWrap] = useState(false);
+  const [fontSize, setFontSize] = useState(settings?.fontSize ?? 13);
+  const [wordWrap, setWordWrap] = useState(settings?.wordWrap ?? false);
   const [syntaxHighlighting, setSyntaxHighlighting] = useState(true);
   const [scrollTop, setScrollTop] = useState(0);
+
+  const showLineNumbers = settings?.lineNumbers !== false;
+  const editorFontFamily = settings?.fontFamily;
+
+  useEffect(() => {
+    if (settings?.fontSize) setFontSize(settings.fontSize);
+  }, [settings?.fontSize]);
+
+  useEffect(() => {
+    if (settings?.wordWrap !== undefined) setWordWrap(settings.wordWrap);
+  }, [settings?.wordWrap]);
 
   // Live Collaboration state & remote cursors
   const [remoteCursors, setRemoteCursors] = useState<RemoteCursor[]>([]);
@@ -716,56 +735,59 @@ export function Editor({
             return <BinaryAssetViewer file={activeFile} t={t} />;
           })()
         ) : (
-          <div className="flex-1 flex overflow-hidden relative bg-[#121316]">
+          <div className="editor-viewport flex-1 flex overflow-hidden relative bg-[#121316]">
             {/* Synchronized Line Numbers Gutter */}
-            <div
-              ref={gutterRef}
-              title={t.jumpToLine}
-              onWheel={(e) => {
-                if (textareaRef.current) {
-                  textareaRef.current.scrollTop += e.deltaY;
-                }
-              }}
-              className="w-12 bg-[#18191c] border-r border-[#43474e]/30 select-none overflow-hidden shrink-0 cursor-default"
-            >
+            {showLineNumbers && (
               <div
-                ref={gutterInnerRef}
-                className="py-3 text-right pr-2 font-mono will-change-transform"
-                style={{
-                  transform: `translateY(-${scrollTop}px)`,
-                  fontSize: `${fontSize}px`,
-                  lineHeight: `${lineHeight}px`,
+                ref={gutterRef}
+                title={t.jumpToLine}
+                onWheel={(e) => {
+                  if (textareaRef.current) {
+                    textareaRef.current.scrollTop += e.deltaY;
+                  }
                 }}
+                className="editor-gutter w-12 bg-[#18191c] border-r border-[#43474e]/30 select-none overflow-hidden shrink-0 cursor-default"
               >
                 <div
+                  ref={gutterInnerRef}
+                  className="py-3 text-right pr-2 font-mono will-change-transform"
                   style={{
-                    paddingTop: `${startLineIndex * lineHeight}px`,
-                    paddingBottom: `${Math.max(0, (lineCount - endLineIndex) * lineHeight)}px`,
+                    transform: `translateY(-${scrollTop}px)`,
+                    fontSize: `${fontSize}px`,
+                    lineHeight: `${lineHeight}px`,
+                    fontFamily: editorFontFamily,
                   }}
                 >
-                  {visibleLineNumbers.map((lineNum) => {
-                    const isCurrentLine = lineNum === cursorPos.line;
-                    return (
-                      <div
-                        key={lineNum}
-                        onClick={() => jumpToLineIndex(lineNum - 1)}
-                        style={{ height: `${lineHeight}px`, lineHeight: `${lineHeight}px` }}
-                        className={`transition-colors cursor-pointer rounded-xs px-1 hover:text-white hover:bg-white/10 ${
-                          isCurrentLine
-                            ? 'text-[#a8c7fa] font-bold bg-[#a8c7fa]/20'
-                            : 'text-[#6e7179]'
-                        }`}
-                      >
-                        {lineNum}
-                      </div>
-                    );
-                  })}
+                  <div
+                    style={{
+                      paddingTop: `${startLineIndex * lineHeight}px`,
+                      paddingBottom: `${Math.max(0, (lineCount - endLineIndex) * lineHeight)}px`,
+                    }}
+                  >
+                    {visibleLineNumbers.map((lineNum) => {
+                      const isCurrentLine = lineNum === cursorPos.line;
+                      return (
+                        <div
+                          key={lineNum}
+                          onClick={() => jumpToLineIndex(lineNum - 1)}
+                          style={{ height: `${lineHeight}px`, lineHeight: `${lineHeight}px` }}
+                          className={`transition-colors cursor-pointer rounded-xs px-1 hover:text-white hover:bg-white/10 ${
+                            isCurrentLine
+                              ? 'text-[#a8c7fa] font-bold bg-[#a8c7fa]/20'
+                              : 'text-[#6e7179]'
+                          }`}
+                        >
+                          {lineNum}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Code Viewport with Syntax Highlighting and Interactive Overlay */}
-            <div className="relative flex-1 h-full overflow-hidden bg-[#121316]">
+            <div className="editor-code-container relative flex-1 h-full overflow-hidden bg-[#121316]">
               {/* Syntax Highlighted Code Layer underneath */}
               {syntaxHighlighting && (
                 <pre
@@ -774,9 +796,10 @@ export function Editor({
                   style={{
                     fontSize: `${fontSize}px`,
                     lineHeight: `${lineHeight}px`,
-                    tabSize: 2,
+                    tabSize: settings?.tabSize ?? 2,
+                    fontFamily: editorFontFamily,
                   }}
-                  className={`absolute inset-0 pointer-events-none font-mono py-3 px-3 m-0 border-none select-none overflow-hidden will-change-scroll ${
+                  className={`editor-pre absolute inset-0 pointer-events-none font-mono py-3 px-3 m-0 border-none select-none overflow-hidden will-change-scroll ${
                     wordWrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'
                   }`}
                   dangerouslySetInnerHTML={{ __html: highlightedHtml + '\n' }}
@@ -798,13 +821,15 @@ export function Editor({
                     const start = e.currentTarget.selectionStart;
                     const end = e.currentTarget.selectionEnd;
                     const val = e.currentTarget.value;
-                    const newVal = val.substring(0, start) + '  ' + val.substring(end);
+                    const tabSize = settings?.tabSize ?? 2;
+                    const tabSpaces = ' '.repeat(tabSize);
+                    const newVal = val.substring(0, start) + tabSpaces + val.substring(end);
                     setContent(newVal);
                     if (activeFilePath) onUpdateContent(activeFilePath, newVal);
                     recordHistory(newVal);
                     setTimeout(() => {
                       if (textareaRef.current) {
-                        textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + 2;
+                        textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + tabSize;
                       }
                     }, 0);
                   }
@@ -849,13 +874,16 @@ export function Editor({
                 }}
                 spellCheck={false}
                 wrap={wordWrap ? 'on' : 'off'}
-                className={`absolute inset-0 w-full h-full bg-transparent font-mono py-3 px-3 resize-none focus:outline-none border-none overflow-auto z-10 selection:bg-[#a8c7fa]/30 ${
+                className={`editor-textarea absolute inset-0 w-full h-full bg-transparent font-mono py-3 px-3 resize-none focus:outline-none border-none overflow-auto z-10 selection:bg-[#a8c7fa]/30 ${
                   syntaxHighlighting ? 'text-transparent caret-white' : 'text-[#e2e2e6] caret-[#a8c7fa]'
                 } ${wordWrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'}`}
                 style={{
+                  backgroundColor: 'transparent',
+                  color: syntaxHighlighting ? 'transparent' : undefined,
                   fontSize: `${fontSize}px`,
                   lineHeight: `${lineHeight}px`,
-                  tabSize: 2,
+                  tabSize: settings?.tabSize ?? 2,
+                  fontFamily: editorFontFamily,
                 }}
               />
 

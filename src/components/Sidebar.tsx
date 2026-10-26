@@ -371,17 +371,17 @@ export function Sidebar({
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
             style={{ paddingLeft }}
-            className="flex items-center gap-1.5 py-1 px-2 text-xs text-[#c4c6d0] hover:bg-[#2b2d30] hover:text-white cursor-pointer rounded transition-colors group relative"
+            className="flex items-center gap-1.5 py-1 px-2 text-xs text-[#44474e] dark:text-[#c4c6d0] hover:bg-[#e8ebf3] dark:hover:bg-[#2b2d30] hover:text-[#191c20] dark:hover:text-white cursor-pointer rounded transition-colors group relative"
           >
             <M3Icon
               name={isExpanded ? 'expand_more' : 'chevron_right'}
               size={16}
-              className="text-[#8e9199] group-hover:text-white transition-transform"
+              className="text-[#74777f] dark:text-[#8e9199] group-hover:text-[#191c20] dark:group-hover:text-white transition-transform"
             />
             <M3Icon
               name={isExpanded ? 'folder_open' : 'folder'}
               size={16}
-              className="text-[#a8c7fa]"
+              className="text-[#0b57d0] dark:text-[#a8c7fa]"
             />
             <span className="truncate font-medium flex-1">{node.name}</span>
 
@@ -392,7 +392,7 @@ export function Sidebar({
                 openContextMenuAt(e.clientX, e.clientY, node);
               }}
               title={t.properties}
-              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-white/10 text-[#8e9199] hover:text-white"
+              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 text-[#74777f] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white"
             >
               <M3Icon name="more_vert" size={14} />
             </button>
@@ -424,8 +424,8 @@ export function Sidebar({
         style={{ paddingLeft }}
         className={`flex items-center gap-2 py-1 px-2 text-xs cursor-pointer rounded transition-colors select-none group relative ${
           isSelected
-            ? 'bg-[#00468b]/30 text-[#a8c7fa] font-medium border-l-2 border-[#a8c7fa]'
-            : 'text-[#e2e2e6] hover:bg-[#2b2d30] hover:text-white'
+            ? 'bg-[#d3e3fd] dark:bg-[#00468b]/40 text-[#041e49] dark:text-[#a8c7fa] font-semibold border-l-2 border-[#0b57d0] dark:border-[#a8c7fa]'
+            : 'text-[#191c20] dark:text-[#e2e2e6] hover:bg-[#e8ebf3] dark:hover:bg-[#2b2d30] hover:text-[#191c20] dark:hover:text-white'
         }`}
       >
         <M3Icon name={icon} size={15} className={color} />
@@ -438,7 +438,7 @@ export function Sidebar({
             openContextMenuAt(e.clientX, e.clientY, node);
           }}
           title={t.properties}
-          className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-white/10 text-[#8e9199] hover:text-white"
+          className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 text-[#74777f] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white"
         >
           <M3Icon name="more_vert" size={14} />
         </button>
@@ -447,7 +447,7 @@ export function Sidebar({
   };
 
   return (
-    <aside className="w-full h-full bg-[#18191c] border-r border-[#43474e]/40 flex flex-col shrink-0 select-none overflow-hidden relative">
+    <aside className="w-full h-full bg-[#f8fafd] dark:bg-[#18191c] border-r border-[#d8dae5] dark:border-[#43474e]/40 flex flex-col shrink-0 select-none overflow-hidden relative">
       {/* Hidden file input for zip upload */}
       <input
         ref={fileInputRef}
@@ -458,10 +458,10 @@ export function Sidebar({
       />
 
       {/* Explorer Header */}
-      <div className="p-3 border-b border-[#43474e]/30 flex items-center justify-between shrink-0">
+      <div className="p-3 border-b border-[#d8dae5] dark:border-[#43474e]/30 bg-[#f8fafd] dark:bg-[#1e1f22]/50 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
-          <M3Icon name="folder_zip" size={18} className="text-[#a8c7fa]" />
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-[#c4c6d0]">
+          <M3Icon name="folder_zip" size={18} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
+          <h2 className="text-xs font-bold uppercase tracking-wider text-[#191c20] dark:text-[#c4c6d0]">
             {t.explorer}
           </h2>
         </div>
@@ -471,6 +471,7 @@ export function Sidebar({
             size="sm"
             icon="note_add"
             label={t.newFile}
+            className="text-[#44474e] hover:text-[#191c20] dark:text-[#c4c6d0] dark:hover:text-white"
             onClick={() => {
               setTargetParentFolder('');
               setIsCreatingFile(true);
@@ -481,6 +482,7 @@ export function Sidebar({
             size="sm"
             icon="create_new_folder"
             label={t.newFolder}
+            className="text-[#44474e] hover:text-[#191c20] dark:text-[#c4c6d0] dark:hover:text-white"
             onClick={() => {
               setTargetParentFolder('');
               setIsCreatingFolder(true);
@@ -491,17 +493,18 @@ export function Sidebar({
             size="sm"
             icon="download"
             label={t.exportZip}
+            className="text-[#44474e] hover:text-[#191c20] dark:text-[#c4c6d0] dark:hover:text-white"
             onClick={onExportZip}
           />
         </div>
       </div>
 
       {/* Primary Actions: Import & Export ZIP */}
-      <div className="p-2 border-b border-[#43474e]/20 bg-[#121316]/50 shrink-0 space-y-2">
+      <div className="p-2 border-b border-[#d8dae5] dark:border-[#43474e]/20 bg-[#f0f4f9] dark:bg-[#121316]/50 shrink-0 space-y-2">
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#a8c7fa]/10 hover:bg-[#a8c7fa]/20 text-[#a8c7fa] border border-[#a8c7fa]/30 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#0b57d0] dark:bg-[#a8c7fa]/15 hover:bg-[#0842a0] dark:hover:bg-[#a8c7fa]/25 text-white dark:text-[#a8c7fa] border border-[#0b57d0] dark:border-[#a8c7fa]/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             title={t.importZip}
           >
             <M3Icon name="upload" size={16} />
@@ -509,7 +512,7 @@ export function Sidebar({
           </button>
           <button
             onClick={onExportZip}
-            className="py-1.5 px-2.5 rounded-lg bg-[#2b2d30] hover:bg-[#383a3e] text-[#e2e2e6] border border-[#43474e]/60 text-xs font-medium flex items-center justify-center gap-1 transition-colors cursor-pointer"
+            className="py-1.5 px-2.5 rounded-lg bg-white dark:bg-[#2b2d30] hover:bg-[#f8fafd] dark:hover:bg-[#383a3e] text-[#191c20] dark:text-[#e2e2e6] border border-[#d8dae5] dark:border-[#43474e]/60 text-xs font-medium flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-xs"
             title={t.exportZip}
           >
             <M3Icon name="download" size={16} />
@@ -522,28 +525,28 @@ export function Sidebar({
           <M3Icon
             name="search"
             size={14}
-            className="absolute left-2 top-2 text-[#8e9199]"
+            className="absolute left-2.5 top-2 text-[#74777f] dark:text-[#8e9199]"
           />
           <input
             type="text"
             placeholder={t.searchFiles}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#1e1f22] border border-[#43474e]/40 rounded-md pl-7 pr-2 py-1 text-xs text-[#e2e2e6] placeholder-[#8e9199] focus:outline-none focus:border-[#a8c7fa]"
+            className="w-full bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/40 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-[#191c20] dark:text-[#e2e2e6] placeholder-[#74777f] dark:placeholder-[#8e9199] focus:outline-none focus:ring-2 focus:ring-[#0b57d0] dark:focus:ring-[#a8c7fa] transition-all"
           />
         </div>
       </div>
 
       {/* New File / Folder inline form with animateContentSize transition */}
       <div
-        className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out border-b border-[#43474e]/40 ${
-          isCreatingFile || isCreatingFolder ? 'grid-rows-[1fr] opacity-100 bg-[#2b2d30]' : 'grid-rows-[0fr] opacity-0 bg-transparent'
+        className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out border-b border-[#d8dae5] dark:border-[#43474e]/40 ${
+          isCreatingFile || isCreatingFolder ? 'grid-rows-[1fr] opacity-100 bg-[#e8ebf3] dark:bg-[#2b2d30]' : 'grid-rows-[0fr] opacity-0 bg-transparent'
         }`}
       >
         <div className="overflow-hidden">
           {(isCreatingFile || isCreatingFolder) && (
             <form onSubmit={handleCreateSubmit} className="p-2">
-              <div className="text-[11px] text-[#a8c7fa] font-medium mb-1 flex items-center gap-1">
+              <div className="text-[11px] text-[#0b57d0] dark:text-[#a8c7fa] font-medium mb-1 flex items-center gap-1">
                 <M3Icon name={isCreatingFile ? 'note_add' : 'create_new_folder'} size={14} />
                 <span>
                   {isCreatingFile ? t.newFile : t.newFolder}
@@ -557,11 +560,11 @@ export function Sidebar({
                   placeholder={isCreatingFile ? 'src/index.js' : 'src/assets'}
                   value={newPathInput}
                   onChange={(e) => setNewPathInput(e.target.value)}
-                  className="flex-1 bg-[#18191c] border border-[#43474e] rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-[#a8c7fa] font-mono"
+                  className="flex-1 bg-white dark:bg-[#18191c] border border-[#d8dae5] dark:border-[#43474e] rounded-md px-2 py-1 text-xs text-[#191c20] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0b57d0] dark:focus:ring-[#a8c7fa] font-mono"
                 />
                 <button
                   type="submit"
-                  className="px-2 py-1 bg-[#a8c7fa] text-[#003062] rounded text-xs font-semibold cursor-pointer"
+                  className="px-2.5 py-1 bg-[#0b57d0] dark:bg-[#a8c7fa] text-white dark:text-[#003062] rounded-md text-xs font-semibold cursor-pointer"
                 >
                   {t.create}
                 </button>
@@ -572,7 +575,7 @@ export function Sidebar({
                     setIsCreatingFolder(false);
                     setTargetParentFolder('');
                   }}
-                  className="px-2 py-1 bg-transparent hover:bg-white/10 text-[#8e9199] rounded text-xs cursor-pointer"
+                  className="px-2 py-1 bg-transparent hover:bg-black/5 dark:hover:bg-white/10 text-[#5d6168] dark:text-[#8e9199] rounded-md text-xs cursor-pointer"
                 >
                   {t.cancel}
                 </button>
@@ -585,9 +588,9 @@ export function Sidebar({
       {/* File Tree List */}
       <div className="flex-1 overflow-y-auto overscroll-contain py-2 px-1 divide-y-0">
         {tree.length === 0 ? (
-          <div className="p-4 text-center text-[#8e9199] text-xs leading-relaxed">
-            <M3Icon name="inbox" size={32} className="mx-auto mb-2 text-[#43474e]" />
-            <p className="font-medium text-[#c4c6d0]">{t.noFilesLoaded}</p>
+          <div className="p-4 text-center text-[#74777f] dark:text-[#8e9199] text-xs leading-relaxed">
+            <M3Icon name="inbox" size={32} className="mx-auto mb-2 text-[#a8c7fa] dark:text-[#43474e]" />
+            <p className="font-semibold text-[#191c20] dark:text-[#c4c6d0]">{t.noFilesLoaded}</p>
             <p className="text-[11px] mt-1">{t.noFilesLoadedDesc}</p>
           </div>
         ) : (
@@ -600,51 +603,51 @@ export function Sidebar({
         <div
           style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
           onClick={(e) => e.stopPropagation()}
-          className="fixed z-50 w-48 bg-[#1e1f22] border border-[#43474e]/60 rounded-xl shadow-2xl py-1 text-xs text-[#e2e2e6] select-none backdrop-blur-md m3-menu-spring"
+          className="fixed z-50 w-48 bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/60 rounded-xl shadow-2xl py-1 text-xs text-[#191c20] dark:text-[#e2e2e6] select-none backdrop-blur-md m3-menu-spring"
         >
-          <div className="px-3 py-1.5 text-[11px] font-mono text-[#a8c7fa] border-b border-[#43474e]/30 truncate font-semibold">
+          <div className="px-3 py-1.5 text-[11px] font-mono text-[#0b57d0] dark:text-[#a8c7fa] border-b border-[#d8dae5] dark:border-[#43474e]/30 truncate font-semibold">
             {contextMenu.node.name}
           </div>
 
           {contextMenu.node.isFolder && (
             <button
               onClick={() => handleAddFileInFolder(contextMenu.node)}
-              className="w-full px-3 py-2 text-left hover:bg-[#2b2d30] flex items-center gap-2 cursor-pointer text-[#e2e2e6]"
+              className="w-full px-3 py-2 text-left hover:bg-[#f0f4f9] dark:hover:bg-[#2b2d30] flex items-center gap-2 cursor-pointer text-[#191c20] dark:text-[#e2e2e6]"
             >
-              <M3Icon name="note_add" size={15} className="text-[#a8c7fa]" />
+              <M3Icon name="note_add" size={15} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
               <span>{t.addFile}</span>
             </button>
           )}
 
           <button
             onClick={() => handleOpenRename(contextMenu.node)}
-            className="w-full px-3 py-2 text-left hover:bg-[#2b2d30] flex items-center gap-2 cursor-pointer text-[#e2e2e6]"
+            className="w-full px-3 py-2 text-left hover:bg-[#f0f4f9] dark:hover:bg-[#2b2d30] flex items-center gap-2 cursor-pointer text-[#191c20] dark:text-[#e2e2e6]"
           >
-            <M3Icon name="edit" size={15} className="text-[#c4c6d0]" />
+            <M3Icon name="edit" size={15} className="text-[#5d6168] dark:text-[#c4c6d0]" />
             <span>{t.rename}</span>
           </button>
 
           <button
             onClick={() => handleDownload(contextMenu.node)}
-            className="w-full px-3 py-2 text-left hover:bg-[#2b2d30] flex items-center gap-2 cursor-pointer text-[#e2e2e6]"
+            className="w-full px-3 py-2 text-left hover:bg-[#f0f4f9] dark:hover:bg-[#2b2d30] flex items-center gap-2 cursor-pointer text-[#191c20] dark:text-[#e2e2e6]"
           >
-            <M3Icon name="download" size={15} className="text-[#c4c6d0]" />
+            <M3Icon name="download" size={15} className="text-[#5d6168] dark:text-[#c4c6d0]" />
             <span>{t.download}</span>
           </button>
 
           <button
             onClick={() => handleViewProperties(contextMenu.node)}
-            className="w-full px-3 py-2 text-left hover:bg-[#2b2d30] flex items-center gap-2 cursor-pointer text-[#e2e2e6]"
+            className="w-full px-3 py-2 text-left hover:bg-[#f0f4f9] dark:hover:bg-[#2b2d30] flex items-center gap-2 cursor-pointer text-[#191c20] dark:text-[#e2e2e6]"
           >
-            <M3Icon name="info" size={15} className="text-[#8e9199]" />
+            <M3Icon name="info" size={15} className="text-[#5d6168] dark:text-[#8e9199]" />
             <span>{t.properties}</span>
           </button>
 
-          <div className="border-t border-[#43474e]/30 my-1" />
+          <div className="border-t border-[#d8dae5] dark:border-[#43474e]/30 my-1" />
 
           <button
             onClick={() => handleDelete(contextMenu.node)}
-            className="w-full px-3 py-2 text-left hover:bg-[#ffb4ab]/10 text-[#ffb4ab] flex items-center gap-2 cursor-pointer"
+            className="w-full px-3 py-2 text-left hover:bg-[#ffb4ab]/20 text-[#ba1a1a] dark:text-[#ffb4ab] flex items-center gap-2 cursor-pointer"
           >
             <M3Icon name="delete" size={15} />
             <span>{t.delete}</span>
@@ -655,31 +658,31 @@ export function Sidebar({
       {/* Rename Modal Dialog */}
       {renameNode && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#1e1f22] border border-[#43474e]/60 rounded-2xl w-full max-w-sm p-4 shadow-2xl m3-dialog-bounce">
-            <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
-              <M3Icon name="edit" size={18} className="text-[#a8c7fa]" />
+          <div className="bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/60 rounded-2xl w-full max-w-sm p-5 shadow-2xl m3-dialog-bounce">
+            <h3 className="text-sm font-bold text-[#191c20] dark:text-white mb-2 flex items-center gap-2">
+              <M3Icon name="edit" size={18} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
               <span>{renameNode.isFolder ? t.renameFolder : t.renameFile}</span>
             </h3>
-            <p className="text-xs text-[#8e9199] mb-3">{t.enterNewName}</p>
+            <p className="text-xs text-[#5d6168] dark:text-[#8e9199] mb-3">{t.enterNewName}</p>
             <form onSubmit={handleConfirmRename}>
               <input
                 autoFocus
                 type="text"
                 value={renameInputValue}
                 onChange={(e) => setRenameInputValue(e.target.value)}
-                className="w-full bg-[#121316] border border-[#43474e] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#a8c7fa] font-mono mb-4"
+                className="w-full bg-[#f8fafd] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg px-3 py-2 text-xs text-[#191c20] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0b57d0] dark:focus:ring-[#a8c7fa] font-mono mb-4"
               />
               <div className="flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setRenameNode(null)}
-                  className="px-3 py-1.5 rounded-lg bg-transparent hover:bg-white/5 text-xs text-[#c4c6d0] cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-transparent hover:bg-black/5 dark:hover:bg-white/5 text-xs text-[#5d6168] dark:text-[#c4c6d0] cursor-pointer"
                 >
                   {t.cancel}
                 </button>
                 <button
                   type="submit"
-                  className="px-3 py-1.5 rounded-lg bg-[#a8c7fa] text-[#003062] font-semibold text-xs cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-lg bg-[#0b57d0] dark:bg-[#a8c7fa] text-white dark:text-[#003062] font-semibold text-xs cursor-pointer shadow-xs"
                 >
                   {t.save}
                 </button>
@@ -692,15 +695,15 @@ export function Sidebar({
       {/* Properties Modal Dialog */}
       {propertiesNode && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#1e1f22] border border-[#43474e]/60 rounded-2xl w-full max-w-md p-5 shadow-2xl m3-dialog-bounce">
-            <div className="flex items-center justify-between border-b border-[#43474e]/30 pb-3 mb-4">
+          <div className="bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/60 rounded-2xl w-full max-w-md p-5 shadow-2xl m3-dialog-bounce">
+            <div className="flex items-center justify-between border-b border-[#d8dae5] dark:border-[#43474e]/30 pb-3 mb-4">
               <div className="flex items-center gap-2">
                 <M3Icon
                   name={propertiesNode.isFolder ? 'folder' : 'description'}
                   size={20}
-                  className="text-[#a8c7fa]"
+                  className="text-[#0b57d0] dark:text-[#a8c7fa]"
                 />
-                <h3 className="text-sm font-bold text-white truncate max-w-xs">
+                <h3 className="text-sm font-bold text-[#191c20] dark:text-white truncate max-w-xs">
                   {propertiesNode.name}
                 </h3>
               </div>
@@ -714,16 +717,16 @@ export function Sidebar({
 
             {/* Properties Grid */}
             <div className="space-y-3 text-xs">
-              <div className="flex items-start justify-between py-1 border-b border-[#43474e]/20">
-                <span className="text-[#8e9199]">{t.filePath}:</span>
-                <span className="font-mono text-[#e2e2e6] text-right truncate max-w-[240px] select-all">
+              <div className="flex items-start justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
+                <span className="text-[#5d6168] dark:text-[#8e9199]">{t.filePath}:</span>
+                <span className="font-mono text-[#191c20] dark:text-[#e2e2e6] text-right truncate max-w-[240px] select-all">
                   /{propertiesNode.path}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between py-1 border-b border-[#43474e]/20">
-                <span className="text-[#8e9199]">{t.fileType}:</span>
-                <span className="text-[#e2e2e6] font-medium">
+              <div className="flex items-center justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
+                <span className="text-[#5d6168] dark:text-[#8e9199]">{t.fileType}:</span>
+                <span className="text-[#191c20] dark:text-[#e2e2e6] font-medium">
                   {propertiesNode.isFolder
                     ? 'Folder'
                     : getFileExtension(propertiesNode.name).toUpperCase() || 'Plain Text'}
@@ -732,25 +735,25 @@ export function Sidebar({
 
               {!propertiesNode.isFolder && files[propertiesNode.path] && (
                 <>
-                  <div className="flex items-center justify-between py-1 border-b border-[#43474e]/20">
-                    <span className="text-[#8e9199]">{t.fileSize}:</span>
-                    <span className="font-mono text-[#a8c7fa]">
+                  <div className="flex items-center justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
+                    <span className="text-[#5d6168] dark:text-[#8e9199]">{t.fileSize}:</span>
+                    <span className="font-mono text-[#0b57d0] dark:text-[#a8c7fa]">
                       {formatBytes(files[propertiesNode.path].size)} ({files[propertiesNode.path].size} bytes)
                     </span>
                   </div>
 
                   {!files[propertiesNode.path].isBinary && (
-                    <div className="flex items-center justify-between py-1 border-b border-[#43474e]/20">
-                      <span className="text-[#8e9199]">{t.fileLines}:</span>
-                      <span className="font-mono text-[#e2e2e6]">
+                    <div className="flex items-center justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
+                      <span className="text-[#5d6168] dark:text-[#8e9199]">{t.fileLines}:</span>
+                      <span className="font-mono text-[#191c20] dark:text-[#e2e2e6]">
                         {files[propertiesNode.path].content.split('\n').length}
                       </span>
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between py-1 border-b border-[#43474e]/20">
-                    <span className="text-[#8e9199]">{t.lastModified}:</span>
-                    <span className="text-[#c4c6d0]">
+                  <div className="flex items-center justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
+                    <span className="text-[#5d6168] dark:text-[#8e9199]">{t.lastModified}:</span>
+                    <span className="text-[#44474e] dark:text-[#c4c6d0]">
                       {new Date(files[propertiesNode.path].lastModified).toLocaleString()}
                     </span>
                   </div>
@@ -758,9 +761,9 @@ export function Sidebar({
               )}
 
               {propertiesNode.isFolder && (
-                <div className="flex items-center justify-between py-1 border-b border-[#43474e]/20">
-                  <span className="text-[#8e9199]">Items:</span>
-                  <span className="font-mono text-[#e2e2e6]">
+                <div className="flex items-center justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
+                  <span className="text-[#5d6168] dark:text-[#8e9199]">Items:</span>
+                  <span className="font-mono text-[#191c20] dark:text-[#e2e2e6]">
                     {propertiesNode.children ? propertiesNode.children.length : 0} items
                   </span>
                 </div>
@@ -770,7 +773,7 @@ export function Sidebar({
             <div className="mt-5 flex items-center justify-end">
               <button
                 onClick={() => setPropertiesNode(null)}
-                className="px-4 py-2 bg-[#2b2d30] hover:bg-[#383a3e] text-[#a8c7fa] rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+                className="px-4 py-2 bg-[#f0f2f8] dark:bg-[#2b2d30] hover:bg-[#e4e7ef] dark:hover:bg-[#383a3e] text-[#0b57d0] dark:text-[#a8c7fa] rounded-xl text-xs font-semibold cursor-pointer transition-colors"
               >
                 {t.close}
               </button>
@@ -782,25 +785,25 @@ export function Sidebar({
       {/* In-UI Delete Confirmation Dialog with Material 3 Expressive Switch */}
       {deleteConfirmNode && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#1e1f22] border border-[#ff8585]/40 rounded-2xl w-full max-w-sm p-5 shadow-2xl m3-dialog-bounce space-y-4">
+          <div className="bg-white dark:bg-[#1e1f22] border border-[#ff8585]/40 rounded-2xl w-full max-w-sm p-5 shadow-2xl m3-dialog-bounce space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#690005]/40 border border-[#ff8585]/30 flex items-center justify-center text-[#ff8585] shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-[#ffdad6] dark:bg-[#690005]/40 border border-[#ff8585]/30 flex items-center justify-center text-[#ba1a1a] dark:text-[#ff8585] shrink-0">
                 <M3Icon name="delete_forever" size={24} />
               </div>
               <div className="min-w-0">
-                <h3 className="text-sm font-bold text-white">Delete Confirmation</h3>
-                <p className="text-xs text-[#c4c6d0] truncate font-mono mt-0.5">
+                <h3 className="text-sm font-bold text-[#191c20] dark:text-white">Delete Confirmation</h3>
+                <p className="text-xs text-[#5d6168] dark:text-[#c4c6d0] truncate font-mono mt-0.5">
                   /{deleteConfirmNode.path}
                 </p>
               </div>
             </div>
 
-            <p className="text-xs text-[#8e9199] leading-relaxed">
-              Are you sure you want to delete <span className="text-white font-semibold">{deleteConfirmNode.name}</span>? This action cannot be undone.
+            <p className="text-xs text-[#5d6168] dark:text-[#8e9199] leading-relaxed">
+              Are you sure you want to delete <span className="text-[#191c20] dark:text-white font-semibold">{deleteConfirmNode.name}</span>? This action cannot be undone.
             </p>
 
             {/* M3Switch from material-esm/material */}
-            <div className="bg-[#121316] p-3 rounded-xl border border-[#43474e]/40">
+            <div className="bg-[#f8fafd] dark:bg-[#121316] p-3 rounded-xl border border-[#d8dae5] dark:border-[#43474e]/40">
               <M3Switch
                 selected={permanentDelete}
                 onChange={setPermanentDelete}
@@ -813,7 +816,7 @@ export function Sidebar({
               <button
                 type="button"
                 onClick={() => setDeleteConfirmNode(null)}
-                className="px-3 py-1.5 rounded-xl bg-transparent hover:bg-white/5 text-xs text-[#c4c6d0] font-medium transition-colors cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-transparent hover:bg-black/5 dark:hover:bg-white/5 text-xs text-[#5d6168] dark:text-[#c4c6d0] font-medium transition-colors cursor-pointer"
               >
                 {t.cancel}
               </button>
@@ -837,24 +840,24 @@ export function Sidebar({
       {/* In-UI Error Dialog */}
       {sidebarError && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#1e1f22] border border-[#ff8585]/40 rounded-2xl w-full max-w-sm p-5 shadow-2xl m3-dialog-bounce space-y-3">
+          <div className="bg-white dark:bg-[#1e1f22] border border-[#ff8585]/40 rounded-2xl w-full max-w-sm p-5 shadow-2xl m3-dialog-bounce space-y-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#690005]/40 border border-[#ff8585]/30 flex items-center justify-center text-[#ff8585] shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-[#ffdad6] dark:bg-[#690005]/40 border border-[#ff8585]/30 flex items-center justify-center text-[#ba1a1a] dark:text-[#ff8585] shrink-0">
                 <M3Icon name="error" size={24} />
               </div>
               <div className="min-w-0">
-                <h3 className="text-sm font-bold text-white">Notice</h3>
-                <p className="text-xs text-[#8e9199] mt-0.5">ZipStudio File System</p>
+                <h3 className="text-sm font-bold text-[#191c20] dark:text-white">Notice</h3>
+                <p className="text-xs text-[#5d6168] dark:text-[#8e9199] mt-0.5">ZipStudio File System</p>
               </div>
             </div>
-            <p className="text-xs text-[#c4c6d0] leading-relaxed whitespace-pre-wrap">
+            <p className="text-xs text-[#44474e] dark:text-[#c4c6d0] leading-relaxed whitespace-pre-wrap">
               {sidebarError}
             </p>
             <div className="flex justify-end pt-2">
               <button
                 type="button"
                 onClick={() => setSidebarError(null)}
-                className="px-4 py-2 bg-[#2b2d30] hover:bg-[#383a3e] text-[#a8c7fa] rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+                className="px-4 py-2 bg-[#f0f2f8] dark:bg-[#2b2d30] hover:bg-[#e4e7ef] dark:hover:bg-[#383a3e] text-[#0b57d0] dark:text-[#a8c7fa] rounded-xl text-xs font-semibold cursor-pointer transition-colors"
               >
                 {t.close || 'OK'}
               </button>

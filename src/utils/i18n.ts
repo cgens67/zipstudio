@@ -205,6 +205,86 @@ export interface Translations {
   prevMatch: string;
   noMatches: string;
   syntaxHighlighting: string;
+  // Settings Modal
+  settingsTitle: string;
+  settingsSubtitle: string;
+  appearanceTab: string;
+  editorTab: string;
+  collabTab: string;
+  workspaceTab: string;
+  colorTheme: string;
+  darkMode: string;
+  lightMode: string;
+  systemAuto: string;
+  languageLabel: string;
+  codeEditorFont: string;
+  editorFontSize: string;
+  tabSizeLabel: string;
+  twoSpaces: string;
+  fourSpaces: string;
+  wordWrapLabel: string;
+  wordWrapDesc: string;
+  lineNumbersLabel: string;
+  lineNumbersDesc: string;
+  collabSettings: string;
+  autoConnectLabel: string;
+  autoConnectDesc: string;
+  displayNameLabel: string;
+  displayNamePlaceholder: string;
+  cursorColorLabel: string;
+  workspaceMaintenance: string;
+  cachedFilesLabel: string;
+  clearWorkspaceTitle: string;
+  clearWorkspaceDesc: string;
+  clearWorkspaceBtn: string;
+  confirmClear: string;
+  confirmClearWarning: string;
+  resetToDefaults: string;
+  done: string;
+  // Media & Audio Player
+  audioReady: string;
+  liveSpectrum: string;
+  barsMode: string;
+  waveMode: string;
+  loopLabel: string;
+  replayTenSec: string;
+  forwardTenSec: string;
+  mute: string;
+  unmute: string;
+  play: string;
+  pause: string;
+  speed: string;
+  downloadOriginal: string;
+  // Font Specimen Viewer
+  sampleTextTab: string;
+  glyphMatrixTab: string;
+  waterfallTab: string;
+  customPreviewText: string;
+  typeCustomText: string;
+  sizeLabel: string;
+  spacingLabel: string;
+  italicStyle: string;
+  reset: string;
+  uppercaseChars: string;
+  lowercaseChars: string;
+  numericChars: string;
+  symbolChars: string;
+  // Binary & APK Archive Inspector
+  archiveContents: string;
+  manifestInspector: string;
+  appPackage: string;
+  permissionsLabel: string;
+  rawXml: string;
+  noDecodedManifest: string;
+  totalEntries: string;
+  // Common App Headers & Drag Overlay
+  liveCollaboration: string;
+  settingsLabel: string;
+  dragFolderNotice: string;
+  createLocalRepo: string;
+  repoCreatedSuccess: string;
+  currentRepoLabel: string;
+  localWorkspace: string;
 }
 
 export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
@@ -408,6 +488,86 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     prevMatch: 'Previous Match (Shift+Enter)',
     noMatches: 'No matches',
     syntaxHighlighting: 'Syntax Highlighting',
+    // Settings Modal
+    settingsTitle: 'ZipStudio Settings',
+    settingsSubtitle: 'Theme, Language, Editor, and Drag & Drop',
+    appearanceTab: 'Appearance & Language',
+    editorTab: 'Editor',
+    collabTab: 'Live Collab',
+    workspaceTab: 'Workspace',
+    colorTheme: 'Color Theme',
+    darkMode: 'Dark Mode',
+    lightMode: 'Light Mode',
+    systemAuto: 'System Auto',
+    languageLabel: 'Language',
+    codeEditorFont: 'Code Editor Font',
+    editorFontSize: 'Editor Font Size',
+    tabSizeLabel: 'Indentation (Tab Size)',
+    twoSpaces: '2 spaces (Default)',
+    fourSpaces: '4 spaces',
+    wordWrapLabel: 'Word Wrap',
+    wordWrapDesc: 'Wrap long code lines to prevent horizontal scrolling',
+    lineNumbersLabel: 'Line Numbers',
+    lineNumbersDesc: 'Display line numbers in editor gutter',
+    collabSettings: 'Live Collaboration Preferences',
+    autoConnectLabel: 'Auto-Connect Collab',
+    autoConnectDesc: 'Automatically discover and join peer mesh in current workspace',
+    displayNameLabel: 'Display Name in Session',
+    displayNamePlaceholder: 'e.g. Alex, Designer...',
+    cursorColorLabel: 'Cursor & Presence Color',
+    workspaceMaintenance: 'Workspace Storage & Maintenance',
+    cachedFilesLabel: 'Cached Project Files',
+    clearWorkspaceTitle: 'Clear Workspace & Reset Storage',
+    clearWorkspaceDesc: 'Removes all current files and restores the default starting project',
+    clearWorkspaceBtn: 'Reset Workspace',
+    confirmClear: 'Confirm Clear',
+    confirmClearWarning: 'Are you sure? All unsaved edits will be permanently wiped.',
+    resetToDefaults: 'Reset to Defaults',
+    done: 'Done',
+    // Media & Audio Player
+    audioReady: 'Audio Ready',
+    liveSpectrum: 'Live Audio Spectrum (Web Audio API)',
+    barsMode: 'Bars',
+    waveMode: 'Wave',
+    loopLabel: 'Loop',
+    replayTenSec: 'Replay 10 seconds',
+    forwardTenSec: 'Forward 10 seconds',
+    mute: 'Mute',
+    unmute: 'Unmute',
+    play: 'Play',
+    pause: 'Pause',
+    speed: 'Speed',
+    downloadOriginal: 'Download original file',
+    // Font Specimen Viewer
+    sampleTextTab: 'Sample Text',
+    glyphMatrixTab: 'Glyph Matrix',
+    waterfallTab: 'Type Waterfall',
+    customPreviewText: 'Custom Preview Text',
+    typeCustomText: 'Type custom text...',
+    sizeLabel: 'Size',
+    spacingLabel: 'Spacing',
+    italicStyle: 'Italic Style',
+    reset: 'Reset',
+    uppercaseChars: 'Uppercase Characters (A-Z)',
+    lowercaseChars: 'Lowercase Characters (a-z)',
+    numericChars: 'Numbers (0-9)',
+    symbolChars: 'Symbols & Punctuation',
+    // Binary & APK Archive Inspector
+    archiveContents: 'Archive Contents',
+    manifestInspector: 'AndroidManifest.xml Inspector',
+    appPackage: 'App Package',
+    permissionsLabel: 'Permissions',
+    rawXml: 'Raw Decoded XML',
+    noDecodedManifest: 'No readable AndroidManifest found',
+    totalEntries: 'Total entries',
+    // Common App Headers & Drag Overlay
+    liveCollaboration: 'Live Collaboration',
+    settingsLabel: 'Settings',
+    dragFolderNotice: 'Drop ZIP file or folder to import',
+    createLocalRepo: 'Create Local Repository',
+    repoCreatedSuccess: 'Repository created successfully!',
+    currentRepoLabel: 'Active Repository',
+    localWorkspace: 'Local Workspace',
   },
   'zh-CN': {
     appName: 'ZipStudio',
@@ -609,6 +769,86 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     prevMatch: '上一个匹配 (Shift+Enter)',
     noMatches: '无匹配结果',
     syntaxHighlighting: '代码高亮',
+    // Settings Modal
+    settingsTitle: 'ZipStudio 设置',
+    settingsSubtitle: '主题、语言、编辑器与拖拽设置',
+    appearanceTab: '外观与语言',
+    editorTab: '编辑器',
+    collabTab: '实时协同',
+    workspaceTab: '工作区',
+    colorTheme: '颜色主题',
+    darkMode: '深色模式',
+    lightMode: '浅色模式',
+    systemAuto: '跟随系统',
+    languageLabel: '界面语言',
+    codeEditorFont: '代码编辑器字体',
+    editorFontSize: '编辑器字号',
+    tabSizeLabel: '缩进大小 (Tab Size)',
+    twoSpaces: '2 空格 (默认)',
+    fourSpaces: '4 空格',
+    wordWrapLabel: '自动换行',
+    wordWrapDesc: '长代码行自动折行，避免横向滚动',
+    lineNumbersLabel: '行号显示',
+    lineNumbersDesc: '在编辑器左侧栏显示代码行号',
+    collabSettings: '实时协作偏好设置',
+    autoConnectLabel: '自动连接协同网络',
+    autoConnectDesc: '自动发现并加入当前工作区的对等协同网',
+    displayNameLabel: '协同会话显示名称',
+    displayNamePlaceholder: '例如：小明、架构师...',
+    cursorColorLabel: '光标与在线指示颜色',
+    workspaceMaintenance: '工作区存储与维护',
+    cachedFilesLabel: '已缓存的项目文件',
+    clearWorkspaceTitle: '清空工作区并重置存储',
+    clearWorkspaceDesc: '清除所有当前文件并恢复默认起始项目',
+    clearWorkspaceBtn: '重置工作区',
+    confirmClear: '确认清空',
+    confirmClearWarning: '确定重置吗？所有未保存的代码修改将被永久清空。',
+    resetToDefaults: '恢复默认设置',
+    done: '完成',
+    // Media & Audio Player
+    audioReady: '音频就绪',
+    liveSpectrum: '实时音频频谱 (Web Audio API)',
+    barsMode: '频谱柱',
+    waveMode: '声波图',
+    loopLabel: '循环播放',
+    replayTenSec: '后退 10 秒',
+    forwardTenSec: '快进 10 秒',
+    mute: '静音',
+    unmute: '取消静音',
+    play: '播放',
+    pause: '暂停',
+    speed: '倍速',
+    downloadOriginal: '下载原始文件',
+    // Font Specimen Viewer
+    sampleTextTab: '文本预览',
+    glyphMatrixTab: '字形矩阵',
+    waterfallTab: '字号阶梯',
+    customPreviewText: '自定义预览文本',
+    typeCustomText: '输入自定义文本...',
+    sizeLabel: '字号',
+    spacingLabel: '字距',
+    italicStyle: '斜体样式',
+    reset: '重置',
+    uppercaseChars: '大写字母 (A-Z)',
+    lowercaseChars: '小写字母 (a-z)',
+    numericChars: '数字 (0-9)',
+    symbolChars: '符号与标点',
+    // Binary & APK Archive Inspector
+    archiveContents: '压缩包内容',
+    manifestInspector: 'AndroidManifest.xml 检查器',
+    appPackage: '应用包名',
+    permissionsLabel: '权限声明',
+    rawXml: '原始已解码 XML',
+    noDecodedManifest: '未找到可读的 AndroidManifest',
+    totalEntries: '总条目数',
+    // Common App Headers & Drag Overlay
+    liveCollaboration: '实时协同',
+    settingsLabel: '设置',
+    dragFolderNotice: '拖放 ZIP 压缩包或文件夹以导入',
+    createLocalRepo: '创建本地仓库',
+    repoCreatedSuccess: '仓库创建成功！',
+    currentRepoLabel: '当前活跃仓库',
+    localWorkspace: '本地工作区',
   },
   ms: {
     appName: 'ZipStudio',
@@ -810,5 +1050,85 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     prevMatch: 'Padanan Sebelumnya (Shift+Enter)',
     noMatches: 'Tiada padanan',
     syntaxHighlighting: 'Penyerlah Sintaks',
+    // Settings Modal
+    settingsTitle: 'Tetapan ZipStudio',
+    settingsSubtitle: 'Tema, Bahasa, Editor dan Seret & Lepas',
+    appearanceTab: 'Rupa & Bahasa',
+    editorTab: 'Editor',
+    collabTab: 'Kolaborasi Langsung',
+    workspaceTab: 'Ruang Kerja',
+    colorTheme: 'Tema Warna',
+    darkMode: 'Mod Gelap',
+    lightMode: 'Mod Cerah',
+    systemAuto: 'Auto Sistem',
+    languageLabel: 'Bahasa',
+    codeEditorFont: 'Fon Editor Kod',
+    editorFontSize: 'Saiz Fon Editor',
+    tabSizeLabel: 'Saiz Lekukan (Tab)',
+    twoSpaces: '2 ruang (Lalai)',
+    fourSpaces: '4 ruang',
+    wordWrapLabel: 'Balut Teks',
+    wordWrapDesc: 'Balut baris kod panjang untuk elak penatalan mendatar',
+    lineNumbersLabel: 'Nombor Baris',
+    lineNumbersDesc: 'Papar nombor baris di tepi editor',
+    collabSettings: 'Pilihan Kolaborasi Langsung',
+    autoConnectLabel: 'Sambung Auto Kolaborasi',
+    autoConnectDesc: 'Cari dan sertai rangkaian rakan di ruang kerja ini secara automatik',
+    displayNameLabel: 'Nama Paparan Sesi',
+    displayNamePlaceholder: 'cth. Alex, Pereka...',
+    cursorColorLabel: 'Warna Kursor & Kehadiran',
+    workspaceMaintenance: 'Penyimpanan & Penyelenggaraan Ruang Kerja',
+    cachedFilesLabel: 'Fail Projek Tersembunyi',
+    clearWorkspaceTitle: 'Kosongkan Ruang Kerja & Set Semula',
+    clearWorkspaceDesc: 'Memadam semua fail semasa dan memulihkan projek permulaan lalai',
+    clearWorkspaceBtn: 'Set Semula Ruang Kerja',
+    confirmClear: 'Sahkan Kosongkan',
+    confirmClearWarning: 'Adakah anda pasti? Semua suntingan belum disimpan akan dipadamkan.',
+    resetToDefaults: 'Pulihkan Nilai Lalai',
+    done: 'Selesai',
+    // Media & Audio Player
+    audioReady: 'Audio Sedia',
+    liveSpectrum: 'Spektrum Audio Langsung (Web Audio API)',
+    barsMode: 'Palang',
+    waveMode: 'Gelombang',
+    loopLabel: 'Ulang',
+    replayTenSec: 'Undur 10 saat',
+    forwardTenSec: 'Maju 10 saat',
+    mute: 'Bisu',
+    unmute: 'Nyahbisu',
+    play: 'Main',
+    pause: 'Jeda',
+    speed: 'Kelajuan',
+    downloadOriginal: 'Muat turun fail asal',
+    // Font Specimen Viewer
+    sampleTextTab: 'Teks Contoh',
+    glyphMatrixTab: 'Matriks Glif',
+    waterfallTab: 'Tangga Saiz',
+    customPreviewText: 'Teks Pratonton Tersuai',
+    typeCustomText: 'Taip teks tersuai...',
+    sizeLabel: 'Saiz',
+    spacingLabel: 'Jarak',
+    italicStyle: 'Gaya Italik',
+    reset: 'Set Semula',
+    uppercaseChars: 'Huruf Besar (A-Z)',
+    lowercaseChars: 'Huruf Kecil (a-z)',
+    numericChars: 'Nombor (0-9)',
+    symbolChars: 'Simbol & Tanda Baca',
+    // Binary & APK Archive Inspector
+    archiveContents: 'Kandungan Arkib',
+    manifestInspector: 'Pemeriksa AndroidManifest.xml',
+    appPackage: 'Pakej Apl',
+    permissionsLabel: 'Keizinan',
+    rawXml: 'XML Dinyahkod Mentah',
+    noDecodedManifest: 'Tiada AndroidManifest boleh dibaca ditemui',
+    totalEntries: 'Jumlah entri',
+    // Common App Headers & Drag Overlay
+    liveCollaboration: 'Kolaborasi Langsung',
+    settingsLabel: 'Tetapan',
+    dragFolderNotice: 'Lepaskan fail ZIP atau folder untuk import',
+    createLocalRepo: 'Cipta Repositori Tempatan',
+    repoCreatedSuccess: 'Repositori berjaya dicipta!',
+    currentRepoLabel: 'Repositori Aktif',
+    localWorkspace: 'Ruang Kerja Tempatan',
   },
 };

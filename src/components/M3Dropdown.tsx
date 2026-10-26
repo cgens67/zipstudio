@@ -162,12 +162,12 @@ export function M3Dropdown<T = string>({
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between gap-2 rounded-xl border border-[#43474e]/50 bg-[#1e1f22] text-left transition-all cursor-pointer ${
+        className={`w-full flex items-center justify-between gap-2 rounded-xl border border-[#d8dae5] dark:border-[#43474e]/50 bg-[#f8fafd] dark:bg-[#1e1f22] text-left transition-all cursor-pointer ${
           isSmall ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-xs'
         } ${
           isOpen
-            ? 'border-[#a8c7fa] ring-1 ring-[#a8c7fa]/30 bg-[#2b2d30]'
-            : 'hover:border-[#43474e] hover:bg-[#2b2d30]'
+            ? 'border-[#0b57d0] dark:border-[#a8c7fa] ring-1 ring-[#0b57d0]/30 dark:ring-[#a8c7fa]/30 bg-white dark:bg-[#2b2d30]'
+            : 'hover:border-[#74777f] dark:hover:border-[#43474e] hover:bg-[#f0f4f9] dark:hover:bg-[#2b2d30]'
         } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -180,7 +180,7 @@ export function M3Dropdown<T = string>({
               className={`shrink-0 ${selectedOption?.iconColor || iconColor}`}
             />
           )}
-          <span className={`truncate font-medium ${selectedOption ? 'text-[#e2e2e6]' : 'text-[#8e9199]'}`}>
+          <span className={`truncate font-medium ${selectedOption ? 'text-[#191c20] dark:text-[#e2e2e6]' : 'text-[#5d6168] dark:text-[#8e9199]'}`}>
             {selectedOption ? selectedOption.label : placeholder}
           </span>
         </div>
@@ -188,8 +188,8 @@ export function M3Dropdown<T = string>({
         <M3Icon
           name="expand_more"
           size={isSmall ? 15 : 17}
-          className={`text-[#8e9199] transition-transform duration-200 shrink-0 ${
-            isOpen ? 'rotate-180 text-[#a8c7fa]' : ''
+          className={`text-[#5d6168] dark:text-[#8e9199] transition-transform duration-200 shrink-0 ${
+            isOpen ? 'rotate-180 text-[#0b57d0] dark:text-[#a8c7fa]' : ''
           }`}
         />
       </button>
@@ -197,21 +197,21 @@ export function M3Dropdown<T = string>({
       {/* In-UI Dropdown Popover */}
       {isOpen && (
         <div
-          className={`absolute left-0 mt-1.5 w-full min-w-[180px] max-w-[340px] z-50 rounded-2xl bg-[#1e1f22] border border-[#43474e]/60 shadow-2xl p-1.5 m3-menu-spring ${menuClassName}`}
+          className={`absolute left-0 mt-1.5 w-full min-w-[180px] max-w-[340px] z-50 rounded-2xl bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/60 shadow-2xl p-1.5 m3-menu-spring ${menuClassName}`}
           style={{ maxHeight: '280px' }}
         >
           {/* Optional In-Menu Search Input */}
           {searchable && (
-            <div className="p-1 mb-1 border-b border-[#43474e]/30">
-              <div className="flex items-center gap-1.5 bg-[#121316] px-2 py-1 rounded-xl border border-[#43474e]/40">
-                <M3Icon name="search" size={14} className="text-[#8e9199]" />
+            <div className="p-1 mb-1 border-b border-[#d8dae5] dark:border-[#43474e]/30">
+              <div className="flex items-center gap-1.5 bg-[#f0f2f8] dark:bg-[#121316] px-2 py-1 rounded-xl border border-[#d8dae5] dark:border-[#43474e]/40">
+                <M3Icon name="search" size={14} className="text-[#5d6168] dark:text-[#8e9199]" />
                 <input
                   ref={searchInputRef}
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Filter options..."
-                  className="w-full bg-transparent text-xs text-white placeholder-[#8e9199] focus:outline-none font-mono"
+                  className="w-full bg-transparent text-xs text-[#191c20] dark:text-white placeholder-[#5d6168] dark:placeholder-[#8e9199] focus:outline-none font-mono"
                   onClick={(e) => e.stopPropagation()}
                 />
                 {searchQuery && (
@@ -220,7 +220,7 @@ export function M3Dropdown<T = string>({
                       e.stopPropagation();
                       setSearchQuery('');
                     }}
-                    className="text-[#8e9199] hover:text-white cursor-pointer"
+                    className="text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white cursor-pointer"
                   >
                     <M3Icon name="close" size={13} />
                   </button>
@@ -236,7 +236,7 @@ export function M3Dropdown<T = string>({
             className="overflow-y-auto max-h-[200px] space-y-0.5 pr-0.5 no-scrollbar"
           >
             {filteredOptions.length === 0 ? (
-              <div className="py-3 px-3 text-center text-xs text-[#8e9199] italic">
+              <div className="py-3 px-3 text-center text-xs text-[#5d6168] dark:text-[#8e9199] italic">
                 No matching options
               </div>
             ) : (
@@ -261,10 +261,10 @@ export function M3Dropdown<T = string>({
                       opt.disabled
                         ? 'opacity-30 cursor-not-allowed'
                         : isSelected
-                        ? 'bg-[#00468b]/40 text-[#a8c7fa] font-semibold'
+                        ? 'bg-[#d3e3fd] text-[#041e49] dark:bg-[#00468b]/40 dark:text-[#a8c7fa] font-semibold'
                         : isHighlighted
-                        ? 'bg-[#2b2d30] text-white'
-                        : 'text-[#c4c6d0] hover:bg-[#2b2d30] hover:text-white'
+                        ? 'bg-[#e8ebf3] text-[#191c20] dark:bg-[#2b2d30] dark:text-white'
+                        : 'text-[#191c20] dark:text-[#c4c6d0] hover:bg-[#f0f2f8] dark:hover:bg-[#2b2d30] hover:text-[#191c20] dark:hover:text-white'
                     }`}
                   >
                     <div className="flex items-center gap-2 truncate">
@@ -272,13 +272,13 @@ export function M3Dropdown<T = string>({
                         <M3Icon
                           name={opt.icon}
                           size={15}
-                          className={`shrink-0 ${opt.iconColor || 'text-[#a8c7fa]'}`}
+                          className={`shrink-0 ${opt.iconColor || 'text-[#0b57d0] dark:text-[#a8c7fa]'}`}
                         />
                       )}
                       <div className="flex flex-col truncate">
                         <span className="truncate">{opt.label}</span>
                         {opt.sublabel && (
-                          <span className="text-[10px] text-[#8e9199] font-normal truncate">
+                          <span className="text-[10px] text-[#5d6168] dark:text-[#8e9199] font-normal truncate">
                             {opt.sublabel}
                           </span>
                         )}
