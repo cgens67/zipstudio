@@ -37,6 +37,7 @@ import { CollabModal } from './components/CollabModal';
 import { collabService, CollabPeer } from './utils/collabService';
 import { SettingsModal, EditorSettings, DEFAULT_SETTINGS } from './components/SettingsModal';
 import { processDroppedDataTransfer } from './utils/dragDropHandler';
+import { useDialogAnimation } from './utils/useDialogAnimation';
 
 interface SavedSession {
   savedAt: number;
@@ -1206,115 +1207,25 @@ export default function App() {
   const tree = useMemo(() => buildFileTree(files), [files]);
 
   // Session Recovery Modal component (shared desktop/mobile)
-  const sessionRecoveryModal = pendingSession ? (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn">
-      <div className="bg-[#1e1f22] border border-[#a8c7fa]/40 rounded-2xl p-5 max-w-md w-full shadow-2xl">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-full bg-[#00468b]/30 text-[#a8c7fa] flex items-center justify-center shrink-0">
-            <M3Icon name="history" size={24} />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-white">{t.restoreSessionTitle}</h3>
-            <p className="text-xs text-[#8e9199]">
-              {t.restoreSessionDesc}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-[#121316] rounded-xl p-3 border border-[#43474e]/40 my-3 text-xs space-y-1.5 text-[#c4c6d0]">
-          <div className="flex justify-between">
-            <span className="text-[#8e9199]">Workspace:</span>
-            <span className="font-mono text-white truncate max-w-[200px]">
-              {pendingSession.repoName || 'Local Project'}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-[#8e9199]">{t.fileCountLabel}:</span>
-            <span className="font-mono text-[#a8c7fa]">
-              {Object.keys(pendingSession.files).length} files
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-[#8e9199]">{t.lastModified}:</span>
-            <span className="font-mono text-[#8e9199]">
-              {new Date(pendingSession.savedAt).toLocaleTimeString()} ({new Date(pendingSession.savedAt).toLocaleDateString()})
-            </span>
-          </div>
-        </div>
-
-        {/* M3Switch from material-esm/material */}
-        <div className="bg-[#121316] p-3 rounded-xl border border-[#43474e]/40 my-3">
-          <M3Switch
-            selected={backupBeforeRestore}
-            onChange={setBackupBeforeRestore}
-            label="Backup current workspace"
-            sublabel="Preserve existing files before applying restored session"
-          />
-        </div>
-
-        <div className="flex gap-2 justify-end mt-4">
-          <M3Button variant="text" size="sm" onClick={handleDiscardSession}>
-            {t.startFresh}
-          </M3Button>
-          <M3Button variant="filled" size="sm" icon="restore" onClick={handleRestoreSession}>
-            {t.restoreSession}
-          </M3Button>
-        </div>
-      </div>
-    </div>
-  ) : null;
+  const sessionRecoveryModal = (
+    <AnimatedSessionRecoveryModal
+      pendingSession={pendingSession}
+      backupBeforeRestore={backupBeforeRestore}
+      onBackupChange={setBackupBeforeRestore}
+      onRestore={handleRestoreSession}
+      onDiscard={handleDiscardSession}
+      t={t}
+    />
+  );
 
   // In-UI Alert & Notification Dialog (Material 3 Expressive, replacing external browser alert)
-  const inUiAlertModal = inUiAlert ? (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn">
-      <div className="bg-[#1e1f22] border border-[#a8c7fa]/40 rounded-2xl p-5 max-w-sm w-full shadow-2xl m3-dialog-bounce space-y-3">
-        <div className="flex items-center gap-3">
-          <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-              inUiAlert.type === 'error'
-                ? 'bg-[#690005]/40 border border-[#ff8585]/40 text-[#ff8585]'
-                : inUiAlert.type === 'warning'
-                ? 'bg-[#e09b00]/30 border border-[#ffd54f]/40 text-[#ffd54f]'
-                : inUiAlert.type === 'success'
-                ? 'bg-[#1b5e20]/40 border border-[#b4f3b7]/40 text-[#b4f3b7]'
-                : 'bg-[#00468b]/40 border border-[#a8c7fa]/40 text-[#a8c7fa]'
-            }`}
-          >
-            <M3Icon
-              name={
-                inUiAlert.type === 'error'
-                  ? 'error'
-                  : inUiAlert.type === 'warning'
-                  ? 'warning'
-                  : inUiAlert.type === 'success'
-                  ? 'check_circle'
-                  : 'info'
-              }
-              size={24}
-            />
-          </div>
-          <div className="min-w-0">
-            <h3 className="text-sm font-bold text-white">{inUiAlert.title}</h3>
-            <p className="text-xs text-[#8e9199] mt-0.5">ZipStudio Notice</p>
-          </div>
-        </div>
-
-        <p className="text-xs text-[#c4c6d0] leading-relaxed whitespace-pre-wrap">
-          {inUiAlert.message}
-        </p>
-
-        <div className="flex justify-end pt-2">
-          <M3Button
-            variant="filled"
-            size="sm"
-            onClick={() => setInUiAlert(null)}
-          >
-            {t.close || 'OK'}
-          </M3Button>
-        </div>
-      </div>
-    </div>
-  ) : null;
+  const inUiAlertModal = (
+    <AnimatedInUiAlertModal
+      alert={inUiAlert}
+      onClose={() => setInUiAlert(null)}
+      t={t}
+    />
+  );
 
   // Full-Screen Drag and Drop Overlay
   const dragOverlay = isDragOver ? (
@@ -1379,10 +1290,10 @@ export default function App() {
             {/* Quick Commit Button */}
             <button
               onClick={() => setMobileTab('git')}
-              className="px-2.5 py-1 rounded-lg bg-[#0b57d0] dark:bg-[#00468b]/40 hover:bg-[#0842a0] dark:hover:bg-[#00468b]/60 border border-[#0b57d0] dark:border-[#a8c7fa]/40 text-white dark:text-[#a8c7fa] text-[11px] font-semibold flex items-center gap-1 cursor-pointer shadow-xs"
+              className="px-2.5 py-1 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white border border-[#0b57d0] text-[11px] font-semibold flex items-center gap-1 cursor-pointer shadow-xs active:scale-95"
             >
-              <M3Icon name="cloud_upload" size={14} />
-              <span>{t.commit}</span>
+              <M3Icon name="cloud_upload" size={14} className="text-white" />
+              <span className="text-white">{t.commit}</span>
             </button>
           </div>
         </header>
@@ -1983,6 +1894,176 @@ export default function App() {
       />
 
       {dragOverlay}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------
+// ANIMATED DIALOG COMPONENTS (Fluid Material 3 Enter & Exit Transitions)
+// -----------------------------------------------------------------
+
+function AnimatedSessionRecoveryModal({
+  pendingSession,
+  backupBeforeRestore,
+  onBackupChange,
+  onRestore,
+  onDiscard,
+  t,
+}: {
+  pendingSession: SavedSession | null;
+  backupBeforeRestore: boolean;
+  onBackupChange: (val: boolean) => void;
+  onRestore: () => void;
+  onDiscard: () => void;
+  t: any;
+}) {
+  const { isRendered, backdropClass, dialogClass, triggerClose } = useDialogAnimation(
+    Boolean(pendingSession),
+    onDiscard
+  );
+  if (!isRendered || !pendingSession) return null;
+
+  return (
+    <div
+      onClick={triggerClose}
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 ${backdropClass}`}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#a8c7fa]/40 rounded-2xl p-5 max-w-md w-full shadow-2xl ${dialogClass}`}
+      >
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-full bg-[#d3e3fd] text-[#041e49] dark:bg-[#00468b]/30 dark:text-[#a8c7fa] flex items-center justify-center shrink-0">
+            <M3Icon name="history" size={24} />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-[#191c20] dark:text-white">{t.restoreSessionTitle}</h3>
+            <p className="text-xs text-[#5d6168] dark:text-[#8e9199]">
+              {t.restoreSessionDesc}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-[#f8fafd] dark:bg-[#121316] rounded-xl p-3 border border-[#d8dae5] dark:border-[#43474e]/40 my-3 text-xs space-y-1.5 text-[#191c20] dark:text-[#c4c6d0]">
+          <div className="flex justify-between">
+            <span className="text-[#5d6168] dark:text-[#8e9199]">Workspace:</span>
+            <span className="font-mono text-[#191c20] dark:text-white truncate max-w-[200px]">
+              {pendingSession.repoName || 'Local Project'}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#5d6168] dark:text-[#8e9199]">{t.fileCountLabel}:</span>
+            <span className="font-mono text-[#0b57d0] dark:text-[#a8c7fa] font-semibold">
+              {Object.keys(pendingSession.files).length} files
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#5d6168] dark:text-[#8e9199]">{t.lastModified}:</span>
+            <span className="font-mono text-[#74777f] dark:text-[#8e9199]">
+              {new Date(pendingSession.savedAt).toLocaleTimeString()} ({new Date(pendingSession.savedAt).toLocaleDateString()})
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-[#f8fafd] dark:bg-[#121316] p-3 rounded-xl border border-[#d8dae5] dark:border-[#43474e]/40 my-3">
+          <M3Switch
+            selected={backupBeforeRestore}
+            onChange={onBackupChange}
+            label="Backup current workspace"
+            sublabel="Preserve existing files before applying restored session"
+          />
+        </div>
+
+        <div className="flex gap-2 justify-end mt-4">
+          <M3Button variant="text" size="sm" onClick={triggerClose}>
+            {t.startFresh}
+          </M3Button>
+          <M3Button
+            variant="filled"
+            size="sm"
+            icon="restore"
+            onClick={() => {
+              triggerClose();
+              onRestore();
+            }}
+          >
+            {t.restoreSession}
+          </M3Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnimatedInUiAlertModal({
+  alert,
+  onClose,
+  t,
+}: {
+  alert: { title: string; message: string; type?: 'info' | 'warning' | 'error' | 'success' } | null;
+  onClose: () => void;
+  t: any;
+}) {
+  const { isRendered, backdropClass, dialogClass, triggerClose } = useDialogAnimation(
+    Boolean(alert),
+    onClose
+  );
+  if (!isRendered || !alert) return null;
+
+  return (
+    <div
+      onClick={triggerClose}
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 ${backdropClass}`}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#a8c7fa]/40 rounded-2xl p-5 max-w-sm w-full shadow-2xl space-y-3 ${dialogClass}`}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+              alert.type === 'error'
+                ? 'bg-[#ffdad6] text-[#ba1a1a] dark:bg-[#690005]/40 dark:border dark:border-[#ff8585]/40 dark:text-[#ff8585]'
+                : alert.type === 'warning'
+                ? 'bg-[#ffdf99] text-[#7e5700] dark:bg-[#e09b00]/30 dark:border dark:border-[#ffd54f]/40 dark:text-[#ffd54f]'
+                : alert.type === 'success'
+                ? 'bg-[#c4eed0] text-[#0a6640] dark:bg-[#1b5e20]/40 dark:border dark:border-[#b4f3b7]/40 dark:text-[#b4f3b7]'
+                : 'bg-[#d3e3fd] text-[#041e49] dark:bg-[#00468b]/40 dark:border dark:border-[#a8c7fa]/40 dark:text-[#a8c7fa]'
+            }`}
+          >
+            <M3Icon
+              name={
+                alert.type === 'error'
+                  ? 'error'
+                  : alert.type === 'warning'
+                  ? 'warning'
+                  : alert.type === 'success'
+                  ? 'check_circle'
+                  : 'info'
+              }
+              size={24}
+            />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-[#191c20] dark:text-white">{alert.title}</h3>
+            <p className="text-xs text-[#5d6168] dark:text-[#8e9199] mt-0.5">ZipStudio Notice</p>
+          </div>
+        </div>
+
+        <p className="text-xs text-[#44474e] dark:text-[#c4c6d0] leading-relaxed whitespace-pre-wrap">
+          {alert.message}
+        </p>
+
+        <div className="flex justify-end pt-2">
+          <M3Button
+            variant="filled"
+            size="sm"
+            onClick={triggerClose}
+          >
+            {t.close || 'OK'}
+          </M3Button>
+        </div>
+      </div>
     </div>
   );
 }

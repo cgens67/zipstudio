@@ -14,6 +14,7 @@ import {
 import { M3Icon, M3IconButton } from './M3Components';
 import { M3Switch } from './M3Switch';
 import { Translations, TRANSLATIONS } from '../utils/i18n';
+import { useDialogAnimation } from '../utils/useDialogAnimation';
 
 interface SidebarProps {
   tree: FileTreeNode[];
@@ -471,7 +472,7 @@ export function Sidebar({
             size="sm"
             icon="note_add"
             label={t.newFile}
-            className="text-[#44474e] hover:text-[#191c20] dark:text-[#c4c6d0] dark:hover:text-white"
+            className="text-[#191c20] hover:text-[#0b57d0] hover:bg-black/5 dark:text-[#c4c6d0] dark:hover:text-white dark:hover:bg-white/10"
             onClick={() => {
               setTargetParentFolder('');
               setIsCreatingFile(true);
@@ -482,7 +483,7 @@ export function Sidebar({
             size="sm"
             icon="create_new_folder"
             label={t.newFolder}
-            className="text-[#44474e] hover:text-[#191c20] dark:text-[#c4c6d0] dark:hover:text-white"
+            className="text-[#191c20] hover:text-[#0b57d0] hover:bg-black/5 dark:text-[#c4c6d0] dark:hover:text-white dark:hover:bg-white/10"
             onClick={() => {
               setTargetParentFolder('');
               setIsCreatingFolder(true);
@@ -493,7 +494,7 @@ export function Sidebar({
             size="sm"
             icon="download"
             label={t.exportZip}
-            className="text-[#44474e] hover:text-[#191c20] dark:text-[#c4c6d0] dark:hover:text-white"
+            className="text-[#191c20] hover:text-[#0b57d0] hover:bg-black/5 dark:text-[#c4c6d0] dark:hover:text-white dark:hover:bg-white/10"
             onClick={onExportZip}
           />
         </div>
@@ -504,18 +505,18 @@ export function Sidebar({
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#0b57d0] dark:bg-[#a8c7fa]/15 hover:bg-[#0842a0] dark:hover:bg-[#a8c7fa]/25 text-white dark:text-[#a8c7fa] border border-[#0b57d0] dark:border-[#a8c7fa]/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white border border-[#0b57d0] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95"
             title={t.importZip}
           >
-            <M3Icon name="upload" size={16} />
-            <span>{t.importZip}</span>
+            <M3Icon name="upload" size={16} className="text-white" />
+            <span className="text-white">{t.importZip}</span>
           </button>
           <button
             onClick={onExportZip}
-            className="py-1.5 px-2.5 rounded-lg bg-white dark:bg-[#2b2d30] hover:bg-[#f8fafd] dark:hover:bg-[#383a3e] text-[#191c20] dark:text-[#e2e2e6] border border-[#d8dae5] dark:border-[#43474e]/60 text-xs font-medium flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-xs"
+            className="py-1.5 px-2.5 rounded-lg bg-white dark:bg-[#2b2d30] hover:bg-[#f8fafd] dark:hover:bg-[#383a3e] text-[#191c20] dark:text-[#e2e2e6] border border-[#d8dae5] dark:border-[#43474e]/60 text-xs font-medium flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-xs active:scale-95"
             title={t.exportZip}
           >
-            <M3Icon name="download" size={16} />
+            <M3Icon name="download" size={16} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
             <span>{t.exportZip}</span>
           </button>
         </div>
@@ -655,216 +656,361 @@ export function Sidebar({
         </div>
       )}
 
-      {/* Rename Modal Dialog */}
-      {renameNode && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/60 rounded-2xl w-full max-w-sm p-5 shadow-2xl m3-dialog-bounce">
-            <h3 className="text-sm font-bold text-[#191c20] dark:text-white mb-2 flex items-center gap-2">
-              <M3Icon name="edit" size={18} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
-              <span>{renameNode.isFolder ? t.renameFolder : t.renameFile}</span>
-            </h3>
-            <p className="text-xs text-[#5d6168] dark:text-[#8e9199] mb-3">{t.enterNewName}</p>
-            <form onSubmit={handleConfirmRename}>
-              <input
-                autoFocus
-                type="text"
-                value={renameInputValue}
-                onChange={(e) => setRenameInputValue(e.target.value)}
-                className="w-full bg-[#f8fafd] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg px-3 py-2 text-xs text-[#191c20] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0b57d0] dark:focus:ring-[#a8c7fa] font-mono mb-4"
-              />
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setRenameNode(null)}
-                  className="px-3 py-1.5 rounded-lg bg-transparent hover:bg-black/5 dark:hover:bg-white/5 text-xs text-[#5d6168] dark:text-[#c4c6d0] cursor-pointer"
-                >
-                  {t.cancel}
-                </button>
-                <button
-                  type="submit"
-                  className="px-3.5 py-1.5 rounded-lg bg-[#0b57d0] dark:bg-[#a8c7fa] text-white dark:text-[#003062] font-semibold text-xs cursor-pointer shadow-xs"
-                >
-                  {t.save}
-                </button>
-              </div>
-            </form>
+      {/* Animated Modals with Fluid Material 3 Enter & Exit Transitions */}
+      <AnimatedRenameModal
+        node={renameNode}
+        initialValue={renameInputValue}
+        onClose={() => setRenameNode(null)}
+        onRename={onRenameNode}
+        t={t}
+      />
+
+      <AnimatedPropertiesModal
+        node={propertiesNode}
+        files={files}
+        onClose={() => setPropertiesNode(null)}
+        t={t}
+      />
+
+      <AnimatedDeleteConfirmModal
+        node={deleteConfirmNode}
+        onClose={() => setDeleteConfirmNode(null)}
+        onDeleteNode={onDeleteNode}
+        t={t}
+      />
+
+      <AnimatedSidebarErrorModal
+        error={sidebarError}
+        onClose={() => setSidebarError(null)}
+        t={t}
+      />
+    </aside>
+  );
+}
+
+// -----------------------------------------------------------------
+// ANIMATED SIDEBAR MODALS (Fluid Material 3 Enter & Exit Transitions)
+// -----------------------------------------------------------------
+
+function AnimatedRenameModal({
+  node,
+  initialValue,
+  onClose,
+  onRename,
+  t,
+}: {
+  node: FileTreeNode | null;
+  initialValue: string;
+  onClose: () => void;
+  onRename: (oldPath: string, newPath: string) => void;
+  t: Translations;
+}) {
+  const [val, setVal] = useState(initialValue);
+  useEffect(() => {
+    if (node) setVal(node.name);
+  }, [node]);
+
+  const { isRendered, backdropClass, dialogClass, triggerClose } = useDialogAnimation(
+    Boolean(node),
+    onClose
+  );
+  if (!isRendered || !node) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = val.trim();
+    if (!trimmed || trimmed === node.name) {
+      triggerClose();
+      return;
+    }
+    const parentPath = node.path.includes('/')
+      ? node.path.substring(0, node.path.lastIndexOf('/'))
+      : '';
+    const newPath = parentPath ? `${parentPath}/${trimmed}` : trimmed;
+    onRename(node.path, newPath);
+    triggerClose();
+  };
+
+  return (
+    <div
+      onClick={triggerClose}
+      className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 ${backdropClass}`}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/60 rounded-2xl w-full max-w-sm p-5 shadow-2xl ${dialogClass}`}
+      >
+        <h3 className="text-sm font-bold text-[#191c20] dark:text-white mb-2 flex items-center gap-2">
+          <M3Icon name="edit" size={18} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
+          <span>{node.isFolder ? t.renameFolder : t.renameFile}</span>
+        </h3>
+        <p className="text-xs text-[#5d6168] dark:text-[#8e9199] mb-3">{t.enterNewName}</p>
+        <form onSubmit={handleSubmit}>
+          <input
+            autoFocus
+            type="text"
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            className="w-full bg-[#f8fafd] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg px-3 py-2 text-xs text-[#191c20] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0b57d0] dark:focus:ring-[#a8c7fa] font-mono mb-4"
+          />
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={triggerClose}
+              className="px-3 py-1.5 rounded-lg bg-transparent hover:bg-black/5 dark:hover:bg-white/5 text-xs text-[#5d6168] dark:text-[#c4c6d0] cursor-pointer"
+            >
+              {t.cancel}
+            </button>
+            <button
+              type="submit"
+              className="px-3.5 py-1.5 rounded-lg bg-[#0b57d0] dark:bg-[#a8c7fa] text-white dark:text-[#003062] font-semibold text-xs cursor-pointer shadow-xs active:scale-95"
+            >
+              {t.save}
+            </button>
           </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function AnimatedPropertiesModal({
+  node,
+  files,
+  onClose,
+  t,
+}: {
+  node: FileTreeNode | null;
+  files: Record<string, VFile>;
+  onClose: () => void;
+  t: Translations;
+}) {
+  const { isRendered, backdropClass, dialogClass, triggerClose } = useDialogAnimation(
+    Boolean(node),
+    onClose
+  );
+  if (!isRendered || !node) return null;
+
+  return (
+    <div
+      onClick={triggerClose}
+      className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 ${backdropClass}`}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/60 rounded-2xl w-full max-w-md p-5 shadow-2xl ${dialogClass}`}
+      >
+        <div className="flex items-center justify-between border-b border-[#d8dae5] dark:border-[#43474e]/30 pb-3 mb-4">
+          <div className="flex items-center gap-2">
+            <M3Icon
+              name={node.isFolder ? 'folder' : 'description'}
+              size={20}
+              className="text-[#0b57d0] dark:text-[#a8c7fa]"
+            />
+            <h3 className="text-sm font-bold text-[#191c20] dark:text-white truncate max-w-xs">
+              {node.name}
+            </h3>
+          </div>
+          <M3IconButton
+            size="sm"
+            icon="close"
+            label={t.close}
+            onClick={triggerClose}
+          />
         </div>
-      )}
 
-      {/* Properties Modal Dialog */}
-      {propertiesNode && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/60 rounded-2xl w-full max-w-md p-5 shadow-2xl m3-dialog-bounce">
-            <div className="flex items-center justify-between border-b border-[#d8dae5] dark:border-[#43474e]/30 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <M3Icon
-                  name={propertiesNode.isFolder ? 'folder' : 'description'}
-                  size={20}
-                  className="text-[#0b57d0] dark:text-[#a8c7fa]"
-                />
-                <h3 className="text-sm font-bold text-[#191c20] dark:text-white truncate max-w-xs">
-                  {propertiesNode.name}
-                </h3>
-              </div>
-              <M3IconButton
-                size="sm"
-                icon="close"
-                label={t.close}
-                onClick={() => setPropertiesNode(null)}
-              />
-            </div>
+        {/* Properties Grid */}
+        <div className="space-y-3 text-xs">
+          <div className="flex items-start justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
+            <span className="text-[#5d6168] dark:text-[#8e9199]">{t.filePath}:</span>
+            <span className="font-mono text-[#191c20] dark:text-[#e2e2e6] text-right truncate max-w-[240px] select-all">
+              /{node.path}
+            </span>
+          </div>
 
-            {/* Properties Grid */}
-            <div className="space-y-3 text-xs">
-              <div className="flex items-start justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
-                <span className="text-[#5d6168] dark:text-[#8e9199]">{t.filePath}:</span>
-                <span className="font-mono text-[#191c20] dark:text-[#e2e2e6] text-right truncate max-w-[240px] select-all">
-                  /{propertiesNode.path}
-                </span>
-              </div>
+          <div className="flex items-center justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
+            <span className="text-[#5d6168] dark:text-[#8e9199]">{t.fileType}:</span>
+            <span className="text-[#191c20] dark:text-[#e2e2e6] font-medium">
+              {node.isFolder
+                ? 'Folder'
+                : getFileExtension(node.name).toUpperCase() || 'Plain Text'}
+            </span>
+          </div>
 
+          {!node.isFolder && files[node.path] && (
+            <>
               <div className="flex items-center justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
-                <span className="text-[#5d6168] dark:text-[#8e9199]">{t.fileType}:</span>
-                <span className="text-[#191c20] dark:text-[#e2e2e6] font-medium">
-                  {propertiesNode.isFolder
-                    ? 'Folder'
-                    : getFileExtension(propertiesNode.name).toUpperCase() || 'Plain Text'}
+                <span className="text-[#5d6168] dark:text-[#8e9199]">{t.fileSize}:</span>
+                <span className="font-mono text-[#0b57d0] dark:text-[#a8c7fa] font-semibold">
+                  {formatBytes(files[node.path].size)} ({files[node.path].size} bytes)
                 </span>
               </div>
 
-              {!propertiesNode.isFolder && files[propertiesNode.path] && (
-                <>
-                  <div className="flex items-center justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
-                    <span className="text-[#5d6168] dark:text-[#8e9199]">{t.fileSize}:</span>
-                    <span className="font-mono text-[#0b57d0] dark:text-[#a8c7fa]">
-                      {formatBytes(files[propertiesNode.path].size)} ({files[propertiesNode.path].size} bytes)
-                    </span>
-                  </div>
-
-                  {!files[propertiesNode.path].isBinary && (
-                    <div className="flex items-center justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
-                      <span className="text-[#5d6168] dark:text-[#8e9199]">{t.fileLines}:</span>
-                      <span className="font-mono text-[#191c20] dark:text-[#e2e2e6]">
-                        {files[propertiesNode.path].content.split('\n').length}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
-                    <span className="text-[#5d6168] dark:text-[#8e9199]">{t.lastModified}:</span>
-                    <span className="text-[#44474e] dark:text-[#c4c6d0]">
-                      {new Date(files[propertiesNode.path].lastModified).toLocaleString()}
-                    </span>
-                  </div>
-                </>
-              )}
-
-              {propertiesNode.isFolder && (
+              {!files[node.path].isBinary && (
                 <div className="flex items-center justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
-                  <span className="text-[#5d6168] dark:text-[#8e9199]">Items:</span>
+                  <span className="text-[#5d6168] dark:text-[#8e9199]">{t.fileLines}:</span>
                   <span className="font-mono text-[#191c20] dark:text-[#e2e2e6]">
-                    {propertiesNode.children ? propertiesNode.children.length : 0} items
+                    {files[node.path].content.split('\n').length}
                   </span>
                 </div>
               )}
-            </div>
 
-            <div className="mt-5 flex items-center justify-end">
-              <button
-                onClick={() => setPropertiesNode(null)}
-                className="px-4 py-2 bg-[#f0f2f8] dark:bg-[#2b2d30] hover:bg-[#e4e7ef] dark:hover:bg-[#383a3e] text-[#0b57d0] dark:text-[#a8c7fa] rounded-xl text-xs font-semibold cursor-pointer transition-colors"
-              >
-                {t.close}
-              </button>
+              <div className="flex items-center justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
+                <span className="text-[#5d6168] dark:text-[#8e9199]">{t.lastModified}:</span>
+                <span className="text-[#44474e] dark:text-[#c4c6d0]">
+                  {new Date(files[node.path].lastModified).toLocaleString()}
+                </span>
+              </div>
+            </>
+          )}
+
+          {node.isFolder && (
+            <div className="flex items-center justify-between py-1 border-b border-[#d8dae5] dark:border-[#43474e]/20">
+              <span className="text-[#5d6168] dark:text-[#8e9199]">Items:</span>
+              <span className="font-mono text-[#191c20] dark:text-[#e2e2e6]">
+                {node.children ? node.children.length : 0} items
+              </span>
             </div>
-          </div>
+          )}
         </div>
-      )}
 
-      {/* In-UI Delete Confirmation Dialog with Material 3 Expressive Switch */}
-      {deleteConfirmNode && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#1e1f22] border border-[#ff8585]/40 rounded-2xl w-full max-w-sm p-5 shadow-2xl m3-dialog-bounce space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#ffdad6] dark:bg-[#690005]/40 border border-[#ff8585]/30 flex items-center justify-center text-[#ba1a1a] dark:text-[#ff8585] shrink-0">
-                <M3Icon name="delete_forever" size={24} />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-sm font-bold text-[#191c20] dark:text-white">Delete Confirmation</h3>
-                <p className="text-xs text-[#5d6168] dark:text-[#c4c6d0] truncate font-mono mt-0.5">
-                  /{deleteConfirmNode.path}
-                </p>
-              </div>
-            </div>
+        <div className="mt-5 flex items-center justify-end">
+          <button
+            onClick={triggerClose}
+            className="px-4 py-2 bg-[#f0f2f8] dark:bg-[#2b2d30] hover:bg-[#e4e7ef] dark:hover:bg-[#383a3e] text-[#0b57d0] dark:text-[#a8c7fa] rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+          >
+            {t.close}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-            <p className="text-xs text-[#5d6168] dark:text-[#8e9199] leading-relaxed">
-              Are you sure you want to delete <span className="text-[#191c20] dark:text-white font-semibold">{deleteConfirmNode.name}</span>? This action cannot be undone.
+function AnimatedDeleteConfirmModal({
+  node,
+  onClose,
+  onDeleteNode,
+  t,
+}: {
+  node: FileTreeNode | null;
+  onClose: () => void;
+  onDeleteNode: (path: string) => void;
+  t: Translations;
+}) {
+  const [permanentDelete, setPermanentDelete] = useState(true);
+  const { isRendered, backdropClass, dialogClass, triggerClose } = useDialogAnimation(
+    Boolean(node),
+    onClose
+  );
+  if (!isRendered || !node) return null;
+
+  return (
+    <div
+      onClick={triggerClose}
+      className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 ${backdropClass}`}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#ff8585]/40 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4 ${dialogClass}`}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#ffdad6] dark:bg-[#690005]/40 border border-[#ff8585]/30 flex items-center justify-center text-[#ba1a1a] dark:text-[#ff8585] shrink-0">
+            <M3Icon name="delete_forever" size={24} />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-[#191c20] dark:text-white">Delete Confirmation</h3>
+            <p className="text-xs text-[#5d6168] dark:text-[#c4c6d0] truncate font-mono mt-0.5">
+              /{node.path}
             </p>
-
-            {/* M3Switch from material-esm/material */}
-            <div className="bg-[#f8fafd] dark:bg-[#121316] p-3 rounded-xl border border-[#d8dae5] dark:border-[#43474e]/40">
-              <M3Switch
-                selected={permanentDelete}
-                onChange={setPermanentDelete}
-                label="Permanent delete"
-                sublabel="Remove immediately from the virtual file system"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setDeleteConfirmNode(null)}
-                className="px-3 py-1.5 rounded-xl bg-transparent hover:bg-black/5 dark:hover:bg-white/5 text-xs text-[#5d6168] dark:text-[#c4c6d0] font-medium transition-colors cursor-pointer"
-              >
-                {t.cancel}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const path = deleteConfirmNode.path;
-                  setDeleteConfirmNode(null);
-                  onDeleteNode(path);
-                }}
-                className="px-4 py-1.5 rounded-xl bg-[#ba1a1a] hover:bg-[#de3730] text-white text-xs font-semibold flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
-              >
-                <M3Icon name="delete" size={16} />
-                Delete
-              </button>
-            </div>
           </div>
         </div>
-      )}
 
-      {/* In-UI Error Dialog */}
-      {sidebarError && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#1e1f22] border border-[#ff8585]/40 rounded-2xl w-full max-w-sm p-5 shadow-2xl m3-dialog-bounce space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#ffdad6] dark:bg-[#690005]/40 border border-[#ff8585]/30 flex items-center justify-center text-[#ba1a1a] dark:text-[#ff8585] shrink-0">
-                <M3Icon name="error" size={24} />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-sm font-bold text-[#191c20] dark:text-white">Notice</h3>
-                <p className="text-xs text-[#5d6168] dark:text-[#8e9199] mt-0.5">ZipStudio File System</p>
-              </div>
-            </div>
-            <p className="text-xs text-[#44474e] dark:text-[#c4c6d0] leading-relaxed whitespace-pre-wrap">
-              {sidebarError}
-            </p>
-            <div className="flex justify-end pt-2">
-              <button
-                type="button"
-                onClick={() => setSidebarError(null)}
-                className="px-4 py-2 bg-[#f0f2f8] dark:bg-[#2b2d30] hover:bg-[#e4e7ef] dark:hover:bg-[#383a3e] text-[#0b57d0] dark:text-[#a8c7fa] rounded-xl text-xs font-semibold cursor-pointer transition-colors"
-              >
-                {t.close || 'OK'}
-              </button>
-            </div>
+        <p className="text-xs text-[#5d6168] dark:text-[#8e9199] leading-relaxed">
+          Are you sure you want to delete <span className="text-[#191c20] dark:text-white font-semibold">{node.name}</span>? This action cannot be undone.
+        </p>
+
+        <div className="bg-[#f8fafd] dark:bg-[#121316] p-3 rounded-xl border border-[#d8dae5] dark:border-[#43474e]/40">
+          <M3Switch
+            selected={permanentDelete}
+            onChange={setPermanentDelete}
+            label="Permanent delete"
+            sublabel="Remove immediately from the virtual file system"
+          />
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={triggerClose}
+            className="px-3 py-1.5 rounded-xl bg-transparent hover:bg-black/5 dark:hover:bg-white/5 text-xs text-[#5d6168] dark:text-[#c4c6d0] font-medium transition-colors cursor-pointer"
+          >
+            {t.cancel}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const path = node.path;
+              triggerClose();
+              onDeleteNode(path);
+            }}
+            className="px-4 py-1.5 rounded-xl bg-[#ba1a1a] hover:bg-[#de3730] text-white text-xs font-semibold flex items-center gap-1.5 shadow-md transition-colors cursor-pointer active:scale-95"
+          >
+            <M3Icon name="delete" size={16} />
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnimatedSidebarErrorModal({
+  error,
+  onClose,
+  t,
+}: {
+  error: string | null;
+  onClose: () => void;
+  t: Translations;
+}) {
+  const { isRendered, backdropClass, dialogClass, triggerClose } = useDialogAnimation(
+    Boolean(error),
+    onClose
+  );
+  if (!isRendered || !error) return null;
+
+  return (
+    <div
+      onClick={triggerClose}
+      className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 ${backdropClass}`}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#ff8585]/40 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-3 ${dialogClass}`}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#ffdad6] dark:bg-[#690005]/40 border border-[#ff8585]/30 flex items-center justify-center text-[#ba1a1a] dark:text-[#ff8585] shrink-0">
+            <M3Icon name="error" size={24} />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-[#191c20] dark:text-white">Notice</h3>
+            <p className="text-xs text-[#5d6168] dark:text-[#8e9199] mt-0.5">ZipStudio File System</p>
           </div>
         </div>
-      )}
-    </aside>
+        <p className="text-xs text-[#44474e] dark:text-[#c4c6d0] leading-relaxed whitespace-pre-wrap">
+          {error}
+        </p>
+        <div className="flex justify-end pt-2">
+          <button
+            type="button"
+            onClick={triggerClose}
+            className="px-4 py-2 bg-[#f0f2f8] dark:bg-[#2b2d30] hover:bg-[#e4e7ef] dark:hover:bg-[#383a3e] text-[#0b57d0] dark:text-[#a8c7fa] rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+          >
+            {t.close || 'OK'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -231,10 +231,10 @@ export function Terminal({
   return (
     <div
       style={isMobile ? undefined : { height: maximized ? '75vh' : `${height}px` }}
-      className={`bg-[#18191c] flex flex-col select-none relative ${
+      className={`bg-white dark:bg-[#18191c] text-[#191c20] dark:text-[#e2e2e6] flex flex-col select-none relative ${
         isMobile
           ? 'h-full w-full flex-1 min-h-0'
-          : 'border-t border-[#43474e]/40 transition-[height] duration-150 shrink-0'
+          : 'border-t border-[#d8dae5] dark:border-[#43474e]/40 transition-[height] duration-150 shrink-0'
       }`}
     >
       {/* Mouse Drag Resize Handle on Top Edge (Desktop only) */}
@@ -242,21 +242,21 @@ export function Terminal({
         <div
           onMouseDown={onResizeStart}
           title={t.resizeTerminal}
-          className="absolute -top-1.5 inset-x-0 h-3 cursor-row-resize z-30 group flex items-center justify-center hover:bg-[#a8c7fa]/20 transition-colors"
+          className="absolute -top-1.5 inset-x-0 h-3 cursor-row-resize z-30 group flex items-center justify-center hover:bg-[#0b57d0]/10 dark:hover:bg-[#a8c7fa]/20 transition-colors"
         >
-          <div className="w-16 h-1 rounded-full bg-[#43474e]/50 group-hover:bg-[#a8c7fa] group-active:bg-[#a8c7fa] transition-colors" />
+          <div className="w-16 h-1 rounded-full bg-[#d8dae5] dark:bg-[#43474e]/50 group-hover:bg-[#0b57d0] dark:group-hover:bg-[#a8c7fa] group-active:bg-[#0b57d0] dark:group-active:bg-[#a8c7fa] transition-colors" />
         </div>
       )}
 
       {/* Terminal Header Tabs Bar */}
-      <div className="h-9 px-2 bg-[#1e1f22] border-b border-[#43474e]/30 flex items-center justify-between text-xs shrink-0 overflow-x-auto no-scrollbar gap-2">
+      <div className="h-9 px-2 bg-[#f8fafd] dark:bg-[#1e1f22] border-b border-[#d8dae5] dark:border-[#43474e]/30 flex items-center justify-between text-xs shrink-0 overflow-x-auto no-scrollbar gap-2">
         <div className="flex items-center gap-1 h-full shrink-0">
           <button
             onClick={() => setActiveTab('terminal')}
             className={`px-3 py-1.5 font-medium flex items-center gap-1.5 border-b-2 cursor-pointer transition-colors ${
               activeTab === 'terminal'
-                ? 'border-[#a8c7fa] text-[#a8c7fa]'
-                : 'border-transparent text-[#8e9199] hover:text-[#e2e2e6]'
+                ? 'border-[#0b57d0] dark:border-[#a8c7fa] text-[#0b57d0] dark:text-[#a8c7fa]'
+                : 'border-transparent text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-[#e2e2e6]'
             }`}
           >
             <M3Icon name="terminal" size={14} />
@@ -267,14 +267,14 @@ export function Terminal({
             onClick={() => setActiveTab('console')}
             className={`px-3 py-1.5 font-medium flex items-center gap-1.5 border-b-2 cursor-pointer transition-colors relative ${
               activeTab === 'console'
-                ? 'border-[#a8c7fa] text-[#a8c7fa]'
-                : 'border-transparent text-[#8e9199] hover:text-[#e2e2e6]'
+                ? 'border-[#0b57d0] dark:border-[#a8c7fa] text-[#0b57d0] dark:text-[#a8c7fa]'
+                : 'border-transparent text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-[#e2e2e6]'
             }`}
           >
             <M3Icon name="dvr" size={14} />
             <span>{t.logs}</span>
             {logs.length > 0 && (
-              <span className="w-4 h-4 rounded-full bg-[#00468b] text-[#d6e3ff] font-bold text-[9px] flex items-center justify-center">
+              <span className="w-4 h-4 rounded-full bg-[#d3e3fd] text-[#041e49] dark:bg-[#00468b] dark:text-[#d6e3ff] font-bold text-[9px] flex items-center justify-center">
                 {logs.length}
               </span>
             )}
@@ -284,8 +284,8 @@ export function Terminal({
             onClick={() => setActiveTab('git')}
             className={`px-3 py-1.5 font-medium flex items-center gap-1.5 border-b-2 cursor-pointer transition-colors ${
               activeTab === 'git'
-                ? 'border-[#a8c7fa] text-[#a8c7fa]'
-                : 'border-transparent text-[#8e9199] hover:text-[#e2e2e6]'
+                ? 'border-[#0b57d0] dark:border-[#a8c7fa] text-[#0b57d0] dark:text-[#a8c7fa]'
+                : 'border-transparent text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-[#e2e2e6]'
             }`}
           >
             <M3Icon name="commit" size={14} />
@@ -296,8 +296,8 @@ export function Terminal({
             onClick={() => setActiveTab('problems')}
             className={`px-3 py-1.5 font-medium flex items-center gap-1.5 border-b-2 cursor-pointer transition-colors ${
               activeTab === 'problems'
-                ? 'border-[#a8c7fa] text-[#a8c7fa]'
-                : 'border-transparent text-[#8e9199] hover:text-[#e2e2e6]'
+                ? 'border-[#0b57d0] dark:border-[#a8c7fa] text-[#0b57d0] dark:text-[#a8c7fa]'
+                : 'border-transparent text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-[#e2e2e6]'
             }`}
           >
             <M3Icon name="error_outline" size={14} />
@@ -375,14 +375,14 @@ export function Terminal({
       </div>
 
       {/* Tab Contents */}
-      <div className="flex-1 overflow-y-auto p-3 font-mono text-xs text-[#e2e2e6]">
+      <div className="flex-1 overflow-y-auto p-3 font-mono text-xs text-[#191c20] dark:text-[#e2e2e6]">
         {/* Terminal Tab */}
         {activeTab === 'terminal' && (
           <div className="space-y-1">
             {history.map((line, idx) => (
               <div
                 key={idx}
-                className={line.startsWith('$') ? 'text-[#a8c7fa] font-semibold' : 'text-[#c4c6d0]'}
+                className={line.startsWith('$') ? 'text-[#0b57d0] dark:text-[#a8c7fa] font-semibold' : 'text-[#44474e] dark:text-[#c4c6d0]'}
               >
                 {line}
               </div>
@@ -394,15 +394,15 @@ export function Terminal({
                   key={cmd}
                   type="button"
                   onClick={() => executeCommand(cmd)}
-                  className="px-2.5 py-1 rounded-full bg-[#2b2d30] hover:bg-[#383a3e] active:scale-95 text-[#a8c7fa] text-[11px] font-mono border border-[#43474e]/40 shrink-0 cursor-pointer transition-all"
+                  className="px-2.5 py-1 rounded-full bg-[#f0f2f8] dark:bg-[#2b2d30] hover:bg-[#e4e7ef] dark:hover:bg-[#383a3e] active:scale-95 text-[#0b57d0] dark:text-[#a8c7fa] text-[11px] font-mono border border-[#d8dae5] dark:border-[#43474e]/40 shrink-0 cursor-pointer transition-all shadow-xs"
                 >
                   {cmd}
                 </button>
               ))}
             </div>
 
-            <form onSubmit={handleCommandSubmit} className="flex items-center gap-2 mt-1.5 bg-[#121316] rounded-xl px-2.5 py-1.5 border border-[#43474e]/40">
-              <span className="text-[#a8c7fa] font-bold text-xs select-none shrink-0">zipstudio:~$</span>
+            <form onSubmit={handleCommandSubmit} className="flex items-center gap-2 mt-1.5 bg-[#f8fafd] dark:bg-[#121316] rounded-xl px-2.5 py-1.5 border border-[#d8dae5] dark:border-[#43474e]/40">
+              <span className="text-[#0b57d0] dark:text-[#a8c7fa] font-bold text-xs select-none shrink-0">zipstudio:~$</span>
               <input
                 type="text"
                 value={inputVal}
@@ -413,12 +413,12 @@ export function Terminal({
                 autoCorrect="off"
                 autoComplete="off"
                 spellCheck={false}
-                className="flex-1 bg-transparent border-none text-[#e2e2e6] focus:outline-none font-mono text-xs min-w-0"
+                className="flex-1 bg-transparent border-none text-[#191c20] dark:text-[#e2e2e6] focus:outline-none font-mono text-xs min-w-0"
               />
               {inputVal.trim() && (
                 <button
                   type="submit"
-                  className="w-7 h-7 rounded-full bg-[#a8c7fa] text-[#003062] flex items-center justify-center shrink-0 cursor-pointer active:scale-90 transition-transform"
+                  className="w-7 h-7 rounded-full bg-[#0b57d0] text-white dark:bg-[#a8c7fa] dark:text-[#003062] flex items-center justify-center shrink-0 cursor-pointer active:scale-90 transition-transform shadow-xs"
                   title="Run command"
                 >
                   <M3Icon name="arrow_forward" size={16} />
@@ -433,20 +433,20 @@ export function Terminal({
         {activeTab === 'console' && (
           <div className="space-y-1">
             {filteredLogs.length === 0 ? (
-              <div className="text-[#8e9199] italic">{t.noLogs}</div>
+              <div className="text-[#74777f] dark:text-[#8e9199] italic">{t.noLogs}</div>
             ) : (
               filteredLogs.map((log) => (
                 <div
                   key={log.id}
-                  className={`flex items-start gap-2 py-0.5 border-b border-[#43474e]/20 ${
+                  className={`flex items-start gap-2 py-0.5 border-b border-[#d8dae5]/50 dark:border-[#43474e]/20 ${
                     log.type === 'error'
-                      ? 'text-[#ff8585] bg-[#690005]/15'
+                      ? 'text-[#ba1a1a] dark:text-[#ff8585] bg-[#ffdad6]/20 dark:bg-[#690005]/15'
                       : log.type === 'warn'
-                      ? 'text-[#ffd54f] bg-[#ff8f00]/10'
-                      : 'text-[#c4c6d0]'
+                      ? 'text-[#7e5700] dark:text-[#ffd54f] bg-[#ffdf99]/20 dark:bg-[#ff8f00]/10'
+                      : 'text-[#191c20] dark:text-[#c4c6d0]'
                   }`}
                 >
-                  <span className="text-[#8e9199] text-[10px] shrink-0 font-mono">
+                  <span className="text-[#74777f] dark:text-[#8e9199] text-[10px] shrink-0 font-mono">
                     {new Date(log.timestamp).toLocaleTimeString()}
                   </span>
                   <span className="font-bold shrink-0 text-[10px] uppercase">
@@ -463,10 +463,10 @@ export function Terminal({
         {activeTab === 'git' && (
           <div className="space-y-1 font-mono text-[11px]">
             {gitLogs.length === 0 ? (
-              <div className="text-[#8e9199] italic">{t.noGitLogs}</div>
+              <div className="text-[#74777f] dark:text-[#8e9199] italic">{t.noGitLogs}</div>
             ) : (
               gitLogs.map((log, idx) => (
-                <div key={idx} className="text-[#a8c7fa]/90">
+                <div key={idx} className="text-[#041e49] dark:text-[#a8c7fa] leading-relaxed">
                   {log}
                 </div>
               ))
@@ -477,11 +477,11 @@ export function Terminal({
         {/* Diagnostics Tab */}
         {activeTab === 'problems' && (
           <div className="space-y-2 text-xs">
-            <div className="p-3 bg-[#1e1f22] rounded-lg border border-[#43474e]/40 flex items-center gap-2 text-[#b4f3b7]">
-              <M3Icon name="verified" size={18} />
+            <div className="p-3 bg-[#e6f4ea] dark:bg-[#1e1f22] rounded-lg border border-[#a5d6a7] dark:border-[#43474e]/40 flex items-center gap-2 text-[#0a6640] dark:text-[#b4f3b7] font-semibold">
+              <M3Icon name="verified" size={18} className="text-[#137333] dark:text-[#b4f3b7]" />
               <span>{t.noDiagnostics}</span>
             </div>
-            <div className="text-[11px] text-[#8e9199] space-y-1">
+            <div className="text-[11px] text-[#44474e] dark:text-[#8e9199] space-y-1">
               <div>• HTML parser: Active</div>
               <div>• ES module loader: Ready</div>
               <div>• Sandboxed preview bridge: Online</div>

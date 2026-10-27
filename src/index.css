@@ -428,8 +428,7 @@ html.light [class*="border-[#43474e]/"] {
 
 /* Light Mode Typography */
 html.light [class~="text-[#e2e2e6]"],
-html.light [class~="text-[#c4c6d0]"],
-html.light [class~="text-white"]:not(.text-white-fixed):not(.no-light-invert) {
+html.light [class~="text-[#c4c6d0]"] {
   color: #191c20 !important;
 }
 
@@ -437,9 +436,13 @@ html.light [class~="text-[#8e9199]"] {
   color: #5d6168 !important;
 }
 
-/* Light Mode Primary Blue Text */
-html.light [class~="text-[#a8c7fa]"] {
-  color: #0b57d0 !important;
+/* Maintain crisp white text on colored buttons and badges */
+html.light button.bg-\[\#0b57d0\],
+html.light button.bg-\[\#ba1a1a\],
+html.light [class~="bg-[#0b57d0]"] [class~="text-white"],
+html.light [class~="bg-[#ba1a1a]"] [class~="text-white"],
+html.light .text-white-fixed {
+  color: #ffffff !important;
 }
 
 /* Light Mode Scrollbars */

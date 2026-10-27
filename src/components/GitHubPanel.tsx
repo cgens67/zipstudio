@@ -17,6 +17,7 @@ import {
   RepoLoadProgress,
 } from '../utils/gitService';
 import { Translations } from '../utils/i18n';
+import { useDialogAnimation } from '../utils/useDialogAnimation';
 
 interface GitHubPanelProps {
   isAuthenticated: boolean;
@@ -174,38 +175,38 @@ export function GitHubPanel({
   // -------------------------------------------------------------
   if (!isAuthenticated) {
     return (
-      <aside className="w-full h-full bg-[#18191c] border-r border-[#43474e]/40 flex flex-col p-4 shrink-0 overflow-y-auto">
-        <div className="flex items-center gap-2 border-b border-[#43474e]/30 pb-3 mb-4">
-          <M3Icon name="lock" size={20} className="text-[#a8c7fa]" />
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-white">GitHub Access Required</h2>
+      <aside className="w-full h-full bg-white dark:bg-[#18191c] border-r border-[#d8dae5] dark:border-[#43474e]/40 flex flex-col p-4 shrink-0 overflow-y-auto text-[#191c20] dark:text-[#e2e2e6]">
+        <div className="flex items-center gap-2 border-b border-[#d8dae5] dark:border-[#43474e]/30 pb-3 mb-4">
+          <M3Icon name="lock" size={20} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-[#191c20] dark:text-white">GitHub Access Required</h2>
         </div>
 
-        <div className="bg-[#1e1f22] border border-[#43474e]/50 rounded-2xl p-4 mb-4 text-center">
-          <div className="w-12 h-12 rounded-full bg-[#00468b]/30 text-[#a8c7fa] flex items-center justify-center mx-auto mb-3">
+        <div className="bg-[#f8fafd] dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/50 rounded-2xl p-4 mb-4 text-center">
+          <div className="w-12 h-12 rounded-full bg-[#d3e3fd] text-[#041e49] dark:bg-[#00468b]/30 dark:text-[#a8c7fa] flex items-center justify-center mx-auto mb-3">
             <M3Icon name="sync_lock" size={26} />
           </div>
-          <h3 className="text-sm font-bold text-white mb-1">Real GitHub Integration</h3>
-          <p className="text-xs text-[#c4c6d0] mb-4 leading-relaxed">
+          <h3 className="text-sm font-bold text-[#191c20] dark:text-white mb-1">Real GitHub Integration</h3>
+          <p className="text-xs text-[#44474e] dark:text-[#c4c6d0] mb-4 leading-relaxed">
             Connect your real GitHub account to view repositories, switch branches, review pull requests, and commit code directly.
           </p>
 
           {/* Real Token Login (Recommended & Instant) */}
-          <form onSubmit={handleTokenSubmit} className="text-left space-y-2 mb-4 bg-[#2b2d30] p-3 rounded-xl border border-[#43474e]/40">
+          <form onSubmit={handleTokenSubmit} className="text-left space-y-2 mb-4 bg-white dark:bg-[#2b2d30] p-3 rounded-xl border border-[#d8dae5] dark:border-[#43474e]/40">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-white flex items-center gap-1">
-                <M3Icon name="key" size={14} className="text-[#a8c7fa]" />
+              <label className="text-xs font-semibold text-[#191c20] dark:text-white flex items-center gap-1">
+                <M3Icon name="key" size={14} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
                 Personal Access Token (PAT)
               </label>
               <a
                 href="https://github.com/settings/tokens"
                 target="_blank"
                 rel="noreferrer"
-                className="text-[11px] text-[#a8c7fa] hover:underline"
+                className="text-[11px] text-[#0b57d0] dark:text-[#a8c7fa] hover:underline"
               >
                 {t.generateTokenLink}
               </a>
             </div>
-            <p className="text-[11px] text-[#8e9199]">
+            <p className="text-[11px] text-[#5d6168] dark:text-[#8e9199]">
               {t.createTokenNotice}
             </p>
             <input
@@ -213,10 +214,10 @@ export function GitHubPanel({
               placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
               value={patInput}
               onChange={(e) => setPatInput(e.target.value)}
-              className="w-full bg-[#121316] border border-[#43474e] rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-[#a8c7fa]"
+              className="w-full bg-[#f8fafd] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg px-2.5 py-1.5 text-xs text-[#191c20] dark:text-white font-mono focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa]"
             />
             {tokenError && (
-              <div className="text-[11px] text-[#ff8585] bg-[#690005]/20 p-1.5 rounded border border-[#ff8585]/30">
+              <div className="text-[11px] text-[#ba1a1a] dark:text-[#ff8585] bg-[#ffdad6]/40 dark:bg-[#690005]/20 p-1.5 rounded border border-[#ff8585]/30">
                 {tokenError}
               </div>
             )}
@@ -233,7 +234,7 @@ export function GitHubPanel({
           </form>
 
           {/* OAuth Alternative */}
-          <div className="pt-2 border-t border-[#43474e]/30">
+          <div className="pt-2 border-t border-[#d8dae5] dark:border-[#43474e]/30">
             <M3Button
               variant="outlined"
               size="sm"
@@ -247,17 +248,17 @@ export function GitHubPanel({
             <button
               type="button"
               onClick={() => setShowOAuthInfo(!showOAuthInfo)}
-              className="text-[11px] text-[#8e9199] hover:text-[#a8c7fa] underline cursor-pointer"
+              className="text-[11px] text-[#5d6168] dark:text-[#8e9199] hover:text-[#0b57d0] dark:hover:text-[#a8c7fa] underline cursor-pointer"
             >
               {showOAuthInfo ? t.hideOAuthInfo : t.viewOAuthInfo}
             </button>
 
             {showOAuthInfo && (
-              <div className="mt-2 text-left bg-[#121316] p-2.5 rounded-lg border border-[#43474e]/40 text-[11px] text-[#c4c6d0] space-y-1.5 animate-fadeIn">
-                <div className="font-semibold text-white">{t.oauthSignIn}:</div>
-                <div>Status: {oauthConfigured ? <span className="text-[#b4f3b7]">{t.oauthConfiguredLabel}</span> : <span className="text-[#ffd54f]">{t.oauthNotConfiguredLabel}</span>}</div>
+              <div className="mt-2 text-left bg-[#f0f4f9] dark:bg-[#121316] p-2.5 rounded-lg border border-[#d8dae5] dark:border-[#43474e]/40 text-[11px] text-[#191c20] dark:text-[#c4c6d0] space-y-1.5 animate-fadeIn">
+                <div className="font-semibold text-[#191c20] dark:text-white">{t.oauthSignIn}:</div>
+                <div>Status: {oauthConfigured ? <span className="text-[#0a6640] dark:text-[#b4f3b7] font-semibold">{t.oauthConfiguredLabel}</span> : <span className="text-[#7e5700] dark:text-[#ffd54f] font-semibold">{t.oauthNotConfiguredLabel}</span>}</div>
                 <div>{t.callbackUrlLabel}:</div>
-                <div className="p-1 bg-[#1e1f22] rounded font-mono text-[10px] break-all text-[#a8c7fa] select-all">
+                <div className="p-1 bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-transparent rounded font-mono text-[10px] break-all text-[#0b57d0] dark:text-[#a8c7fa] select-all">
                   {callbackUrl}
                 </div>
               </div>
@@ -272,9 +273,9 @@ export function GitHubPanel({
   // REAL AUTHENTICATED VIEW
   // -------------------------------------------------------------
   return (
-    <aside className="w-full h-full bg-[#18191c] border-r border-[#43474e]/40 flex flex-col shrink-0 overflow-hidden">
+    <aside className="w-full h-full bg-white dark:bg-[#18191c] border-r border-[#d8dae5] dark:border-[#43474e]/40 flex flex-col shrink-0 overflow-hidden text-[#191c20] dark:text-[#e2e2e6]">
       {/* Real GitHub User Header */}
-      <div className="p-3 bg-[#1e1f22] border-b border-[#43474e]/30 flex items-center justify-between">
+      <div className="p-3 bg-[#f8fafd] dark:bg-[#1e1f22] border-b border-[#d8dae5] dark:border-[#43474e]/30 flex items-center justify-between">
         <a
           href={user?.htmlUrl || 'https://github.com'}
           target="_blank"
@@ -285,18 +286,18 @@ export function GitHubPanel({
             <img
               src={user.avatarUrl}
               alt={user.login}
-              className="w-7 h-7 rounded-full border border-[#a8c7fa]"
+              className="w-7 h-7 rounded-full border border-[#0b57d0] dark:border-[#a8c7fa]"
             />
           ) : (
-            <div className="w-7 h-7 rounded-full bg-[#00468b] text-[#d6e3ff] flex items-center justify-center font-bold text-xs">
+            <div className="w-7 h-7 rounded-full bg-[#d3e3fd] dark:bg-[#00468b] text-[#041e49] dark:text-[#d6e3ff] flex items-center justify-center font-bold text-xs">
               {user?.login?.charAt(0).toUpperCase() || 'U'}
             </div>
           )}
           <div className="truncate text-left">
-            <div className="text-xs font-semibold text-white leading-tight truncate">
+            <div className="text-xs font-semibold text-[#191c20] dark:text-white leading-tight truncate">
               {user?.name || user?.login}
             </div>
-            <div className="text-[10px] text-[#8e9199]">@{user?.login}</div>
+            <div className="text-[10px] text-[#5d6168] dark:text-[#8e9199]">@{user?.login}</div>
           </div>
         </a>
         <M3IconButton
@@ -308,15 +309,15 @@ export function GitHubPanel({
       </div>
 
       {/* Real Repository Selector */}
-      <div className="p-2.5 bg-[#121316]/60 border-b border-[#43474e]/30">
+      <div className="p-2.5 bg-[#f0f4f9] dark:bg-[#121316]/60 border-b border-[#d8dae5] dark:border-[#43474e]/30">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[11px] font-semibold text-[#8e9199] uppercase tracking-wider flex items-center gap-1">
-            <M3Icon name="bookmark" size={13} className="text-[#a8c7fa]" />
+          <span className="text-[11px] font-semibold text-[#44474e] dark:text-[#8e9199] uppercase tracking-wider flex items-center gap-1">
+            <M3Icon name="bookmark" size={13} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
             Target Repository
           </span>
           <button
             onClick={() => setShowNewRepoModal(true)}
-            className="text-[11px] text-[#a8c7fa] hover:underline flex items-center gap-0.5 cursor-pointer"
+            className="text-[11px] text-[#0b57d0] dark:text-[#a8c7fa] hover:underline flex items-center gap-0.5 cursor-pointer font-medium"
           >
             <M3Icon name="add" size={12} />
             New Repo
@@ -331,7 +332,7 @@ export function GitHubPanel({
               label: r.fullName,
               description: `default: ${r.defaultBranch}`,
               icon: r.private ? 'lock' : 'folder_open',
-              iconColor: r.private ? 'text-[#ffd54f]' : 'text-[#a8c7fa]',
+              iconColor: r.private ? 'text-[#7e5700] dark:text-[#ffd54f]' : 'text-[#0b57d0] dark:text-[#a8c7fa]',
             }))}
             value={selectedRepo?.fullName || ''}
             onChange={(val) => {
@@ -341,7 +342,7 @@ export function GitHubPanel({
             placeholder="Select a repository..."
           />
         ) : (
-          <div className="text-xs text-[#8e9199] py-1">
+          <div className="text-xs text-[#5d6168] dark:text-[#8e9199] py-1">
             No repositories found. Click &quot;New Repo&quot; to create one.
           </div>
         )}
@@ -349,23 +350,23 @@ export function GitHubPanel({
         {repos.length > 0 && selectedRepo && (
           <>
             {isLoadingRepo ? (
-              <div className="w-full mt-2 p-2.5 rounded-xl bg-[#a8c7fa]/10 border border-[#a8c7fa]/30 text-xs">
-                <div className="flex items-center justify-between mb-1.5 text-[#a8c7fa] font-medium">
+              <div className="w-full mt-2 p-2.5 rounded-xl bg-[#d3e3fd]/40 dark:bg-[#a8c7fa]/10 border border-[#0b57d0]/30 dark:border-[#a8c7fa]/30 text-xs">
+                <div className="flex items-center justify-between mb-1.5 text-[#0b57d0] dark:text-[#a8c7fa] font-medium">
                   <span className="flex items-center gap-1.5">
                     <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                     <span>{t.loadingRepo}</span>
                   </span>
                   {repoLoadProgress && (
-                    <span className="font-mono text-[11px] text-[#c4c6d0]">
+                    <span className="font-mono text-[11px] text-[#191c20] dark:text-[#c4c6d0]">
                       {repoLoadProgress.loaded}/{repoLoadProgress.total}
                     </span>
                   )}
                 </div>
                 {repoLoadProgress && (
                   <>
-                    <div className="w-full bg-[#1e1f22] h-1.5 rounded-full overflow-hidden mb-1.5">
+                    <div className="w-full bg-[#d8dae5] dark:bg-[#1e1f22] h-1.5 rounded-full overflow-hidden mb-1.5">
                       <div
-                        className="bg-[#a8c7fa] h-full transition-all duration-300 rounded-full"
+                        className="bg-[#0b57d0] dark:bg-[#a8c7fa] h-full transition-all duration-300 rounded-full"
                         style={{
                           width: `${Math.min(
                             100,
@@ -376,11 +377,11 @@ export function GitHubPanel({
                         }}
                       />
                     </div>
-                    <div className="flex items-center justify-between text-[10px] text-[#8e9199]">
+                    <div className="flex items-center justify-between text-[10px] text-[#5d6168] dark:text-[#8e9199]">
                       <span className="truncate max-w-[130px]" title={repoLoadProgress.currentFile}>
                         {repoLoadProgress.currentFile ? repoLoadProgress.currentFile.split('/').pop() : ''}
                       </span>
-                      <span className="shrink-0 text-[#ffd54f] font-mono">
+                      <span className="shrink-0 text-[#7e5700] dark:text-[#ffd54f] font-mono">
                         ~{repoLoadProgress.estimatedSecondsRemaining}s {t.estimatedRemaining}
                       </span>
                     </div>
@@ -391,9 +392,9 @@ export function GitHubPanel({
               <button
                 type="button"
                 onClick={onLoadRepoFiles}
-                className="w-full mt-2 py-1 px-2 rounded-lg bg-[#a8c7fa]/10 hover:bg-[#a8c7fa]/20 text-[#a8c7fa] border border-[#a8c7fa]/30 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                className="w-full mt-2 py-1 px-2 rounded-lg bg-[#d3e3fd] hover:bg-[#c2e7ff] text-[#041e49] border border-[#0b57d0]/30 dark:bg-[#a8c7fa]/10 dark:hover:bg-[#a8c7fa]/20 dark:text-[#a8c7fa] dark:border-[#a8c7fa]/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
               >
-                <M3Icon name="cloud_download" size={14} />
+                <M3Icon name="cloud_download" size={14} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
                 <span>{t.loadRepoFiles} ({selectedRepo.name})</span>
               </button>
             )}
@@ -402,15 +403,15 @@ export function GitHubPanel({
       </div>
 
       {/* Real Branch Switcher & Creator */}
-      <div className="p-2.5 bg-[#18191c] border-b border-[#43474e]/30">
+      <div className="p-2.5 bg-[#f8fafd] dark:bg-[#18191c] border-b border-[#d8dae5] dark:border-[#43474e]/30">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[11px] font-semibold text-[#8e9199] uppercase tracking-wider flex items-center gap-1">
-            <M3Icon name="fork_right" size={13} className="text-[#a8c7fa]" />
+          <span className="text-[11px] font-semibold text-[#44474e] dark:text-[#8e9199] uppercase tracking-wider flex items-center gap-1">
+            <M3Icon name="fork_right" size={13} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
             Active Branch
           </span>
           <button
             onClick={() => setShowNewBranchModal(true)}
-            className="text-[11px] text-[#a8c7fa] hover:underline flex items-center gap-0.5 cursor-pointer"
+            className="text-[11px] text-[#0b57d0] dark:text-[#a8c7fa] hover:underline flex items-center gap-0.5 cursor-pointer font-medium"
           >
             <M3Icon name="add" size={12} />
             New Branch
@@ -425,7 +426,7 @@ export function GitHubPanel({
             label: b.name,
             description: b.name === activeBranch ? 'Active branch' : undefined,
             icon: 'fork_right',
-            iconColor: b.name === activeBranch ? 'text-[#a8c7fa]' : 'text-[#8e9199]',
+            iconColor: b.name === activeBranch ? 'text-[#0b57d0] dark:text-[#a8c7fa]' : 'text-[#74777f] dark:text-[#8e9199]',
           }))}
           value={activeBranch}
           onChange={(branchName) => onSwitchBranch(branchName)}
@@ -434,13 +435,13 @@ export function GitHubPanel({
       </div>
 
       {/* Sub Tabs */}
-      <div className="h-8 bg-[#1e1f22] border-b border-[#43474e]/30 flex items-center px-1 text-xs">
+      <div className="h-8 bg-[#f0f4f9] dark:bg-[#1e1f22] border-b border-[#d8dae5] dark:border-[#43474e]/30 flex items-center px-1 text-xs">
         <button
           onClick={() => setActiveSubTab('changes')}
           className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-colors cursor-pointer ${
             activeSubTab === 'changes'
-              ? 'border-[#a8c7fa] text-[#a8c7fa]'
-              : 'border-transparent text-[#8e9199] hover:text-white'
+              ? 'border-[#0b57d0] dark:border-[#a8c7fa] text-[#0b57d0] dark:text-[#a8c7fa]'
+              : 'border-transparent text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white'
           }`}
         >
           Changes ({diffs.length})
@@ -449,8 +450,8 @@ export function GitHubPanel({
           onClick={() => setActiveSubTab('prs')}
           className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-colors cursor-pointer ${
             activeSubTab === 'prs'
-              ? 'border-[#a8c7fa] text-[#a8c7fa]'
-              : 'border-transparent text-[#8e9199] hover:text-white'
+              ? 'border-[#0b57d0] dark:border-[#a8c7fa] text-[#0b57d0] dark:text-[#a8c7fa]'
+              : 'border-transparent text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white'
           }`}
         >
           PRs ({pullRequests.length})
@@ -459,8 +460,8 @@ export function GitHubPanel({
           onClick={() => setActiveSubTab('commits')}
           className={`flex-1 py-1.5 text-center font-medium border-b-2 transition-colors cursor-pointer ${
             activeSubTab === 'commits'
-              ? 'border-[#a8c7fa] text-[#a8c7fa]'
-              : 'border-transparent text-[#8e9199] hover:text-white'
+              ? 'border-[#0b57d0] dark:border-[#a8c7fa] text-[#0b57d0] dark:text-[#a8c7fa]'
+              : 'border-transparent text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white'
           }`}
         >
           History
@@ -474,14 +475,14 @@ export function GitHubPanel({
           <div className="space-y-3">
             {diffs.length === 0 ? (
               <div className="space-y-3">
-                <div className="text-center py-4 text-xs text-[#8e9199]">
-                  <M3Icon name="check_circle" size={32} className="mx-auto mb-2 text-[#b4f3b7]" />
-                  <p className="font-semibold text-white">Working tree clean</p>
+                <div className="text-center py-4 text-xs text-[#5d6168] dark:text-[#8e9199]">
+                  <M3Icon name="check_circle" size={32} className="mx-auto mb-2 text-[#137333] dark:text-[#b4f3b7]" />
+                  <p className="font-semibold text-[#191c20] dark:text-white">Working tree clean</p>
                   <p className="mt-1 text-[11px]">All current files match your local baseline.</p>
                 </div>
                 {/* Allow pushing a fresh project commit directly */}
-                <form onSubmit={handleCommitSubmit} className="pt-2 border-t border-[#43474e]/30 space-y-2">
-                  <div className="text-[11px] font-semibold text-[#a8c7fa] flex items-center gap-1">
+                <form onSubmit={handleCommitSubmit} className="pt-2 border-t border-[#d8dae5] dark:border-[#43474e]/30 space-y-2">
+                  <div className="text-[11px] font-semibold text-[#0b57d0] dark:text-[#a8c7fa] flex items-center gap-1">
                     <M3Icon name="cloud_upload" size={14} />
                     <span>Push Project Snapshot to GitHub</span>
                   </div>
@@ -490,7 +491,7 @@ export function GitHubPanel({
                     placeholder="Commit message (e.g. Sync imported zip files)"
                     value={commitMessage}
                     onChange={(e) => setCommitMessage(e.target.value)}
-                    className="w-full bg-[#121316] border border-[#43474e] rounded-lg p-2 text-xs text-white placeholder-[#8e9199] focus:outline-none focus:border-[#a8c7fa] resize-none font-mono"
+                    className="w-full bg-white dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg p-2 text-xs text-[#191c20] dark:text-white placeholder-[#74777f] dark:placeholder-[#8e9199] focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa] resize-none font-mono"
                   />
                   <M3Button
                     variant="filled"
@@ -507,13 +508,13 @@ export function GitHubPanel({
             ) : (
               <>
                 {isCleanZipImport && (
-                  <div className="p-2.5 rounded-lg bg-[#00468b]/30 border border-[#a8c7fa]/40 text-[#d6e3ff] text-[11px] flex items-start gap-2">
-                    <M3Icon name="auto_delete" size={16} className="text-[#a8c7fa] shrink-0 mt-0.5" />
+                  <div className="p-2.5 rounded-lg bg-[#d3e3fd]/40 dark:bg-[#00468b]/30 border border-[#0b57d0]/30 dark:border-[#a8c7fa]/40 text-[#041e49] dark:text-[#d6e3ff] text-[11px] flex items-start gap-2">
+                    <M3Icon name="auto_delete" size={16} className="text-[#0b57d0] dark:text-[#a8c7fa] shrink-0 mt-0.5" />
                     <span>{t.cleanOverwriteNotice}</span>
                   </div>
                 )}
                 <div className="space-y-1">
-                  <div className="text-[11px] font-semibold uppercase text-[#8e9199] mb-1">
+                  <div className="text-[11px] font-semibold uppercase text-[#5d6168] dark:text-[#8e9199] mb-1">
                     Staged Files ({diffs.length})
                   </div>
                   {diffs.map((diff) => (
@@ -522,34 +523,34 @@ export function GitHubPanel({
                       onClick={() => setSelectedDiff(diff)}
                       className={`p-2 rounded-lg cursor-pointer flex items-center justify-between text-xs transition-colors ${
                         selectedDiff?.path === diff.path
-                          ? 'bg-[#00468b]/30 border border-[#a8c7fa]/50'
-                          : 'bg-[#2b2d30] hover:bg-[#383a3e]'
+                          ? 'bg-[#d3e3fd] dark:bg-[#00468b]/30 border border-[#0b57d0]/40 dark:border-[#a8c7fa]/50'
+                          : 'bg-[#f0f2f8] hover:bg-[#e4e7ef] dark:bg-[#2b2d30] dark:hover:bg-[#383a3e]'
                       }`}
                     >
                       <div className="flex items-center gap-1.5 truncate">
                         <M3Icon
                           name={diff.status === 'added' ? 'add_circle' : diff.status === 'deleted' ? 'remove_circle' : 'edit'}
                           size={14}
-                          className={diff.status === 'added' ? 'text-[#b4f3b7]' : diff.status === 'deleted' ? 'text-[#ff8585]' : 'text-[#ffd54f]'}
+                          className={diff.status === 'added' ? 'text-[#0a6640] dark:text-[#b4f3b7]' : diff.status === 'deleted' ? 'text-[#ba1a1a] dark:text-[#ff8585]' : 'text-[#7e5700] dark:text-[#ffd54f]'}
                         />
-                        <span className="truncate font-mono text-white">{diff.path}</span>
+                        <span className="truncate font-mono text-[#191c20] dark:text-white">{diff.path}</span>
                       </div>
-                      <div className="flex items-center gap-1 text-[10px] font-mono shrink-0 ml-2">
-                        {diff.additions > 0 && <span className="text-[#b4f3b7]">+{diff.additions}</span>}
-                        {diff.deletions > 0 && <span className="text-[#ff8585]">-{diff.deletions}</span>}
+                      <div className="flex items-center gap-1 text-[10px] font-mono shrink-0 ml-2 font-semibold">
+                        {diff.additions > 0 && <span className="text-[#0a6640] dark:text-[#b4f3b7]">+{diff.additions}</span>}
+                        {diff.deletions > 0 && <span className="text-[#ba1a1a] dark:text-[#ff8585]">-{diff.deletions}</span>}
                       </div>
                     </div>
                   ))}
                 </div>
 
                 {/* Commit Form */}
-                <form onSubmit={handleCommitSubmit} className="pt-2 border-t border-[#43474e]/30 space-y-2">
+                <form onSubmit={handleCommitSubmit} className="pt-2 border-t border-[#d8dae5] dark:border-[#43474e]/30 space-y-2">
                   <textarea
                     rows={2}
                     placeholder="Commit message (e.g. Update components and styles)"
                     value={commitMessage}
                     onChange={(e) => setCommitMessage(e.target.value)}
-                    className="w-full bg-[#121316] border border-[#43474e] rounded-lg p-2 text-xs text-white placeholder-[#8e9199] focus:outline-none focus:border-[#a8c7fa] resize-none font-mono"
+                    className="w-full bg-white dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg p-2 text-xs text-[#191c20] dark:text-white placeholder-[#74777f] dark:placeholder-[#8e9199] focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa] resize-none font-mono"
                   />
                   <M3Button
                     variant="filled"
@@ -571,7 +572,7 @@ export function GitHubPanel({
         {activeSubTab === 'prs' && (
           <div className="space-y-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-white">Pull Requests</span>
+              <span className="text-xs font-semibold text-[#191c20] dark:text-white">Pull Requests</span>
               <M3Button
                 variant="tonal"
                 size="sm"
@@ -583,39 +584,39 @@ export function GitHubPanel({
             </div>
 
             {pullRequests.length === 0 ? (
-              <div className="text-center py-6 text-xs text-[#8e9199]">
-                <M3Icon name="merge" size={32} className="mx-auto mb-2 text-[#a8c7fa]/40" />
+              <div className="text-center py-6 text-xs text-[#5d6168] dark:text-[#8e9199]">
+                <M3Icon name="merge" size={32} className="mx-auto mb-2 text-[#0b57d0]/40 dark:text-[#a8c7fa]/40" />
                 <p>No pull requests found for this repo.</p>
               </div>
             ) : (
               pullRequests.map((pr) => (
                 <div
                   key={pr.id}
-                  className="p-3 rounded-xl bg-[#2b2d30] border border-[#43474e]/50 hover:border-[#a8c7fa]/50 transition-all space-y-2"
+                  className="p-3 rounded-xl bg-[#f8fafd] dark:bg-[#2b2d30] border border-[#d8dae5] dark:border-[#43474e]/50 hover:border-[#0b57d0]/50 dark:hover:border-[#a8c7fa]/50 transition-all space-y-2"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-xs font-semibold text-white">#{pr.number} {pr.title}</span>
+                    <span className="text-xs font-semibold text-[#191c20] dark:text-white">#{pr.number} {pr.title}</span>
                     <M3Badge variant={pr.state === 'open' ? 'success' : 'secondary'}>
                       {pr.state}
                     </M3Badge>
                   </div>
-                  <div className="text-[11px] text-[#8e9199] flex items-center gap-1 font-mono">
+                  <div className="text-[11px] text-[#5d6168] dark:text-[#8e9199] flex items-center gap-1 font-mono">
                     <span>{pr.headBranch}</span>
                     <M3Icon name="arrow_forward" size={12} />
                     <span>{pr.baseBranch}</span>
                   </div>
                   {pr.description && (
-                    <p className="text-xs text-[#c4c6d0] line-clamp-2">{pr.description}</p>
+                    <p className="text-xs text-[#44474e] dark:text-[#c4c6d0] line-clamp-2">{pr.description}</p>
                   )}
 
                   {/* Review Actions */}
-                  <div className="pt-2 border-t border-[#43474e]/30 flex items-center justify-between">
-                    <span className="text-[10px] text-[#8e9199]">
+                  <div className="pt-2 border-t border-[#d8dae5] dark:border-[#43474e]/30 flex items-center justify-between">
+                    <span className="text-[10px] text-[#5d6168] dark:text-[#8e9199]">
                       {pr.reviews.length} {t.reviews}
                     </span>
                     <button
                       onClick={() => setActivePRToReview(pr)}
-                      className="px-2.5 py-1 rounded bg-[#a8c7fa]/20 hover:bg-[#a8c7fa]/30 text-[#a8c7fa] text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                      className="px-2.5 py-1 rounded bg-[#d3e3fd] hover:bg-[#c2e7ff] text-[#041e49] dark:bg-[#a8c7fa]/20 dark:hover:bg-[#a8c7fa]/30 dark:text-[#a8c7fa] text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
                     >
                       <M3Icon name="rate_review" size={14} />
                       {t.reviewPR}
@@ -631,15 +632,15 @@ export function GitHubPanel({
         {activeSubTab === 'commits' && (
           <div className="space-y-3">
             {/* Header explaining commit history */}
-            <div className="p-3 rounded-xl bg-[#1e1f22] border border-[#43474e]/40 shadow-xs flex items-center justify-between gap-2">
+            <div className="p-3 rounded-xl bg-[#f8fafd] dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/40 shadow-xs flex items-center justify-between gap-2">
               <div>
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
-                  <M3Icon name="history" size={16} className="text-[#a8c7fa]" />
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-[#191c20] dark:text-white">
+                  <M3Icon name="history" size={16} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
                   <span>Repository Commit History</span>
                 </div>
-                <p className="text-[11px] text-[#8e9199] mt-0.5">
+                <p className="text-[11px] text-[#5d6168] dark:text-[#8e9199] mt-0.5">
                   Live timeline of commits from {selectedRepo ? selectedRepo.fullName : 'workspace'} on branch{' '}
-                  <span className="text-[#a8c7fa] font-mono">{activeBranch}</span>
+                  <span className="text-[#0b57d0] dark:text-[#a8c7fa] font-mono font-medium">{activeBranch}</span>
                 </p>
               </div>
 
@@ -658,17 +659,17 @@ export function GitHubPanel({
                 }}
                 disabled={isRefreshingCommits}
                 title="Refresh commit history from remote repository"
-                className="p-1.5 rounded-lg bg-[#2b2d30] hover:bg-[#383a3e] text-[#a8c7fa] transition-colors cursor-pointer shrink-0 disabled:opacity-40"
+                className="p-1.5 rounded-lg bg-[#f0f2f8] hover:bg-[#e4e7ef] dark:bg-[#2b2d30] dark:hover:bg-[#383a3e] text-[#0b57d0] dark:text-[#a8c7fa] transition-colors cursor-pointer shrink-0 disabled:opacity-40"
               >
                 <M3Icon name={isRefreshingCommits ? 'sync' : 'refresh'} size={16} className={isRefreshingCommits ? 'animate-spin' : ''} />
               </button>
             </div>
 
             {commits.length === 0 ? (
-              <div className="text-center py-8 text-xs text-[#8e9199] bg-[#1e1f22]/50 rounded-xl border border-[#43474e]/30 p-4">
-                <M3Icon name="history_toggle_off" size={32} className="mx-auto mb-2 text-[#a8c7fa]/40" />
-                <p className="font-medium text-white mb-1">No commits recorded yet</p>
-                <p className="text-[11px] text-[#8e9199] max-w-xs mx-auto">
+              <div className="text-center py-8 text-xs text-[#5d6168] dark:text-[#8e9199] bg-[#f8fafd] dark:bg-[#1e1f22]/50 rounded-xl border border-[#d8dae5] dark:border-[#43474e]/30 p-4">
+                <M3Icon name="history_toggle_off" size={32} className="mx-auto mb-2 text-[#0b57d0]/40 dark:text-[#a8c7fa]/40" />
+                <p className="font-medium text-[#191c20] dark:text-white mb-1">No commits recorded yet</p>
+                <p className="text-[11px] text-[#5d6168] dark:text-[#8e9199] max-w-xs mx-auto">
                   Connect a GitHub repository to load its commit history, or stage and commit changes above to build your timeline.
                 </p>
               </div>
@@ -677,7 +678,7 @@ export function GitHubPanel({
                 {commits.map((c) => (
                   <div
                     key={c.id}
-                    className="p-3 rounded-xl bg-[#2b2d30] border border-[#43474e]/40 hover:border-[#a8c7fa]/40 transition-all space-y-2 shadow-xs"
+                    className="p-3 rounded-xl bg-[#f8fafd] dark:bg-[#2b2d30] border border-[#d8dae5] dark:border-[#43474e]/40 hover:border-[#0b57d0]/40 dark:hover:border-[#a8c7fa]/40 transition-all space-y-2 shadow-xs"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2 min-w-0">
@@ -685,19 +686,19 @@ export function GitHubPanel({
                           <img
                             src={c.author.avatarUrl}
                             alt={c.author.name}
-                            className="w-6 h-6 rounded-full bg-[#1e1f22] border border-[#43474e]/40 shrink-0 mt-0.5 object-cover"
+                            className="w-6 h-6 rounded-full bg-[#f0f2f8] dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/40 shrink-0 mt-0.5 object-cover"
                           />
                         ) : (
-                          <div className="w-6 h-6 rounded-full bg-[#00468b]/40 text-[#a8c7fa] flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">
+                          <div className="w-6 h-6 rounded-full bg-[#d3e3fd] text-[#041e49] dark:bg-[#00468b]/40 dark:text-[#a8c7fa] flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">
                             {c.author.name.charAt(0).toUpperCase()}
                           </div>
                         )}
                         <div className="min-w-0">
-                          <p className="text-xs font-medium text-white break-words leading-snug">
+                          <p className="text-xs font-medium text-[#191c20] dark:text-white break-words leading-snug">
                             {c.message}
                           </p>
-                          <div className="flex items-center gap-1.5 text-[10px] text-[#8e9199] mt-1 font-mono">
-                            <span className="text-[#c4c6d0]">{c.author.name}</span>
+                          <div className="flex items-center gap-1.5 text-[10px] text-[#5d6168] dark:text-[#8e9199] mt-1 font-mono">
+                            <span className="text-[#191c20] dark:text-[#c4c6d0] font-semibold">{c.author.name}</span>
                             <span>•</span>
                             <span>{new Date(c.timestamp).toLocaleString()}</span>
                           </div>
@@ -712,7 +713,7 @@ export function GitHubPanel({
                             setTimeout(() => setCopiedSha(null), 2000);
                           }}
                           title="Copy commit SHA"
-                          className="px-2 py-0.5 rounded bg-[#1e1f22] hover:bg-[#121316] text-[10px] font-mono text-[#a8c7fa] border border-[#43474e]/50 flex items-center gap-1 transition-colors cursor-pointer"
+                          className="px-2 py-0.5 rounded bg-[#f0f2f8] hover:bg-[#e4e7ef] dark:bg-[#1e1f22] dark:hover:bg-[#121316] text-[10px] font-mono text-[#0b57d0] dark:text-[#a8c7fa] border border-[#d8dae5] dark:border-[#43474e]/50 flex items-center gap-1 transition-colors cursor-pointer"
                         >
                           <M3Icon name={copiedSha === c.id ? 'check' : 'content_copy'} size={11} />
                           <span>{c.shortId}</span>
@@ -727,234 +728,472 @@ export function GitHubPanel({
         )}
       </div>
 
-      {/* Visual File Diff Modal */}
-      {selectedDiff && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-2xl w-full max-h-[80vh] flex flex-col shadow-2xl overflow-hidden m3-dialog-bounce">
-            <div className="p-3 bg-[#2b2d30] border-b border-[#43474e] flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <M3Icon name="difference" size={18} className="text-[#a8c7fa]" />
-                <span className="text-xs font-mono font-semibold text-white">{selectedDiff.path}</span>
-                <span className="text-[11px] text-[#b4f3b7]">+{selectedDiff.additions}</span>
-                <span className="text-[11px] text-[#ff8585]">-{selectedDiff.deletions}</span>
-              </div>
-              <M3IconButton
-                size="sm"
-                icon="close"
-                label={t.closeDiff}
-                onClick={() => setSelectedDiff(null)}
-              />
-            </div>
+      {/* Visual File Diff Modal with Exit Animation */}
+      <AnimatedDiffModal
+        diff={selectedDiff}
+        onClose={() => setSelectedDiff(null)}
+        t={t}
+      />
 
-            <div className="flex-1 overflow-auto p-3 font-mono text-xs bg-[#121316]">
-              {selectedDiff.lines.map((line, idx) => {
-                const isAdd = line.type === 'add';
-                const isDel = line.type === 'delete';
-                return (
-                  <div
-                    key={idx}
-                    className={`flex items-start py-0.5 px-2 ${
-                      isAdd
-                        ? 'bg-[#0f5223]/30 text-[#b4f3b7]'
-                        : isDel
-                        ? 'bg-[#690005]/30 text-[#ff8585]'
-                        : 'text-[#c4c6d0]'
-                    }`}
-                  >
-                    <span className="w-8 text-right pr-2 text-[#6e7179] select-none shrink-0">
-                      {line.newLineNumber || line.oldLineNumber || ''}
-                    </span>
-                    <span className="w-4 select-none shrink-0 font-bold">
-                      {isAdd ? '+' : isDel ? '-' : ' '}
-                    </span>
-                    <span className="whitespace-pre-wrap break-all">{line.content}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Review Pull Request Dialog with Exit Animation */}
+      <AnimatedReviewPRModal
+        pr={activePRToReview}
+        onClose={() => setActivePRToReview(null)}
+        onReviewAction={handleReviewAction}
+        t={t}
+      />
 
-      {/* Review Pull Request Dialog */}
-      {activePRToReview && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-lg w-full p-5 shadow-2xl m3-dialog-bounce">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-white">{t.reviewPRTitle} #{activePRToReview.number}</h3>
-              <M3IconButton
-                size="sm"
-                icon="close"
-                label={t.close}
-                onClick={() => setActivePRToReview(null)}
-              />
-            </div>
-            <p className="text-xs text-[#a8c7fa] font-medium mb-1">{activePRToReview.title}</p>
-            <p className="text-xs text-[#c4c6d0] mb-3">{activePRToReview.description}</p>
+      {/* Create New Repo Modal with Exit Animation */}
+      <AnimatedNewRepoModal
+        isOpen={showNewRepoModal}
+        onClose={() => setShowNewRepoModal(false)}
+        onCreateRepo={onCreateRepo}
+        t={t}
+      />
 
-            <textarea
-              rows={3}
-              placeholder={t.reviewNotesPlaceholder}
-              value={reviewComment}
-              onChange={(e) => setReviewComment(e.target.value)}
-              className="w-full bg-[#121316] border border-[#43474e] rounded-lg p-2.5 text-xs text-white mb-4 focus:outline-none focus:border-[#a8c7fa]"
-            />
+      {/* Create New Branch Modal with Exit Animation */}
+      <AnimatedNewBranchModal
+        isOpen={showNewBranchModal}
+        onClose={() => setShowNewBranchModal(false)}
+        onCreateBranch={onCreateBranch}
+        activeBranch={activeBranch}
+        t={t}
+      />
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleReviewAction('APPROVED')}
-                className="flex-1 py-2 px-3 rounded-xl bg-[#0f5223] hover:bg-[#146c2e] text-[#b4f3b7] text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
-              >
-                <M3Icon name="check" size={16} />
-                {t.approve}
-              </button>
-              <button
-                onClick={() => handleReviewAction('CHANGES_REQUESTED')}
-                className="flex-1 py-2 px-3 rounded-xl bg-[#690005] hover:bg-[#8c0009] text-[#ffdad6] text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
-              >
-                <M3Icon name="cancel" size={16} />
-                {t.requestChanges}
-              </button>
-              <button
-                onClick={() => handleReviewAction('COMMENTED')}
-                className="flex-1 py-2 px-3 rounded-xl bg-[#2b2d30] hover:bg-[#383a3e] text-[#e2e2e6] text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
-              >
-                <M3Icon name="chat" size={16} />
-                {t.comment}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create New Repo Modal */}
-      {showNewRepoModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <form onSubmit={handleCreateRepoSubmit} className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-3 m3-dialog-bounce">
-            <h3 className="text-sm font-semibold text-white">{t.createRepoTitle}</h3>
-            <input
-              type="text"
-              required
-              placeholder={t.repoNamePlaceholder}
-              value={newRepoName}
-              onChange={(e) => setNewRepoName(e.target.value)}
-              className="w-full bg-[#121316] border border-[#43474e] rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#a8c7fa]"
-            />
-            <input
-              type="text"
-              placeholder={t.repoDescPlaceholder}
-              value={newRepoDesc}
-              onChange={(e) => setNewRepoDesc(e.target.value)}
-              className="w-full bg-[#121316] border border-[#43474e] rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#a8c7fa]"
-            />
-            <div className="bg-[#121316] p-2.5 rounded-xl border border-[#43474e]/40">
-              <M3Switch
-                selected={newRepoPrivate}
-                onChange={setNewRepoPrivate}
-                label={t.privateRepo}
-                sublabel="Only visible to you and authorized collaborators"
-              />
-            </div>
-            <div className="flex gap-2 pt-2">
-              <M3Button variant="tonal" size="sm" type="button" onClick={() => setShowNewRepoModal(false)} className="flex-1">
-                {t.cancel}
-              </M3Button>
-              <M3Button variant="filled" size="sm" type="submit" className="flex-1">
-                {t.createOnGitHub}
-              </M3Button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Create New Branch Modal */}
-      {showNewBranchModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <form onSubmit={handleCreateBranchSubmit} className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-3 m3-dialog-bounce">
-            <h3 className="text-sm font-semibold text-white">{t.createBranchTitle}</h3>
-            <p className="text-xs text-[#c4c6d0]">{t.branchFrom}: <span className="text-[#a8c7fa] font-mono">{activeBranch}</span></p>
-            <input
-              type="text"
-              required
-              placeholder={t.branchNamePlaceholder}
-              value={newBranchName}
-              onChange={(e) => setNewBranchName(e.target.value)}
-              className="w-full bg-[#121316] border border-[#43474e] rounded-lg px-2.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#a8c7fa]"
-            />
-            <div className="flex gap-2 pt-2">
-              <M3Button variant="tonal" size="sm" type="button" onClick={() => setShowNewBranchModal(false)} className="flex-1">
-                {t.cancel}
-              </M3Button>
-              <M3Button variant="filled" size="sm" type="submit" className="flex-1">
-                {t.newBranch}
-              </M3Button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Create New Pull Request Modal */}
-      {showNewPRModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <form onSubmit={handleCreatePRSubmit} className="bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-3 m3-dialog-bounce">
-            <h3 className="text-sm font-semibold text-white">{t.newPR}</h3>
-            <div className="flex items-center gap-2 text-xs">
-              <div className="flex-1">
-                <M3Dropdown<string>
-                  searchable
-                  size="sm"
-                  label="Head branch"
-                  options={branches.map((b) => ({
-                    value: b.name,
-                    label: b.name,
-                    icon: 'fork_right',
-                  }))}
-                  value={prHead}
-                  onChange={(val) => setPrHead(val)}
-                />
-              </div>
-              <span className="text-[#8e9199] font-medium shrink-0 pt-3">into</span>
-              <div className="flex-1">
-                <M3Dropdown<string>
-                  searchable
-                  size="sm"
-                  label="Base branch"
-                  options={branches.map((b) => ({
-                    value: b.name,
-                    label: b.name,
-                    icon: 'fork_right',
-                  }))}
-                  value={prBase}
-                  onChange={(val) => setPrBase(val)}
-                />
-              </div>
-            </div>
-            <input
-              type="text"
-              required
-              placeholder="PR Title"
-              value={prTitle}
-              onChange={(e) => setPrTitle(e.target.value)}
-              className="w-full bg-[#121316] border border-[#43474e] rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#a8c7fa]"
-            />
-            <textarea
-              rows={3}
-              placeholder="Description of changes..."
-              value={prBody}
-              onChange={(e) => setPrBody(e.target.value)}
-              className="w-full bg-[#121316] border border-[#43474e] rounded-lg p-2 text-xs text-white focus:outline-none focus:border-[#a8c7fa] resize-none"
-            />
-            <div className="flex gap-2 pt-2">
-              <M3Button variant="tonal" size="sm" type="button" onClick={() => setShowNewPRModal(false)} className="flex-1">
-                {t.cancel}
-              </M3Button>
-              <M3Button variant="filled" size="sm" type="submit" className="flex-1">
-                {t.openPR}
-              </M3Button>
-            </div>
-          </form>
-        </div>
-      )}
+      {/* Create New Pull Request Modal with Exit Animation */}
+      <AnimatedNewPRModal
+        isOpen={showNewPRModal}
+        onClose={() => setShowNewPRModal(false)}
+        onCreatePR={onCreatePullRequest}
+        branches={branches}
+        activeBranch={activeBranch}
+        t={t}
+      />
     </aside>
+  );
+}
+
+// -----------------------------------------------------------------
+// ANIMATED MODAL COMPONENTS (Fluid Material 3 Enter & Exit Transitions)
+// -----------------------------------------------------------------
+
+function AnimatedDiffModal({
+  diff,
+  onClose,
+  t,
+}: {
+  diff: FileDiff | null;
+  onClose: () => void;
+  t: Translations;
+}) {
+  const { isRendered, backdropClass, dialogClass, triggerClose } = useDialogAnimation(
+    Boolean(diff),
+    onClose
+  );
+  if (!isRendered || !diff) return null;
+
+  return (
+    <div
+      onClick={triggerClose}
+      className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 ${backdropClass}`}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e] rounded-2xl max-w-2xl w-full max-h-[80vh] flex flex-col shadow-2xl overflow-hidden ${dialogClass}`}
+      >
+        <div className="p-3 bg-[#f8fafd] dark:bg-[#2b2d30] border-b border-[#d8dae5] dark:border-[#43474e] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <M3Icon name="difference" size={18} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
+            <span className="text-xs font-mono font-semibold text-[#191c20] dark:text-white truncate max-w-xs">{diff.path}</span>
+            <span className="text-[11px] text-[#0a6640] dark:text-[#b4f3b7] font-semibold">+{diff.additions}</span>
+            <span className="text-[11px] text-[#ba1a1a] dark:text-[#ff8585] font-semibold">-{diff.deletions}</span>
+          </div>
+          <M3IconButton
+            size="sm"
+            icon="close"
+            label={t.closeDiff}
+            onClick={triggerClose}
+          />
+        </div>
+
+        <div className="flex-1 overflow-auto p-3 font-mono text-xs bg-[#f8fafd] dark:bg-[#121316]">
+          {diff.lines.map((line, idx) => {
+            const isAdd = line.type === 'add';
+            const isDel = line.type === 'delete';
+            return (
+              <div
+                key={idx}
+                className={`flex items-start py-0.5 px-2 ${
+                  isAdd
+                    ? 'bg-[#c4eed0]/40 text-[#072711] dark:bg-[#0f5223]/30 dark:text-[#b4f3b7]'
+                    : isDel
+                    ? 'bg-[#ffdad6]/40 text-[#ba1a1a] dark:bg-[#690005]/30 dark:text-[#ff8585]'
+                    : 'text-[#191c20] dark:text-[#c4c6d0]'
+                }`}
+              >
+                <span className="w-8 text-right pr-2 text-[#74777f] dark:text-[#6e7179] select-none shrink-0">
+                  {line.newLineNumber || line.oldLineNumber || ''}
+                </span>
+                <span className="w-4 select-none shrink-0 font-bold">
+                  {isAdd ? '+' : isDel ? '-' : ' '}
+                </span>
+                <span className="whitespace-pre-wrap break-all">{line.content}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnimatedReviewPRModal({
+  pr,
+  onClose,
+  onReviewAction,
+  t,
+}: {
+  pr: PullRequest | null;
+  onClose: () => void;
+  onReviewAction: (state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED', comment: string) => Promise<void>;
+  t: Translations;
+}) {
+  const [comment, setComment] = useState('');
+  const { isRendered, backdropClass, dialogClass, triggerClose } = useDialogAnimation(
+    Boolean(pr),
+    onClose
+  );
+  if (!isRendered || !pr) return null;
+
+  return (
+    <div
+      onClick={triggerClose}
+      className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 ${backdropClass}`}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e] rounded-2xl max-w-lg w-full p-5 shadow-2xl ${dialogClass}`}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-[#191c20] dark:text-white">{t.reviewPRTitle} #{pr.number}</h3>
+          <M3IconButton
+            size="sm"
+            icon="close"
+            label={t.close}
+            onClick={triggerClose}
+          />
+        </div>
+        <p className="text-xs text-[#0b57d0] dark:text-[#a8c7fa] font-medium mb-1">{pr.title}</p>
+        <p className="text-xs text-[#5d6168] dark:text-[#c4c6d0] mb-3">{pr.description}</p>
+
+        <textarea
+          rows={3}
+          placeholder={t.reviewNotesPlaceholder}
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          className="w-full bg-[#f8fafd] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg p-2.5 text-xs text-[#191c20] dark:text-white mb-4 focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa]"
+        />
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={async () => {
+              await onReviewAction('APPROVED', comment);
+              triggerClose();
+            }}
+            className="flex-1 py-2 px-3 rounded-xl bg-[#0a6640] hover:bg-[#085032] text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-xs"
+          >
+            <M3Icon name="check" size={16} />
+            {t.approve}
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              await onReviewAction('CHANGES_REQUESTED', comment);
+              triggerClose();
+            }}
+            className="flex-1 py-2 px-3 rounded-xl bg-[#ba1a1a] hover:bg-[#93000a] text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-xs"
+          >
+            <M3Icon name="cancel" size={16} />
+            {t.requestChanges}
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              await onReviewAction('COMMENTED', comment);
+              triggerClose();
+            }}
+            className="flex-1 py-2 px-3 rounded-xl bg-[#f0f2f8] dark:bg-[#2b2d30] hover:bg-[#e4e7ef] dark:hover:bg-[#383a3e] text-[#191c20] dark:text-[#e2e2e6] text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-xs"
+          >
+            <M3Icon name="chat" size={16} />
+            {t.comment}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnimatedNewRepoModal({
+  isOpen,
+  onClose,
+  onCreateRepo,
+  t,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreateRepo: (name: string, description: string, isPrivate: boolean) => Promise<void>;
+  t: Translations;
+}) {
+  const [name, setName] = useState('');
+  const [desc, setDesc] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const { isRendered, backdropClass, dialogClass, triggerClose } = useDialogAnimation(
+    isOpen,
+    onClose
+  );
+  if (!isRendered) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setLoading(true);
+    try {
+      await onCreateRepo(name.trim(), desc.trim(), isPrivate);
+      triggerClose();
+      setName('');
+      setDesc('');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      onClick={triggerClose}
+      className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 ${backdropClass}`}
+    >
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={handleSubmit}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e] rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-3 ${dialogClass}`}
+      >
+        <h3 className="text-sm font-semibold text-[#191c20] dark:text-white">{t.createRepoTitle}</h3>
+        <input
+          type="text"
+          required
+          placeholder={t.repoNamePlaceholder}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full bg-[#f8fafd] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg px-2.5 py-2 text-xs text-[#191c20] dark:text-white focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa]"
+        />
+        <input
+          type="text"
+          placeholder={t.repoDescPlaceholder}
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
+          className="w-full bg-[#f8fafd] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg px-2.5 py-2 text-xs text-[#191c20] dark:text-white focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa]"
+        />
+        <div className="bg-[#f0f4f9] dark:bg-[#121316] p-2.5 rounded-xl border border-[#d8dae5] dark:border-[#43474e]/40">
+          <M3Switch
+            selected={isPrivate}
+            onChange={setIsPrivate}
+            label={t.privateRepo}
+            sublabel="Only visible to you and authorized collaborators"
+          />
+        </div>
+        <div className="flex gap-2 pt-2">
+          <M3Button variant="tonal" size="sm" type="button" onClick={triggerClose} className="flex-1">
+            {t.cancel}
+          </M3Button>
+          <M3Button variant="filled" size="sm" type="submit" loading={loading} className="flex-1">
+            {t.createOnGitHub}
+          </M3Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function AnimatedNewBranchModal({
+  isOpen,
+  onClose,
+  onCreateBranch,
+  activeBranch,
+  t,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreateBranch: (name: string) => Promise<void>;
+  activeBranch: string;
+  t: Translations;
+}) {
+  const [name, setName] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const { isRendered, backdropClass, dialogClass, triggerClose } = useDialogAnimation(
+    isOpen,
+    onClose
+  );
+  if (!isRendered) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setLoading(true);
+    try {
+      await onCreateBranch(name.trim());
+      triggerClose();
+      setName('');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      onClick={triggerClose}
+      className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 ${backdropClass}`}
+    >
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={handleSubmit}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e] rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-3 ${dialogClass}`}
+      >
+        <h3 className="text-sm font-semibold text-[#191c20] dark:text-white">{t.createBranchTitle}</h3>
+        <p className="text-xs text-[#5d6168] dark:text-[#c4c6d0]">
+          {t.branchFrom}: <span className="text-[#0b57d0] dark:text-[#a8c7fa] font-mono font-medium">{activeBranch}</span>
+        </p>
+        <input
+          type="text"
+          required
+          placeholder={t.branchNamePlaceholder}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full bg-[#f8fafd] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg px-2.5 py-2 text-xs text-[#191c20] dark:text-white font-mono focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa]"
+        />
+        <div className="flex gap-2 pt-2">
+          <M3Button variant="tonal" size="sm" type="button" onClick={triggerClose} className="flex-1">
+            {t.cancel}
+          </M3Button>
+          <M3Button variant="filled" size="sm" type="submit" loading={loading} className="flex-1">
+            {t.newBranch}
+          </M3Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function AnimatedNewPRModal({
+  isOpen,
+  onClose,
+  onCreatePR,
+  branches,
+  activeBranch,
+  t,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreatePR: (title: string, head: string, base: string, body: string) => Promise<void>;
+  branches: GitBranch[];
+  activeBranch: string;
+  t: Translations;
+}) {
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [head, setHead] = useState(activeBranch);
+  const [base, setBase] = useState('main');
+  const [loading, setLoading] = useState(false);
+
+  const { isRendered, backdropClass, dialogClass, triggerClose } = useDialogAnimation(
+    isOpen,
+    onClose
+  );
+  if (!isRendered) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setLoading(true);
+    try {
+      await onCreatePR(title.trim(), head, base, body.trim());
+      triggerClose();
+      setTitle('');
+      setBody('');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      onClick={triggerClose}
+      className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 ${backdropClass}`}
+    >
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={handleSubmit}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e] rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-3 ${dialogClass}`}
+      >
+        <h3 className="text-sm font-semibold text-[#191c20] dark:text-white">{t.newPR}</h3>
+        <div className="flex items-center gap-2 text-xs">
+          <div className="flex-1">
+            <M3Dropdown<string>
+              searchable
+              size="sm"
+              label="Head branch"
+              options={branches.map((b) => ({
+                value: b.name,
+                label: b.name,
+                icon: 'fork_right',
+              }))}
+              value={head}
+              onChange={(val) => setHead(val)}
+            />
+          </div>
+          <span className="text-[#5d6168] dark:text-[#8e9199] font-medium shrink-0 pt-3">into</span>
+          <div className="flex-1">
+            <M3Dropdown<string>
+              searchable
+              size="sm"
+              label="Base branch"
+              options={branches.map((b) => ({
+                value: b.name,
+                label: b.name,
+                icon: 'fork_right',
+              }))}
+              value={base}
+              onChange={(val) => setBase(val)}
+            />
+          </div>
+        </div>
+        <input
+          type="text"
+          required
+          placeholder="PR Title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="w-full bg-[#f8fafd] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg px-2.5 py-2 text-xs text-[#191c20] dark:text-white focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa]"
+        />
+        <textarea
+          rows={3}
+          placeholder="Description of changes..."
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          className="w-full bg-[#f8fafd] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg p-2 text-xs text-[#191c20] dark:text-white focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa] resize-none"
+        />
+        <div className="flex gap-2 pt-2">
+          <M3Button variant="tonal" size="sm" type="button" onClick={triggerClose} className="flex-1">
+            {t.cancel}
+          </M3Button>
+          <M3Button variant="filled" size="sm" type="submit" loading={loading} className="flex-1">
+            {t.openPR}
+          </M3Button>
+        </div>
+      </form>
+    </div>
   );
 }
