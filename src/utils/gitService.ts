@@ -425,30 +425,61 @@ export class GitHubApiClient {
     });
   }
 
-  async getRepoCommits(owner: string, repo: string, branch?: string): Promise<GitCommit[]> {
-    const query = branch ? `?sha=${encodeURIComponent(branch)}&per_page=30` : '?per_page=30';
+  async resetBranch(owner: string, repo: string, branch: string, commitSha: string, force = true): Promise<void> {
+    await this.request(`/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        sha: commitSha,
+        force,
+      }),
+    });
+  }
+
+  async getRepoCommits(
+    owner: string,
+    repo: string,
+    branch?: string,
+    maxCommits = 400
+  ): Promise<GitCommit[]> {
+    const allCommits: GitCommit[] = [];
+    const perPage = 100;
+    let page = 1;
+
     try {
-      const data: any[] = await this.request(`/repos/${owner}/${repo}/commits${query}`);
-      return data.map((item: any) => ({
-        id: item.sha,
-        shortId: item.sha.substring(0, 7),
-        message: item.commit?.message?.split('\n')[0] || 'Commit',
-        author: {
-          name: item.commit?.author?.name || item.author?.login || 'Developer',
-          email: item.commit?.author?.email || 'dev@example.com',
-          avatarUrl:
-            item.author?.avatar_url ||
-            `https://api.dicebear.com/7.x/bottts/svg?seed=${item.commit?.author?.name || 'Developer'}`,
-        },
-        timestamp: new Date(
-          item.commit?.author?.date || item.commit?.committer?.date || Date.now()
-        ).getTime(),
-        branch: branch || 'main',
-        filesChanged: item.stats?.total || 1,
-      }));
+      while (allCommits.length < maxCommits) {
+        const query = branch
+          ? `?sha=${encodeURIComponent(branch)}&per_page=${perPage}&page=${page}`
+          : `?per_page=${perPage}&page=${page}`;
+        const data: any[] = await this.request(`/repos/${owner}/${repo}/commits${query}`);
+        if (!Array.isArray(data) || data.length === 0) break;
+
+        const mapped: GitCommit[] = data.map((item: any) => ({
+          id: item.sha,
+          shortId: item.sha.substring(0, 7),
+          message: item.commit?.message?.split('\n')[0] || 'Commit',
+          author: {
+            name: item.commit?.author?.name || item.author?.login || 'Developer',
+            email: item.commit?.author?.email || 'dev@example.com',
+            avatarUrl:
+              item.author?.avatar_url ||
+              `https://api.dicebear.com/7.x/bottts/svg?seed=${item.commit?.author?.name || 'Developer'}`,
+          },
+          timestamp: new Date(
+            item.commit?.author?.date || item.commit?.committer?.date || Date.now()
+          ).getTime(),
+          branch: branch || 'main',
+          filesChanged: item.stats?.total || 1,
+        }));
+
+        allCommits.push(...mapped);
+        if (data.length < perPage) break;
+        page++;
+        if (page > 10) break;
+      }
+      return allCommits;
     } catch (err: any) {
       console.warn(`Could not load commits for ${owner}/${repo}:`, err.message);
-      return [];
+      return allCommits;
     }
   }
 

@@ -47,6 +47,7 @@ interface GitHubPanelProps {
   onCreatePullRequest: (title: string, head: string, base: string, body: string) => Promise<void>;
   onSubmitPRReview: (prId: number, state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED', body: string) => Promise<void>;
   onRefreshCommits?: () => Promise<void>;
+  onGitReset?: (mode: 'soft' | 'mixed' | 'hard', count: number, forcePushRemote: boolean) => Promise<void>;
 }
 
 export function GitHubPanel({
@@ -77,6 +78,7 @@ export function GitHubPanel({
   onCreatePullRequest,
   onSubmitPRReview,
   onRefreshCommits,
+  onGitReset,
 }: GitHubPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState<'changes' | 'branches' | 'prs' | 'commits'>('changes');
   const [commitMessage, setCommitMessage] = useState('');
@@ -86,6 +88,30 @@ export function GitHubPanel({
   const [selectedDiff, setSelectedDiff] = useState<FileDiff | null>(null);
   const [copiedSha, setCopiedSha] = useState<string | null>(null);
   const [isRefreshingCommits, setIsRefreshingCommits] = useState(false);
+
+  // Git Reset UI state
+  const [showResetUI, setShowResetUI] = useState(false);
+  const [resetMode, setResetMode] = useState<'soft' | 'mixed' | 'hard'>('soft');
+  const [resetCount, setResetCount] = useState<number>(1);
+  const [forcePushRemote, setForcePushRemote] = useState(false);
+  const [isExecutingReset, setIsExecutingReset] = useState(false);
+
+  // Commit Search & Windowing state (for searching and preventing lag)
+  const [commitSearchQuery, setCommitSearchQuery] = useState('');
+  const [visibleCommitCount, setVisibleCommitCount] = useState(40);
+
+  const filteredCommits = React.useMemo(() => {
+    if (!commitSearchQuery.trim()) return commits;
+    const q = commitSearchQuery.toLowerCase().trim();
+    return commits.filter(
+      (c) =>
+        c.message.toLowerCase().includes(q) ||
+        c.author.name.toLowerCase().includes(q) ||
+        c.author.email.toLowerCase().includes(q) ||
+        c.shortId.toLowerCase().includes(q) ||
+        c.id.toLowerCase().includes(q)
+    );
+  }, [commits, commitSearchQuery]);
 
   // Authentication inputs
   const [patInput, setPatInput] = useState('');
@@ -644,26 +670,272 @@ export function GitHubPanel({
                 </p>
               </div>
 
-              <button
-                onClick={async () => {
-                  if (onRefreshCommits) {
-                    setIsRefreshingCommits(true);
-                    try {
-                      await onRefreshCommits();
-                    } finally {
-                      setIsRefreshingCommits(false);
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() => setShowResetUI(!showResetUI)}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border ${
+                    showResetUI
+                      ? 'bg-[#0b57d0] text-white border-[#0b57d0] dark:bg-[#a8c7fa] dark:text-[#003062]'
+                      : 'bg-[#f0f2f8] hover:bg-[#e4e7ef] text-[#0b57d0] dark:bg-[#2b2d30] dark:hover:bg-[#383a3e] dark:text-[#a8c7fa] border-[#d8dae5] dark:border-[#43474e]/50'
+                  }`}
+                  title="Rewind / Reset HEAD (e.g. git reset --soft HEAD~N)"
+                >
+                  <M3Icon name="restore" size={15} />
+                  <span>Git Reset</span>
+                </button>
+
+                <button
+                  onClick={async () => {
+                    if (onRefreshCommits) {
+                      setIsRefreshingCommits(true);
+                      try {
+                        await onRefreshCommits();
+                      } finally {
+                        setIsRefreshingCommits(false);
+                      }
+                    } else {
+                      await onLoadRepoFiles();
                     }
-                  } else {
-                    await onLoadRepoFiles();
-                  }
-                }}
-                disabled={isRefreshingCommits}
-                title="Refresh commit history from remote repository"
-                className="p-1.5 rounded-lg bg-[#f0f2f8] hover:bg-[#e4e7ef] dark:bg-[#2b2d30] dark:hover:bg-[#383a3e] text-[#0b57d0] dark:text-[#a8c7fa] transition-colors cursor-pointer shrink-0 disabled:opacity-40"
-              >
-                <M3Icon name={isRefreshingCommits ? 'sync' : 'refresh'} size={16} className={isRefreshingCommits ? 'animate-spin' : ''} />
-              </button>
+                  }}
+                  disabled={isRefreshingCommits}
+                  title="Refresh commit history from remote repository"
+                  className="p-1.5 rounded-lg bg-[#f0f2f8] hover:bg-[#e4e7ef] dark:bg-[#2b2d30] dark:hover:bg-[#383a3e] text-[#0b57d0] dark:text-[#a8c7fa] transition-colors cursor-pointer shrink-0 disabled:opacity-40"
+                >
+                  <M3Icon name={isRefreshingCommits ? 'sync' : 'refresh'} size={16} className={isRefreshingCommits ? 'animate-spin' : ''} />
+                </button>
+              </div>
             </div>
+
+            {/* Dedicated Git Reset Panel */}
+            {showResetUI && (
+              <div className="p-4 rounded-xl bg-white dark:bg-[#1e1f22] border-2 border-[#0b57d0]/40 dark:border-[#a8c7fa]/40 shadow-md space-y-3.5 m3-dialog-bounce">
+                <div className="flex items-center justify-between border-b border-[#d8dae5] dark:border-[#43474e]/30 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-[#00468b]/20 dark:bg-[#00468b]/40 text-[#0b57d0] dark:text-[#a8c7fa] flex items-center justify-center">
+                      <M3Icon name="restore" size={16} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-[#191c20] dark:text-white">Git Reset HEAD</h4>
+                      <p className="text-[10px] text-[#5d6168] dark:text-[#8e9199]">Rewind history / squash recent commits</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowResetUI(false)}
+                    className="p-1 rounded-md text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white transition-colors cursor-pointer"
+                  >
+                    <M3Icon name="close" size={16} />
+                  </button>
+                </div>
+
+                {/* Reset Mode Selector */}
+                <div>
+                  <label className="text-[11px] font-semibold text-[#5d6168] dark:text-[#8e9199] uppercase tracking-wider block mb-1.5">
+                    Reset Mode
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setResetMode('soft')}
+                      className={`p-2 rounded-xl text-left border transition-all cursor-pointer ${
+                        resetMode === 'soft'
+                          ? 'bg-[#d3e3fd] dark:bg-[#00468b]/40 border-[#0b57d0] dark:border-[#a8c7fa] text-[#041e49] dark:text-[#a8c7fa] font-semibold shadow-xs'
+                          : 'bg-[#f0f2f8] dark:bg-[#121316] border-[#d8dae5] dark:border-[#43474e]/40 text-[#5d6168] dark:text-[#8e9199]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="font-mono font-bold text-xs">--soft</span>
+                        <span className="text-[9px] px-1 py-0.2 bg-[#0f5223] text-[#b4f3b7] rounded font-sans">SAFE</span>
+                      </div>
+                      <p className="text-[10px] opacity-80 leading-tight">Keep changes staged</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setResetMode('mixed')}
+                      className={`p-2 rounded-xl text-left border transition-all cursor-pointer ${
+                        resetMode === 'mixed'
+                          ? 'bg-[#d3e3fd] dark:bg-[#00468b]/40 border-[#0b57d0] dark:border-[#a8c7fa] text-[#041e49] dark:text-[#a8c7fa] font-semibold shadow-xs'
+                          : 'bg-[#f0f2f8] dark:bg-[#121316] border-[#d8dae5] dark:border-[#43474e]/40 text-[#5d6168] dark:text-[#8e9199]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="font-mono font-bold text-xs">--mixed</span>
+                      </div>
+                      <p className="text-[10px] opacity-80 leading-tight">Unstage in editor</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setResetMode('hard')}
+                      className={`p-2 rounded-xl text-left border transition-all cursor-pointer ${
+                        resetMode === 'hard'
+                          ? 'bg-[#ffdad6] dark:bg-[#690005]/40 border-[#ba1a1a] dark:border-[#ff8585] text-[#410002] dark:text-[#ffdad6] font-semibold shadow-xs'
+                          : 'bg-[#f0f2f8] dark:bg-[#121316] border-[#d8dae5] dark:border-[#43474e]/40 text-[#5d6168] dark:text-[#8e9199]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="font-mono font-bold text-xs">--hard</span>
+                        <span className="text-[9px] px-1 py-0.2 bg-[#ba1a1a] text-white rounded font-sans">DANGER</span>
+                      </div>
+                      <p className="text-[10px] opacity-80 leading-tight">Discard changes</p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Commit Count (HEAD~N) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-semibold text-[#5d6168] dark:text-[#8e9199] uppercase tracking-wider">
+                      Number of Commits to Rewind (HEAD~N)
+                    </label>
+                    <span className="font-mono text-xs font-bold text-[#0b57d0] dark:text-[#a8c7fa]">
+                      HEAD~{resetCount}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={Math.max(1, commits.length || 999)}
+                      value={resetCount}
+                      onChange={(e) => setResetCount(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-24 bg-[#f0f2f8] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-[#191c20] dark:text-white focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa]"
+                    />
+
+                    {/* Quick Preset Buttons */}
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {[1, 2, 3, 5, 10, 96].map((num) => (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => setResetCount(num)}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-mono transition-colors cursor-pointer border ${
+                            resetCount === num
+                              ? 'bg-[#0b57d0] text-white border-[#0b57d0] dark:bg-[#a8c7fa] dark:text-[#003062]'
+                              : 'bg-[#f0f2f8] hover:bg-[#e4e7ef] dark:bg-[#121316] dark:hover:bg-[#2b2d30] text-[#191c20] dark:text-[#c4c6d0] border-[#d8dae5] dark:border-[#43474e]/40'
+                          }`}
+                        >
+                          ~{num}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Target Commit Preview if available */}
+                {commits[resetCount] && (
+                  <div className="p-2.5 rounded-xl bg-[#f0f2f8] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e]/40 text-xs">
+                    <span className="text-[10px] text-[#5d6168] dark:text-[#8e9199] block mb-0.5">HEAD will land on:</span>
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="font-mono font-bold text-[#0b57d0] dark:text-[#a8c7fa] shrink-0 text-[11px]">
+                        {commits[resetCount].shortId}
+                      </span>
+                      <span className="text-[#191c20] dark:text-white truncate text-[11px]">
+                        {commits[resetCount].message}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Live Command Banner */}
+                <div className="p-2.5 rounded-xl bg-[#f0f2f8] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e]/40 font-mono text-xs flex items-center justify-between gap-2 overflow-x-auto text-[#0b57d0] dark:text-[#a8c7fa]">
+                  <span className="truncate">
+                    git reset --{resetMode} HEAD~{resetCount}{forcePushRemote && selectedRepo ? ' && git push origin HEAD --force' : ''}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`git reset --${resetMode} HEAD~${resetCount}${forcePushRemote && selectedRepo ? ' && git push origin HEAD --force' : ''}`);
+                    }}
+                    title="Copy command"
+                    className="p-1 rounded text-[#5d6168] dark:text-[#8e9199] hover:text-[#0b57d0] dark:hover:text-[#a8c7fa] transition-colors cursor-pointer shrink-0"
+                  >
+                    <M3Icon name="content_copy" size={14} />
+                  </button>
+                </div>
+
+                {/* Explanation Box */}
+                <div className={`p-3 rounded-xl border text-xs leading-relaxed ${
+                  resetMode === 'soft'
+                    ? 'bg-[#e7f8ed] dark:bg-[#0f5223]/20 border-[#308745]/40 text-[#0f5223] dark:text-[#b4f3b7]'
+                    : resetMode === 'mixed'
+                    ? 'bg-[#f0f2f8] dark:bg-[#121316] border-[#d8dae5] dark:border-[#43474e]/40 text-[#5d6168] dark:text-[#c4c6d0]'
+                    : 'bg-[#ffdad6] dark:bg-[#690005]/20 border-[#ba1a1a]/40 text-[#690005] dark:text-[#ffdad6]'
+                }`}>
+                  {resetMode === 'soft' && (
+                    <p>
+                      <strong>git reset --soft:</strong> Undoes {resetCount} commit(s) from history. All code and modifications stay intact and staged in your workspace, ideal for squashing commits together or fixing messages without losing any work!
+                    </p>
+                  )}
+                  {resetMode === 'mixed' && (
+                    <p>
+                      <strong>git reset --mixed:</strong> Undoes {resetCount} commit(s) and unstages them. Changes stay preserved as modified files in your editor.
+                    </p>
+                  )}
+                  {resetMode === 'hard' && (
+                    <p>
+                      <strong>git reset --hard:</strong> Destructive! Completely resets HEAD and discards changes made in the last {resetCount} commit(s).
+                    </p>
+                  )}
+                </div>
+
+                {/* Optional Force Push to GitHub Remote */}
+                {selectedRepo && isAuthenticated && (
+                  <label className="flex items-center gap-2 text-xs text-[#191c20] dark:text-white cursor-pointer select-none pt-1">
+                    <input
+                      type="checkbox"
+                      checked={forcePushRemote}
+                      onChange={(e) => setForcePushRemote(e.target.checked)}
+                      className="rounded accent-[#0b57d0] dark:accent-[#a8c7fa] cursor-pointer"
+                    />
+                    <span>Force push to GitHub remote branch (<strong>{activeBranch}</strong>)</span>
+                  </label>
+                )}
+
+                {/* Action button */}
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowResetUI(false)}
+                    className="px-3 py-1.5 rounded-xl text-xs text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!onGitReset) return;
+                      setIsExecutingReset(true);
+                      try {
+                        await onGitReset(resetMode, resetCount, forcePushRemote);
+                        setShowResetUI(false);
+                      } finally {
+                        setIsExecutingReset(false);
+                      }
+                    }}
+                    disabled={isExecutingReset}
+                    className={`px-4 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm disabled:opacity-40 ${
+                      resetMode === 'hard'
+                        ? 'bg-[#ba1a1a] hover:bg-[#93000a] text-white'
+                        : 'bg-[#0b57d0] hover:bg-[#0842a0] text-white'
+                    }`}
+                  >
+                    {isExecutingReset ? (
+                      <>
+                        <M3Icon name="sync" size={14} className="animate-spin" />
+                        <span>Resetting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <M3Icon name="check" size={14} />
+                        <span>Execute git reset --{resetMode} HEAD~{resetCount}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {commits.length === 0 ? (
               <div className="text-center py-8 text-xs text-[#5d6168] dark:text-[#8e9199] bg-[#f8fafd] dark:bg-[#1e1f22]/50 rounded-xl border border-[#d8dae5] dark:border-[#43474e]/30 p-4">
@@ -674,54 +946,149 @@ export function GitHubPanel({
                 </p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {commits.map((c) => (
-                  <div
-                    key={c.id}
-                    className="p-3 rounded-xl bg-[#f8fafd] dark:bg-[#2b2d30] border border-[#d8dae5] dark:border-[#43474e]/40 hover:border-[#0b57d0]/40 dark:hover:border-[#a8c7fa]/40 transition-all space-y-2 shadow-xs"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2 min-w-0">
-                        {c.author.avatarUrl ? (
-                          <img
-                            src={c.author.avatarUrl}
-                            alt={c.author.name}
-                            className="w-6 h-6 rounded-full bg-[#f0f2f8] dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/40 shrink-0 mt-0.5 object-cover"
-                          />
-                        ) : (
-                          <div className="w-6 h-6 rounded-full bg-[#d3e3fd] text-[#041e49] dark:bg-[#00468b]/40 dark:text-[#a8c7fa] flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">
-                            {c.author.name.charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium text-[#191c20] dark:text-white break-words leading-snug">
-                            {c.message}
-                          </p>
-                          <div className="flex items-center gap-1.5 text-[10px] text-[#5d6168] dark:text-[#8e9199] mt-1 font-mono">
-                            <span className="text-[#191c20] dark:text-[#c4c6d0] font-semibold">{c.author.name}</span>
-                            <span>•</span>
-                            <span>{new Date(c.timestamp).toLocaleString()}</span>
+              <div className="space-y-2.5">
+                {/* Search Commits Bar */}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <M3Icon
+                      name="search"
+                      size={16}
+                      className="absolute left-2.5 top-2 text-[#74777f] dark:text-[#8e9199]"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Search commits by message, author, or SHA..."
+                      value={commitSearchQuery}
+                      onChange={(e) => {
+                        setCommitSearchQuery(e.target.value);
+                        setVisibleCommitCount(40);
+                      }}
+                      className="w-full bg-[#f8fafd] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e]/50 rounded-xl pl-8 pr-8 py-1.5 text-xs text-[#191c20] dark:text-white placeholder-[#74777f] dark:placeholder-[#8e9199] focus:outline-none focus:ring-2 focus:ring-[#0b57d0] dark:focus:ring-[#a8c7fa] transition-all"
+                    />
+                    {commitSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCommitSearchQuery('');
+                          setVisibleCommitCount(40);
+                        }}
+                        className="absolute right-2.5 top-2 text-[#74777f] hover:text-[#191c20] dark:hover:text-white cursor-pointer"
+                        title="Clear search"
+                      >
+                        <M3Icon name="close" size={15} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="px-2 py-1 rounded-lg bg-[#f0f2f8] dark:bg-[#2b2d30] border border-[#d8dae5] dark:border-[#43474e]/40 text-[11px] font-mono text-[#5d6168] dark:text-[#8e9199] shrink-0">
+                    {filteredCommits.length} {filteredCommits.length === 1 ? 'commit' : 'commits'}
+                  </div>
+                </div>
+
+                {filteredCommits.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-[#5d6168] dark:text-[#8e9199] bg-[#f8fafd] dark:bg-[#1e1f22]/50 rounded-xl border border-[#d8dae5] dark:border-[#43474e]/30 p-4">
+                    <M3Icon name="search_off" size={28} className="mx-auto mb-1 text-[#5d6168] dark:text-[#8e9199]" />
+                    <p className="font-medium text-[#191c20] dark:text-white mb-0.5">No matching commits found</p>
+                    <p className="text-[11px]">No commits matched "{commitSearchQuery}".</p>
+                    <button
+                      type="button"
+                      onClick={() => setCommitSearchQuery('')}
+                      className="mt-2 px-3 py-1 text-xs text-[#0b57d0] dark:text-[#a8c7fa] font-semibold hover:underline cursor-pointer"
+                    >
+                      Clear search filter
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredCommits.slice(0, visibleCommitCount).map((c) => {
+                      const originalIdx = commits.findIndex((item) => item.id === c.id);
+                      const headDistance = originalIdx >= 0 ? originalIdx + 1 : 1;
+
+                      return (
+                        <div
+                          key={c.id}
+                          className="p-3 rounded-xl bg-[#f8fafd] dark:bg-[#2b2d30] border border-[#d8dae5] dark:border-[#43474e]/40 hover:border-[#0b57d0]/40 dark:hover:border-[#a8c7fa]/40 transition-all space-y-2 shadow-xs"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-2 min-w-0">
+                              {c.author.avatarUrl ? (
+                                <img
+                                  src={c.author.avatarUrl}
+                                  alt={c.author.name}
+                                  className="w-6 h-6 rounded-full bg-[#f0f2f8] dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/40 shrink-0 mt-0.5 object-cover"
+                                />
+                              ) : (
+                                <div className="w-6 h-6 rounded-full bg-[#d3e3fd] text-[#041e49] dark:bg-[#00468b]/40 dark:text-[#a8c7fa] flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">
+                                  {c.author.name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium text-[#191c20] dark:text-white break-words leading-snug">
+                                  {c.message}
+                                </p>
+                                <div className="flex items-center gap-1.5 text-[10px] text-[#5d6168] dark:text-[#8e9199] mt-1 font-mono">
+                                  <span className="text-[#191c20] dark:text-[#c4c6d0] font-semibold">{c.author.name}</span>
+                                  <span>•</span>
+                                  <span>{new Date(c.timestamp).toLocaleString()}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={() => {
+                                  setResetCount(headDistance);
+                                  setShowResetUI(true);
+                                }}
+                                title={`Reset HEAD to HEAD~${headDistance}`}
+                                className="px-2 py-0.5 rounded bg-[#f0f2f8] hover:bg-[#e4e7ef] dark:bg-[#1e1f22] dark:hover:bg-[#121316] text-[10px] font-mono text-[#0b57d0] dark:text-[#a8c7fa] border border-[#d8dae5] dark:border-[#43474e]/50 flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                <M3Icon name="restore" size={11} />
+                                <span>~{headDistance}</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(c.id);
+                                  setCopiedSha(c.id);
+                                  setTimeout(() => setCopiedSha(null), 2000);
+                                }}
+                                title="Copy commit SHA"
+                                className="px-2 py-0.5 rounded bg-[#f0f2f8] hover:bg-[#e4e7ef] dark:bg-[#1e1f22] dark:hover:bg-[#121316] text-[10px] font-mono text-[#0b57d0] dark:text-[#a8c7fa] border border-[#d8dae5] dark:border-[#43474e]/50 flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                <M3Icon name={copiedSha === c.id ? 'check' : 'content_copy'} size={11} />
+                                <span>{c.shortId}</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      );
+                    })}
 
-                      <div className="flex items-center gap-1 shrink-0">
+                    {/* Windowed pagination control to prevent DOM lag */}
+                    {filteredCommits.length > visibleCommitCount && (
+                      <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
                         <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(c.id);
-                            setCopiedSha(c.id);
-                            setTimeout(() => setCopiedSha(null), 2000);
-                          }}
-                          title="Copy commit SHA"
-                          className="px-2 py-0.5 rounded bg-[#f0f2f8] hover:bg-[#e4e7ef] dark:bg-[#1e1f22] dark:hover:bg-[#121316] text-[10px] font-mono text-[#0b57d0] dark:text-[#a8c7fa] border border-[#d8dae5] dark:border-[#43474e]/50 flex items-center gap-1 transition-colors cursor-pointer"
+                          type="button"
+                          onClick={() => setVisibleCommitCount((prev) => prev + 50)}
+                          className="px-4 py-2 rounded-xl bg-[#f0f2f8] hover:bg-[#e4e7ef] dark:bg-[#2b2d30] dark:hover:bg-[#383a3e] text-xs font-semibold text-[#0b57d0] dark:text-[#a8c7fa] border border-[#d8dae5] dark:border-[#43474e]/50 flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95"
                         >
-                          <M3Icon name={copiedSha === c.id ? 'check' : 'content_copy'} size={11} />
-                          <span>{c.shortId}</span>
+                          <M3Icon name="expand_more" size={16} />
+                          <span>
+                            Show 50 More (showing {Math.min(visibleCommitCount, filteredCommits.length)} of {filteredCommits.length})
+                          </span>
                         </button>
+                        {filteredCommits.length > visibleCommitCount + 50 && (
+                          <button
+                            type="button"
+                            onClick={() => setVisibleCommitCount(filteredCommits.length)}
+                            className="px-3 py-2 rounded-xl bg-transparent hover:bg-black/5 dark:hover:bg-white/5 text-xs text-[#5d6168] dark:text-[#8e9199] transition-colors cursor-pointer"
+                          >
+                            Show All ({filteredCommits.length})
+                          </button>
+                        )}
                       </div>
-                    </div>
+                    )}
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>

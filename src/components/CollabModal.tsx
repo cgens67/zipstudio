@@ -90,25 +90,25 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
       onClick={triggerClose}
     >
       <div
-        className={`bg-[#1e1f22] border border-[#43474e] rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${dialogClass}`}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e] rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${dialogClass}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="px-5 py-4 border-b border-[#43474e]/40 flex items-center justify-between bg-[#18191c]">
+        <div className="px-5 py-4 border-b border-[#d8dae5] dark:border-[#43474e]/40 flex items-center justify-between bg-[#f8fafd] dark:bg-[#18191c]">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#00468b]/40 border border-[#a8c7fa]/30 flex items-center justify-center text-[#a8c7fa]">
+            <div className="w-9 h-9 rounded-xl bg-[#00468b]/20 dark:bg-[#00468b]/40 border border-[#0b57d0]/30 dark:border-[#a8c7fa]/30 flex items-center justify-center text-[#0b57d0] dark:text-[#a8c7fa]">
               <M3Icon name="group" size={20} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-white">
+                <h3 className="text-sm font-bold text-[#191c20] dark:text-white">
                   {t?.liveCollaboration || 'Live Real-Time Collaboration'}
                 </h3>
                 <span
                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                     isConnected
-                      ? 'bg-[#0f5223] text-[#b4f3b7] border border-[#308745]'
-                      : 'bg-[#690005] text-[#ffdad6] border border-[#ba1a1a]'
+                      ? 'bg-[#e7f8ed] text-[#0f5223] dark:bg-[#0f5223] dark:text-[#b4f3b7] border border-[#308745]'
+                      : 'bg-[#ffdad6] text-[#690005] dark:bg-[#690005] dark:text-[#ffdad6] border border-[#ba1a1a]'
                   }`}
                 >
                   <span
@@ -119,28 +119,28 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
                   {isConnected ? `Online (${latency}ms)` : 'Connecting...'}
                 </span>
               </div>
-              <p className="text-xs text-[#8e9199] mt-0.5">
-                Room: <span className="font-mono text-[#a8c7fa]">{collabService.getRoomId()}</span>
+              <p className="text-xs text-[#5d6168] dark:text-[#8e9199] mt-0.5">
+                Room: <span className="font-mono text-[#0b57d0] dark:text-[#a8c7fa] font-medium">{collabService.getRoomId()}</span>
               </p>
             </div>
           </div>
 
           <button
             onClick={triggerClose}
-            className="p-1 rounded-lg text-[#8e9199] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            className="p-1 rounded-lg text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
           >
             <M3Icon name="close" size={18} />
           </button>
         </div>
 
         {/* Modal Tabs */}
-        <div className="flex items-center px-5 border-b border-[#43474e]/30 bg-[#1e1f22] text-xs">
+        <div className="flex items-center px-5 border-b border-[#d8dae5] dark:border-[#43474e]/30 bg-[#f8fafd] dark:bg-[#1e1f22] text-xs">
           <button
             onClick={() => setActiveTab('peers')}
             className={`py-2.5 px-3 font-medium border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
               activeTab === 'peers'
-                ? 'border-[#a8c7fa] text-[#a8c7fa]'
-                : 'border-transparent text-[#8e9199] hover:text-white'
+                ? 'border-[#0b57d0] text-[#0b57d0] dark:border-[#a8c7fa] dark:text-[#a8c7fa]'
+                : 'border-transparent text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white'
             }`}
           >
             <M3Icon name="people" size={15} />
@@ -150,8 +150,8 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
             onClick={() => setActiveTab('conflicts')}
             className={`py-2.5 px-3 font-medium border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
               activeTab === 'conflicts'
-                ? 'border-[#a8c7fa] text-[#a8c7fa]'
-                : 'border-transparent text-[#8e9199] hover:text-white'
+                ? 'border-[#0b57d0] text-[#0b57d0] dark:border-[#a8c7fa] dark:text-[#a8c7fa]'
+                : 'border-transparent text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white'
             }`}
           >
             <M3Icon name="sync_problem" size={15} />
@@ -161,8 +161,8 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
             onClick={() => setActiveTab('settings')}
             className={`py-2.5 px-3 font-medium border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
               activeTab === 'settings'
-                ? 'border-[#a8c7fa] text-[#a8c7fa]'
-                : 'border-transparent text-[#8e9199] hover:text-white'
+                ? 'border-[#0b57d0] text-[#0b57d0] dark:border-[#a8c7fa] dark:text-[#a8c7fa]'
+                : 'border-transparent text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white'
             }`}
           >
             <M3Icon name="tune" size={15} />
@@ -175,12 +175,12 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
           {activeTab === 'peers' && (
             <div className="space-y-3">
               {/* Invite Link Card */}
-              <div className="bg-[#18191c] border border-[#43474e]/40 rounded-2xl p-3.5 flex items-center justify-between gap-3">
+              <div className="bg-[#f0f2f8] dark:bg-[#18191c] border border-[#d8dae5] dark:border-[#43474e]/40 rounded-2xl p-3.5 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 truncate">
-                  <M3Icon name="link" size={18} className="text-[#a8c7fa] shrink-0" />
+                  <M3Icon name="link" size={18} className="text-[#0b57d0] dark:text-[#a8c7fa] shrink-0" />
                   <div className="truncate">
-                    <span className="text-xs text-white font-medium block">Invite Collaborators</span>
-                    <span className="text-[11px] text-[#8e9199] truncate block">
+                    <span className="text-xs text-[#191c20] dark:text-white font-medium block">Invite Collaborators</span>
+                    <span className="text-[11px] text-[#5d6168] dark:text-[#8e9199] truncate block">
                       Share room link to code simultaneously with live cursors
                     </span>
                   </div>
@@ -189,8 +189,8 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
                   onClick={handleCopyInviteLink}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
                     copiedLink
-                      ? 'bg-[#0f5223] text-[#b4f3b7] border border-[#308745]'
-                      : 'bg-[#2b2d30] hover:bg-[#383a3e] text-[#a8c7fa] border border-[#43474e]/50'
+                      ? 'bg-[#0f5223] text-white border border-[#308745]'
+                      : 'bg-[#d3e3fd] hover:bg-[#c2e7ff] text-[#041e49] dark:bg-[#2b2d30] dark:hover:bg-[#383a3e] dark:text-[#a8c7fa] border border-[#d8dae5] dark:border-[#43474e]/50'
                   }`}
                 >
                   <M3Icon name={copiedLink ? 'check' : 'content_copy'} size={14} />
@@ -200,12 +200,12 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
 
               {/* Active Users List */}
               <div className="space-y-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#8e9199] block">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#5d6168] dark:text-[#8e9199] block">
                   Active in Workspace
                 </span>
 
                 {/* You */}
-                <div className="bg-[#18191c] border border-[#43474e]/40 rounded-xl p-3 flex items-center justify-between">
+                <div className="bg-[#f0f2f8] dark:bg-[#18191c] border border-[#d8dae5] dark:border-[#43474e]/40 rounded-xl p-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div
                       style={{ backgroundColor: profile.color }}
@@ -215,10 +215,10 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-white">{profile.name}</span>
+                        <span className="text-xs font-semibold text-[#191c20] dark:text-white">{profile.name}</span>
                         <M3Badge variant="primary">YOU</M3Badge>
                       </div>
-                      <span className="text-[11px] text-[#8e9199] font-mono">
+                      <span className="text-[11px] text-[#5d6168] dark:text-[#8e9199] font-mono">
                         Host / Active Editor
                       </span>
                     </div>
@@ -228,10 +228,10 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
 
                 {/* Other Peers */}
                 {peers.length === 0 ? (
-                  <div className="py-6 px-4 text-center rounded-2xl border border-dashed border-[#43474e]/40 bg-[#121316]">
-                    <M3Icon name="group_add" size={32} className="text-[#8e9199] mx-auto mb-1.5 opacity-60" />
-                    <p className="text-xs text-[#c4c6d0] font-medium">Waiting for other collaborators...</p>
-                    <p className="text-[11px] text-[#8e9199] mt-0.5">
+                  <div className="py-6 px-4 text-center rounded-2xl border border-dashed border-[#d8dae5] dark:border-[#43474e]/40 bg-[#f8fafd] dark:bg-[#121316]">
+                    <M3Icon name="group_add" size={32} className="text-[#5d6168] dark:text-[#8e9199] mx-auto mb-1.5 opacity-60" />
+                    <p className="text-xs text-[#191c20] dark:text-[#c4c6d0] font-medium">Waiting for other collaborators...</p>
+                    <p className="text-[11px] text-[#5d6168] dark:text-[#8e9199] mt-0.5">
                       Open this URL in another tab or send the link to a teammate to test live editing!
                     </p>
                   </div>
@@ -239,7 +239,7 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
                   peers.map((peer) => (
                     <div
                       key={peer.id}
-                      className="bg-[#18191c] border border-[#43474e]/40 rounded-xl p-3 flex items-center justify-between"
+                      className="bg-[#f0f2f8] dark:bg-[#18191c] border border-[#d8dae5] dark:border-[#43474e]/40 rounded-xl p-3 flex items-center justify-between"
                     >
                       <div className="flex items-center gap-3">
                         <div
@@ -250,7 +250,7 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-white">{peer.name}</span>
+                            <span className="text-xs font-semibold text-[#191c20] dark:text-white">{peer.name}</span>
                             <span
                               style={{ color: peer.color }}
                               className="text-[10px] font-mono font-bold"
@@ -258,7 +258,7 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
                               Live
                             </span>
                           </div>
-                          <span className="text-[11px] text-[#8e9199] font-mono">
+                          <span className="text-[11px] text-[#5d6168] dark:text-[#8e9199] font-mono">
                             {peer.activeFilePath ? `Editing ${peer.activeFilePath}` : 'Browsing files'}
                             {peer.cursor ? ` (Line ${peer.cursor.line}, Col ${peer.cursor.col})` : ''}
                           </span>
@@ -266,7 +266,7 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
                       </div>
                       <span
                         style={{ backgroundColor: peer.color }}
-                        className="w-2.5 h-2.5 rounded-full ring-4 ring-white/10"
+                        className="w-2.5 h-2.5 rounded-full ring-4 ring-[#0b57d0]/20"
                       />
                     </div>
                   ))
@@ -277,26 +277,26 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
 
           {activeTab === 'conflicts' && (
             <div className="space-y-3">
-              <div className="bg-[#18191c] border border-[#43474e]/40 rounded-xl p-3 flex items-start gap-2.5 text-xs">
-                <M3Icon name="shield" size={18} className="text-[#3ddc84] shrink-0 mt-0.5" />
+              <div className="bg-[#f0f2f8] dark:bg-[#18191c] border border-[#d8dae5] dark:border-[#43474e]/40 rounded-xl p-3 flex items-start gap-2.5 text-xs">
+                <M3Icon name="shield" size={18} className="text-[#0f5223] dark:text-[#3ddc84] shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <span className="font-semibold text-white block">Automatic Conflict Resolution Engine</span>
-                  <p className="text-[#c4c6d0] leading-relaxed">
+                  <span className="font-semibold text-[#191c20] dark:text-white block">Automatic Conflict Resolution Engine</span>
+                  <p className="text-[#5d6168] dark:text-[#c4c6d0] leading-relaxed">
                     ZipStudio uses server-authoritative 3-way line reconciliation and monotonic version vectors. When multiple developers type simultaneously in the exact same line, changes are merged automatically without wiping local edits.
                   </p>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#8e9199] block">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#5d6168] dark:text-[#8e9199] block">
                   Reconciliation History
                 </span>
 
                 {conflicts.length === 0 ? (
-                  <div className="py-6 px-4 text-center rounded-2xl border border-dashed border-[#43474e]/40 bg-[#121316]">
-                    <M3Icon name="task_alt" size={28} className="text-[#3ddc84] mx-auto mb-1 opacity-70" />
-                    <p className="text-xs text-[#c4c6d0] font-medium">All edits currently in sync</p>
-                    <p className="text-[11px] text-[#8e9199] mt-0.5">
+                  <div className="py-6 px-4 text-center rounded-2xl border border-dashed border-[#d8dae5] dark:border-[#43474e]/40 bg-[#f8fafd] dark:bg-[#121316]">
+                    <M3Icon name="task_alt" size={28} className="text-[#0f5223] dark:text-[#3ddc84] mx-auto mb-1 opacity-70" />
+                    <p className="text-xs text-[#191c20] dark:text-[#c4c6d0] font-medium">All edits currently in sync</p>
+                    <p className="text-[11px] text-[#5d6168] dark:text-[#8e9199] mt-0.5">
                       No concurrent collisions detected. Live synchronization is 100% harmonious.
                     </p>
                   </div>
@@ -304,15 +304,15 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
                   conflicts.map((c) => (
                     <div
                       key={c.id}
-                      className="bg-[#18191c] border border-[#3ddc84]/30 rounded-xl p-3 text-xs space-y-1"
+                      className="bg-[#f0f2f8] dark:bg-[#18191c] border border-[#3ddc84]/30 rounded-xl p-3 text-xs space-y-1"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-semibold text-white font-mono">{c.filePath}</span>
-                        <span className="text-[10px] text-[#8e9199] font-mono">
+                        <span className="font-semibold text-[#191c20] dark:text-white font-mono">{c.filePath}</span>
+                        <span className="text-[10px] text-[#5d6168] dark:text-[#8e9199] font-mono">
                           {new Date(c.timestamp).toLocaleTimeString()}
                         </span>
                       </div>
-                      <p className="text-[#b4f3b7]">{c.message}</p>
+                      <p className="text-[#0f5223] dark:text-[#b4f3b7]">{c.message}</p>
                     </div>
                   ))
                 )}
@@ -323,20 +323,20 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
           {activeTab === 'settings' && (
             <div className="space-y-4">
               {/* Profile Config */}
-              <form onSubmit={handleSaveProfile} className="bg-[#18191c] border border-[#43474e]/40 rounded-2xl p-4 space-y-3">
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider">Your Collaborator Profile</h4>
+              <form onSubmit={handleSaveProfile} className="bg-[#f0f2f8] dark:bg-[#18191c] border border-[#d8dae5] dark:border-[#43474e]/40 rounded-2xl p-4 space-y-3">
+                <h4 className="text-xs font-bold text-[#191c20] dark:text-white uppercase tracking-wider">Your Collaborator Profile</h4>
                 <div>
-                  <label className="text-[11px] text-[#8e9199] block mb-1">Display Name</label>
+                  <label className="text-[11px] text-[#5d6168] dark:text-[#8e9199] block mb-1">Display Name</label>
                   <input
                     type="text"
                     value={profile.name}
                     onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                    className="w-full bg-[#121316] border border-[#43474e] rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#a8c7fa]"
+                    className="w-full bg-white dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-xl px-3 py-1.5 text-xs text-[#191c20] dark:text-white focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa]"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[11px] text-[#8e9199] block mb-1.5">Cursor & Presence Color</label>
+                  <label className="text-[11px] text-[#5d6168] dark:text-[#8e9199] block mb-1.5">Cursor & Presence Color</label>
                   <div className="flex items-center gap-2">
                     {PRESET_COLORS.map((c) => (
                       <button
@@ -345,7 +345,7 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
                         onClick={() => setProfile({ ...profile, color: c })}
                         style={{ backgroundColor: c }}
                         className={`w-7 h-7 rounded-full transition-transform cursor-pointer flex items-center justify-center ${
-                          profile.color === c ? 'scale-115 ring-2 ring-white shadow-lg' : 'opacity-80 hover:opacity-100'
+                          profile.color === c ? 'scale-115 ring-2 ring-[#0b57d0] dark:ring-white shadow-lg' : 'opacity-80 hover:opacity-100'
                         }`}
                       >
                         {profile.color === c && <M3Icon name="check" size={14} className="text-[#001d3d]" />}
@@ -356,16 +356,16 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
 
                 <button
                   type="submit"
-                  className="px-3.5 py-1.5 rounded-xl bg-[#00468b] hover:bg-[#005cb8] text-[#d6e3ff] font-semibold text-xs transition-colors cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-semibold text-xs transition-colors cursor-pointer shadow-xs"
                 >
                   Save Profile
                 </button>
               </form>
 
               {/* Room Config */}
-              <form onSubmit={handleSwitchRoom} className="bg-[#18191c] border border-[#43474e]/40 rounded-2xl p-4 space-y-3">
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider">Change Collaboration Room</h4>
-                <p className="text-xs text-[#8e9199] leading-relaxed">
+              <form onSubmit={handleSwitchRoom} className="bg-[#f0f2f8] dark:bg-[#18191c] border border-[#d8dae5] dark:border-[#43474e]/40 rounded-2xl p-4 space-y-3">
+                <h4 className="text-xs font-bold text-[#191c20] dark:text-white uppercase tracking-wider">Change Collaboration Room</h4>
+                <p className="text-xs text-[#5d6168] dark:text-[#8e9199] leading-relaxed">
                   Join a separate room to collaborate in private with specific colleagues or teammates.
                 </p>
                 <div className="flex items-center gap-2">
@@ -374,11 +374,11 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
                     value={roomIdInput}
                     onChange={(e) => setRoomIdInput(e.target.value)}
                     placeholder="Enter room code or name..."
-                    className="flex-1 bg-[#121316] border border-[#43474e] rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-[#a8c7fa]"
+                    className="flex-1 bg-white dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-xl px-3 py-1.5 text-xs text-[#191c20] dark:text-white font-mono focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa]"
                   />
                   <button
                     type="submit"
-                    className="px-3.5 py-1.5 rounded-xl bg-[#2b2d30] hover:bg-[#383a3e] text-[#a8c7fa] font-semibold text-xs border border-[#43474e]/50 transition-colors cursor-pointer shrink-0"
+                    className="px-3.5 py-1.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-semibold text-xs transition-colors cursor-pointer shrink-0 shadow-xs"
                   >
                     Switch Room
                   </button>
@@ -389,13 +389,13 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
         </div>
 
         {/* Modal Footer */}
-        <div className="px-5 py-3 border-t border-[#43474e]/30 bg-[#18191c] flex items-center justify-between text-xs">
-          <span className="text-[#8e9199] font-mono text-[11px]">
+        <div className="px-5 py-3 border-t border-[#d8dae5] dark:border-[#43474e]/30 bg-[#f8fafd] dark:bg-[#18191c] flex items-center justify-between text-xs">
+          <span className="text-[#5d6168] dark:text-[#8e9199] font-mono text-[11px]">
             WebSocket Status: {isConnected ? 'Connected' : 'Connecting...'}
           </span>
           <button
             onClick={triggerClose}
-            className="px-4 py-1.5 rounded-xl bg-[#2b2d30] hover:bg-[#383a3e] text-white font-medium cursor-pointer transition-colors"
+            className="px-5 py-1.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-semibold cursor-pointer transition-colors shadow-sm"
           >
             {t?.done || 'Done'}
           </button>

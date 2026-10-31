@@ -86,30 +86,30 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
   const waterfallSizes = [72, 48, 36, 28, 20, 16, 13];
 
   return (
-    <div className="w-full h-full flex flex-col bg-[#121316] text-[#e2e2e6] overflow-y-auto p-4 md:p-6 space-y-4">
+    <div className="w-full h-full flex flex-col bg-[#f0f2f8] dark:bg-[#121316] text-[#191c20] dark:text-[#e2e2e6] overflow-y-auto p-4 md:p-6 space-y-4">
       {/* Header Card */}
-      <div className="bg-[#1e1f22] border border-[#43474e]/50 rounded-2xl p-4 shadow-lg flex flex-wrap items-center justify-between gap-3 shrink-0">
+      <div className="bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/50 rounded-2xl p-4 shadow-lg flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#00468b]/40 border border-[#a8c7fa]/30 flex items-center justify-center text-[#a8c7fa]">
+          <div className="w-10 h-10 rounded-xl bg-[#00468b]/20 dark:bg-[#00468b]/40 border border-[#0b57d0]/30 dark:border-[#a8c7fa]/30 flex items-center justify-center text-[#0b57d0] dark:text-[#a8c7fa]">
             <M3Icon name="font_download" size={24} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-white">{file.name}</h2>
+              <h2 className="text-base font-semibold text-[#191c20] dark:text-white">{file.name}</h2>
               <M3Badge variant="primary">{ext.toUpperCase()}</M3Badge>
             </div>
-            <p className="text-xs text-[#8e9199] font-mono mt-0.5">
+            <p className="text-xs text-[#5d6168] dark:text-[#8e9199] font-mono mt-0.5">
               {formatBytes(file.size)} • {file.path}
             </p>
           </div>
         </div>
 
         {/* View mode tabs */}
-        <div className="flex items-center bg-[#121316] p-1 rounded-xl border border-[#43474e]/40 gap-1 text-xs">
+        <div className="flex items-center bg-[#f0f2f8] dark:bg-[#121316] p-1 rounded-xl border border-[#d8dae5] dark:border-[#43474e]/40 gap-1 text-xs">
           <button
             onClick={() => setActiveTab('sample')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
-              activeTab === 'sample' ? 'bg-[#2b2d30] text-[#a8c7fa]' : 'text-[#8e9199] hover:text-white'
+              activeTab === 'sample' ? 'bg-[#d3e3fd] text-[#041e49] dark:bg-[#2b2d30] dark:text-[#a8c7fa]' : 'text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white'
             }`}
           >
             {t?.sampleTextTab || 'Sample Text'}
@@ -117,7 +117,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
           <button
             onClick={() => setActiveTab('glyphs')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
-              activeTab === 'glyphs' ? 'bg-[#2b2d30] text-[#a8c7fa]' : 'text-[#8e9199] hover:text-white'
+              activeTab === 'glyphs' ? 'bg-[#d3e3fd] text-[#041e49] dark:bg-[#2b2d30] dark:text-[#a8c7fa]' : 'text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white'
             }`}
           >
             {t?.glyphMatrixTab || 'Glyph Matrix'}
@@ -125,7 +125,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
           <button
             onClick={() => setActiveTab('waterfall')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
-              activeTab === 'waterfall' ? 'bg-[#2b2d30] text-[#a8c7fa]' : 'text-[#8e9199] hover:text-white'
+              activeTab === 'waterfall' ? 'bg-[#d3e3fd] text-[#041e49] dark:bg-[#2b2d30] dark:text-[#a8c7fa]' : 'text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white'
             }`}
           >
             {t?.waterfallTab || 'Type Waterfall'}
@@ -134,17 +134,17 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
       </div>
 
       {/* Font Controls Toolbar */}
-      <div className="bg-[#1e1f22] border border-[#43474e]/40 rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-4 text-xs relative z-10 shrink-0">
+      <div className="bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/40 rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-4 text-xs relative z-10 shrink-0">
         {/* Sample Text Input */}
         <div className="flex-1 min-w-[240px]">
-          <label className="text-[11px] font-semibold uppercase text-[#8e9199] block mb-1">
+          <label className="text-[11px] font-semibold uppercase text-[#5d6168] dark:text-[#8e9199] block mb-1">
             {t?.customPreviewText || 'Custom Preview Text'}
           </label>
           <input
             type="text"
             value={sampleText}
             onChange={(e) => setSampleText(e.target.value)}
-            className="w-full bg-[#121316] border border-[#43474e] rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-[#a8c7fa]"
+            className="w-full bg-[#f0f2f8] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-xl px-3 py-2 text-[#191c20] dark:text-white font-mono focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa]"
             placeholder={t?.typeCustomText || 'Type custom text...'}
           />
         </div>
@@ -152,8 +152,8 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
         {/* Font Size Slider */}
         <div className="w-48">
           <div className="flex justify-between items-center mb-1">
-            <span className="text-[11px] font-semibold uppercase text-[#8e9199]">{t?.sizeLabel || 'Size'}</span>
-            <span className="font-mono text-[#a8c7fa] font-bold">{fontSize}px</span>
+            <span className="text-[11px] font-semibold uppercase text-[#5d6168] dark:text-[#8e9199]">{t?.sizeLabel || 'Size'}</span>
+            <span className="font-mono text-[#0b57d0] dark:text-[#a8c7fa] font-bold">{fontSize}px</span>
           </div>
           <input
             type="range"
@@ -161,15 +161,15 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
             max={96}
             value={fontSize}
             onChange={(e) => setFontSize(Number(e.target.value))}
-            className="w-full accent-[#a8c7fa] cursor-pointer"
+            className="w-full accent-[#0b57d0] dark:accent-[#a8c7fa] cursor-pointer"
           />
         </div>
 
         {/* Letter Spacing */}
         <div className="w-36">
           <div className="flex justify-between items-center mb-1">
-            <span className="text-[11px] font-semibold uppercase text-[#8e9199]">{t?.spacingLabel || 'Spacing'}</span>
-            <span className="font-mono text-[#a8c7fa]">{letterSpacing}px</span>
+            <span className="text-[11px] font-semibold uppercase text-[#5d6168] dark:text-[#8e9199]">{t?.spacingLabel || 'Spacing'}</span>
+            <span className="font-mono text-[#0b57d0] dark:text-[#a8c7fa]">{letterSpacing}px</span>
           </div>
           <input
             type="range"
@@ -177,7 +177,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
             max={12}
             value={letterSpacing}
             onChange={(e) => setLetterSpacing(Number(e.target.value))}
-            className="w-full accent-[#a8c7fa] cursor-pointer"
+            className="w-full accent-[#0b57d0] dark:accent-[#a8c7fa] cursor-pointer"
           />
         </div>
 
@@ -195,7 +195,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
               setIsItalic(false);
               setSampleText('The quick brown fox jumps over the lazy dog 1234567890');
             }}
-            className="px-3 py-1.5 rounded-xl bg-[#121316] text-[#8e9199] border border-[#43474e] hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-xs"
+            className="px-3 py-1.5 rounded-xl bg-[#f0f2f8] dark:bg-[#121316] text-[#5d6168] dark:text-[#8e9199] border border-[#d8dae5] dark:border-[#43474e] hover:text-[#191c20] dark:hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-xs"
           >
             <M3Icon name="restart_alt" size={15} />
             {t?.reset || 'Reset'}
@@ -205,7 +205,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
 
       {/* Main Preview Area */}
       {activeTab === 'sample' && (
-        <div className="flex-1 min-h-[260px] bg-[#18191c] border border-[#43474e]/40 rounded-2xl p-6 shadow-inner flex flex-col justify-start items-start overflow-y-auto relative z-0">
+        <div className="flex-1 min-h-[260px] bg-[#f8fafd] dark:bg-[#18191c] border border-[#d8dae5] dark:border-[#43474e]/40 rounded-2xl p-6 shadow-inner flex flex-col justify-start items-start overflow-y-auto relative z-0">
           <div
             style={{
               fontFamily: `'${fontFamily}', sans-serif`,
@@ -214,7 +214,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
               fontStyle: isItalic ? 'italic' : 'normal',
               lineHeight: 1.25,
             }}
-            className="w-full text-white whitespace-pre-wrap break-words selection:bg-[#a8c7fa] selection:text-[#003062]"
+            className="w-full text-[#191c20] dark:text-white whitespace-pre-wrap break-words selection:bg-[#a8c7fa] selection:text-[#003062]"
           >
             {sampleText || ' '}
           </div>
@@ -223,10 +223,10 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
 
       {/* Glyph Matrix */}
       {activeTab === 'glyphs' && (
-        <div className="flex-1 bg-[#18191c] border border-[#43474e]/40 rounded-2xl p-6 shadow-inner space-y-6">
+        <div className="flex-1 bg-[#f8fafd] dark:bg-[#18191c] border border-[#d8dae5] dark:border-[#43474e]/40 rounded-2xl p-6 shadow-inner space-y-6">
           {/* Uppercase */}
           <div>
-            <div className="text-xs font-semibold uppercase text-[#8e9199] mb-2 tracking-wider">
+            <div className="text-xs font-semibold uppercase text-[#5d6168] dark:text-[#8e9199] mb-2 tracking-wider">
               {t?.uppercaseChars || 'Uppercase Characters (A-Z)'}
             </div>
             <div className="grid grid-cols-6 sm:grid-cols-9 md:grid-cols-13 gap-2">
@@ -234,7 +234,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
                 <div
                   key={ch}
                   style={{ fontFamily: `'${fontFamily}', sans-serif` }}
-                  className="h-12 rounded-xl bg-[#2b2d30] hover:bg-[#383a3e] border border-[#43474e]/40 flex items-center justify-center text-xl text-white select-none transition-colors"
+                  className="h-12 rounded-xl bg-white dark:bg-[#2b2d30] hover:bg-black/5 dark:hover:bg-[#383a3e] border border-[#d8dae5] dark:border-[#43474e]/40 flex items-center justify-center text-xl text-[#191c20] dark:text-white select-none transition-colors shadow-xs"
                 >
                   {ch}
                 </div>
@@ -244,7 +244,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
 
           {/* Lowercase */}
           <div>
-            <div className="text-xs font-semibold uppercase text-[#8e9199] mb-2 tracking-wider">
+            <div className="text-xs font-semibold uppercase text-[#5d6168] dark:text-[#8e9199] mb-2 tracking-wider">
               {t?.lowercaseChars || 'Lowercase Characters (a-z)'}
             </div>
             <div className="grid grid-cols-6 sm:grid-cols-9 md:grid-cols-13 gap-2">
@@ -252,7 +252,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
                 <div
                   key={ch}
                   style={{ fontFamily: `'${fontFamily}', sans-serif` }}
-                  className="h-12 rounded-xl bg-[#2b2d30] hover:bg-[#383a3e] border border-[#43474e]/40 flex items-center justify-center text-xl text-white select-none transition-colors"
+                  className="h-12 rounded-xl bg-white dark:bg-[#2b2d30] hover:bg-black/5 dark:hover:bg-[#383a3e] border border-[#d8dae5] dark:border-[#43474e]/40 flex items-center justify-center text-xl text-[#191c20] dark:text-white select-none transition-colors shadow-xs"
                 >
                   {ch}
                 </div>
@@ -262,7 +262,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
 
           {/* Numbers */}
           <div>
-            <div className="text-xs font-semibold uppercase text-[#8e9199] mb-2 tracking-wider">
+            <div className="text-xs font-semibold uppercase text-[#5d6168] dark:text-[#8e9199] mb-2 tracking-wider">
               {t?.numericChars || 'Numerals (0-9)'}
             </div>
             <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
@@ -270,7 +270,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
                 <div
                   key={ch}
                   style={{ fontFamily: `'${fontFamily}', sans-serif` }}
-                  className="h-12 rounded-xl bg-[#2b2d30] hover:bg-[#383a3e] border border-[#43474e]/40 flex items-center justify-center text-xl text-[#a8c7fa] select-none transition-colors"
+                  className="h-12 rounded-xl bg-white dark:bg-[#2b2d30] hover:bg-black/5 dark:hover:bg-[#383a3e] border border-[#d8dae5] dark:border-[#43474e]/40 flex items-center justify-center text-xl text-[#0b57d0] dark:text-[#a8c7fa] select-none transition-colors shadow-xs font-bold"
                 >
                   {ch}
                 </div>
@@ -280,7 +280,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
 
           {/* Symbols */}
           <div>
-            <div className="text-xs font-semibold uppercase text-[#8e9199] mb-2 tracking-wider">
+            <div className="text-xs font-semibold uppercase text-[#5d6168] dark:text-[#8e9199] mb-2 tracking-wider">
               Symbols & Punctuation
             </div>
             <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-12 gap-2">
@@ -288,7 +288,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
                 <div
                   key={idx}
                   style={{ fontFamily: `'${fontFamily}', sans-serif` }}
-                  className="h-12 rounded-xl bg-[#2b2d30] hover:bg-[#383a3e] border border-[#43474e]/40 flex items-center justify-center text-lg text-[#ffd54f] select-none transition-colors"
+                  className="h-12 rounded-xl bg-white dark:bg-[#2b2d30] hover:bg-black/5 dark:hover:bg-[#383a3e] border border-[#d8dae5] dark:border-[#43474e]/40 flex items-center justify-center text-lg text-[#b26a00] dark:text-[#ffd54f] select-none transition-colors shadow-xs font-bold"
                 >
                   {ch}
                 </div>
@@ -300,10 +300,10 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
 
       {/* Typographic Waterfall */}
       {activeTab === 'waterfall' && (
-        <div className="flex-1 bg-[#18191c] border border-[#43474e]/40 rounded-2xl p-6 shadow-inner space-y-6">
+        <div className="flex-1 bg-[#f8fafd] dark:bg-[#18191c] border border-[#d8dae5] dark:border-[#43474e]/40 rounded-2xl p-6 shadow-inner space-y-6">
           {waterfallSizes.map((px) => (
-            <div key={px} className="border-b border-[#43474e]/30 pb-4 last:border-b-0">
-              <span className="text-[10px] font-mono font-bold text-[#a8c7fa] block mb-1">
+            <div key={px} className="border-b border-[#d8dae5] dark:border-[#43474e]/30 pb-4 last:border-b-0">
+              <span className="text-[10px] font-mono font-bold text-[#0b57d0] dark:text-[#a8c7fa] block mb-1">
                 {px}px
               </span>
               <p
@@ -314,7 +314,7 @@ export function FontSpecimenViewer({ file, t }: BinaryViewerProps) {
                   fontStyle: isItalic ? 'italic' : 'normal',
                   lineHeight: 1.25,
                 }}
-                className="text-white whitespace-pre-wrap break-words"
+                className="text-[#191c20] dark:text-white whitespace-pre-wrap break-words"
               >
                 {sampleText}
               </p>
@@ -403,7 +403,7 @@ export function MediaPlayer({ file, t }: BinaryViewerProps) {
     }
   };
 
-  // Real moving soundwave animation canvas loop
+  // Optimized moving soundwave animation canvas loop
   useEffect(() => {
     if (!isAudio) return;
     const canvas = canvasRef.current;
@@ -412,7 +412,8 @@ export function MediaPlayer({ file, t }: BinaryViewerProps) {
     if (!ctx) return;
 
     let isRunning = true;
-    const barCount = 42;
+    const barCount = 36; // Optimized bar count for fluid mobile performance
+    let lastFrameTime = 0;
 
     // Initialize peaks array if needed
     if (peaksRef.current.length !== barCount) {
@@ -420,9 +421,40 @@ export function MediaPlayer({ file, t }: BinaryViewerProps) {
       smoothedBarsRef.current = Array.from({ length: barCount }, () => 0);
     }
 
-    const renderVisualizer = () => {
+    const drawIdle = () => {
+      const width = canvas.width;
+      const height = canvas.height;
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = '#74777f';
+      const barGap = 3;
+      const totalGaps = (barCount - 1) * barGap;
+      const barWidth = Math.max(3, (width - totalGaps) / barCount);
+
+      for (let i = 0; i < barCount; i++) {
+        const x = i * (barWidth + barGap);
+        const phase = i * 0.22;
+        const idleHeight = 6 + (Math.sin(phase) * 0.5 + 0.5) * 6;
+        ctx.beginPath();
+        ctx.roundRect(x, height - idleHeight, barWidth, idleHeight, [2, 2, 0, 0]);
+        ctx.fill();
+      }
+    };
+
+    if (!isPlaying) {
+      drawIdle();
+      return () => {
+        isRunning = false;
+        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      };
+    }
+
+    const renderVisualizer = (timestamp: number) => {
       if (!isRunning) return;
       animFrameRef.current = requestAnimationFrame(renderVisualizer);
+
+      // Throttle canvas to ~30-33fps to prevent mobile CPU/GPU throttling and battery drain
+      if (timestamp - lastFrameTime < 30) return;
+      lastFrameTime = timestamp;
 
       const width = canvas.width;
       const height = canvas.height;
@@ -438,7 +470,7 @@ export function MediaPlayer({ file, t }: BinaryViewerProps) {
       const freqBuffer = analyser ? new Uint8Array(analyser.frequencyBinCount) : null;
       const timeBuffer = analyser ? new Uint8Array(analyser.fftSize) : null;
 
-      if (analyser && isPlaying) {
+      if (analyser) {
         analyser.getByteFrequencyData(freqBuffer!);
         analyser.getByteTimeDomainData(timeBuffer!);
 
@@ -451,127 +483,101 @@ export function MediaPlayer({ file, t }: BinaryViewerProps) {
         }
       }
 
-      if (isPlaying) {
-        const audioCurrentTime = mediaRef.current?.currentTime || (now / 1000);
-        const activeVol = isMuted ? 0 : volume;
+      const audioCurrentTime = mediaRef.current?.currentTime || (now / 1000);
+      const activeVol = isMuted ? 0 : volume;
 
-        if (visualizerMode === 'spectrum') {
-          // REAL frequency spectrum with dynamic peak falloff
-          for (let i = 0; i < barCount; i++) {
-            let amplitude = 0;
+      if (visualizerMode === 'spectrum') {
+        // High-performance 2D gradient bars (no CPU shadowBlur overhead)
+        for (let i = 0; i < barCount; i++) {
+          let amplitude = 0;
 
-            if (hasRealSignal && freqBuffer) {
-              // Read authentic frequency data with non-linear distribution (bass to treble)
-              const binIndex = Math.min(
-                freqBuffer.length - 1,
-                Math.floor(Math.pow(i / barCount, 1.3) * freqBuffer.length)
-              );
-              amplitude = freqBuffer[binIndex] / 255;
-            } else {
-              // Resilient acoustic wave synthesis synced with real audio progression & harmonics
-              const t = audioCurrentTime * 3.5;
-              const bassKick = Math.pow(Math.sin(t * 4), 6) * 0.45;
-              const subBeat = Math.sin(t * 8 + i * 0.15) * 0.25;
-              const midHarmony = Math.cos(t * 6 + i * 0.28) * 0.28;
-              const shimmer = Math.sin(t * 14 + i * 0.5) * 0.15;
-              const curve = Math.sin((i / barCount) * Math.PI); // arch envelope
-              amplitude = Math.max(0.06, (bassKick + subBeat + midHarmony + shimmer + 0.35) * curve * activeVol);
-            }
-
-            // Smooth interpolation
-            const prev = smoothedBarsRef.current[i] || 0;
-            const currentAmp = prev * 0.65 + amplitude * 0.35;
-            smoothedBarsRef.current[i] = currentAmp;
-
-            const barHeight = Math.max(6, Math.min(height - 12, currentAmp * (height - 10)));
-            const x = i * (barWidth + barGap);
-            const y = height - barHeight;
-
-            // Expressive Gradient: Deep Cyan -> M3 Primary Blue -> Soft Violet
-            const gradient = ctx.createLinearGradient(0, height, 0, y);
-            gradient.addColorStop(0, '#00468b');
-            gradient.addColorStop(0.55, '#a8c7fa');
-            gradient.addColorStop(1, '#d0bcff');
-
-            ctx.fillStyle = gradient;
-            ctx.beginPath();
-            ctx.roundRect(x, y, barWidth, barHeight, [4, 4, 1, 1]);
-            ctx.fill();
-
-            // Real-time floating peak cap with gravity physics
-            const peak = peaksRef.current[i] || { y: height, vel: 0 };
-            if (y < peak.y) {
-              peak.y = y;
-              peak.vel = 0;
-            } else {
-              peak.vel += 0.22; // gravity
-              peak.y += peak.vel;
-              if (peak.y > height - 6) {
-                peak.y = height - 6;
-                peak.vel = 0;
-              }
-            }
-            peaksRef.current[i] = peak;
-
-            // Render floating peak cap
-            ctx.fillStyle = '#ffffff';
-            ctx.shadowColor = '#a8c7fa';
-            ctx.shadowBlur = 6;
-            ctx.fillRect(x, Math.max(2, peak.y - 2), barWidth, 2);
-            ctx.shadowBlur = 0;
+          if (hasRealSignal && freqBuffer) {
+            const binIndex = Math.min(
+              freqBuffer.length - 1,
+              Math.floor(Math.pow(i / barCount, 1.3) * freqBuffer.length)
+            );
+            amplitude = freqBuffer[binIndex] / 255;
+          } else {
+            const t = audioCurrentTime * 3.5;
+            const bassKick = Math.pow(Math.sin(t * 4), 6) * 0.45;
+            const subBeat = Math.sin(t * 8 + i * 0.15) * 0.25;
+            const midHarmony = Math.cos(t * 6 + i * 0.28) * 0.28;
+            const shimmer = Math.sin(t * 14 + i * 0.5) * 0.15;
+            const curve = Math.sin((i / barCount) * Math.PI);
+            amplitude = Math.max(0.06, (bassKick + subBeat + midHarmony + shimmer + 0.35) * curve * activeVol);
           }
-        } else {
-          // REAL oscilloscope waveform mode
+
+          const prev = smoothedBarsRef.current[i] || 0;
+          const currentAmp = prev * 0.65 + amplitude * 0.35;
+          smoothedBarsRef.current[i] = currentAmp;
+
+          const barHeight = Math.max(6, Math.min(height - 12, currentAmp * (height - 10)));
+          const x = i * (barWidth + barGap);
+          const y = height - barHeight;
+
+          const gradient = ctx.createLinearGradient(0, height, 0, y);
+          gradient.addColorStop(0, '#00468b');
+          gradient.addColorStop(0.55, '#a8c7fa');
+          gradient.addColorStop(1, '#d0bcff');
+
+          ctx.fillStyle = gradient;
           ctx.beginPath();
-          ctx.lineWidth = 3;
-          ctx.strokeStyle = '#a8c7fa';
-          ctx.shadowColor = '#a8c7fa';
-          ctx.shadowBlur = 12;
+          ctx.roundRect(x, y, barWidth, barHeight, [3, 3, 1, 1]);
+          ctx.fill();
 
-          const pointsCount = timeBuffer ? timeBuffer.length : 80;
-          const sliceWidth = width / (pointsCount - 1);
-
-          for (let i = 0; i < pointsCount; i++) {
-            let norm = 0.5;
-            if (hasRealSignal && timeBuffer) {
-              norm = timeBuffer[i] / 255.0;
-            } else {
-              const t = audioCurrentTime * 6;
-              const f1 = Math.sin(t + (i / pointsCount) * 12) * 0.25;
-              const f2 = Math.sin(t * 1.8 + (i / pointsCount) * 24) * 0.12;
-              norm = 0.5 + (f1 + f2) * activeVol;
-            }
-
-            const x = i * sliceWidth;
-            const y = norm * height;
-
-            if (i === 0) {
-              ctx.moveTo(x, y);
-            } else {
-              ctx.lineTo(x, y);
+          // Real-time floating peak cap with gravity physics
+          const peak = peaksRef.current[i] || { y: height, vel: 0 };
+          if (y < peak.y) {
+            peak.y = y;
+            peak.vel = 0;
+          } else {
+            peak.vel += 0.22;
+            peak.y += peak.vel;
+            if (peak.y > height - 6) {
+              peak.y = height - 6;
+              peak.vel = 0;
             }
           }
-          ctx.stroke();
-          ctx.shadowBlur = 0;
+          peaksRef.current[i] = peak;
+
+          // Floating peak cap without expensive CPU blur
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(x, Math.max(2, peak.y - 2), barWidth, 2);
         }
       } else {
-        // Paused state: Gentle, living breathing standing wave
-        ctx.fillStyle = '#2b2d30';
-        const waveTime = now * 0.0016;
+        // Oscilloscope waveform mode
+        ctx.beginPath();
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#a8c7fa';
 
-        for (let i = 0; i < barCount; i++) {
-          const x = i * (barWidth + barGap);
-          const phase = i * 0.22 + waveTime;
-          const idleHeight = 8 + (Math.sin(phase) * 0.5 + 0.5) * 8;
+        const pointsCount = timeBuffer ? Math.min(timeBuffer.length, 64) : 48;
+        const sliceWidth = width / (pointsCount - 1);
 
-          ctx.beginPath();
-          ctx.roundRect(x, height - idleHeight, barWidth, idleHeight, [3, 3, 0, 0]);
-          ctx.fill();
+        for (let i = 0; i < pointsCount; i++) {
+          let norm = 0.5;
+          if (hasRealSignal && timeBuffer) {
+            norm = timeBuffer[i] / 255.0;
+          } else {
+            const t = audioCurrentTime * 6;
+            const f1 = Math.sin(t + (i / pointsCount) * 12) * 0.25;
+            const f2 = Math.sin(t * 1.8 + (i / pointsCount) * 24) * 0.12;
+            norm = 0.5 + (f1 + f2) * activeVol;
+          }
+
+          const x = i * sliceWidth;
+          const y = norm * height;
+
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
         }
+        ctx.stroke();
       }
     };
 
-    renderVisualizer();
+    animFrameRef.current = requestAnimationFrame(renderVisualizer);
 
     return () => {
       isRunning = false;
@@ -581,13 +587,18 @@ export function MediaPlayer({ file, t }: BinaryViewerProps) {
     };
   }, [isAudio, isPlaying, visualizerMode, volume, isMuted]);
 
-  // Media element event handlers
+  // Throttled media element event handler to eliminate mobile re-render stutter
+  const lastTimeUpdateRef = useRef<number>(0);
   const handleTimeUpdate = () => {
     if (mediaRef.current) {
-      setCurrentTime(mediaRef.current.currentTime);
-      if (mediaRef.current.buffered.length > 0 && mediaRef.current.duration) {
-        const bufferedEnd = mediaRef.current.buffered.end(mediaRef.current.buffered.length - 1);
-        setBufferedPercent((bufferedEnd / mediaRef.current.duration) * 100);
+      const now = performance.now();
+      if (now - lastTimeUpdateRef.current > 250 || mediaRef.current.ended) {
+        lastTimeUpdateRef.current = now;
+        setCurrentTime(mediaRef.current.currentTime);
+        if (mediaRef.current.buffered.length > 0 && mediaRef.current.duration) {
+          const bufferedEnd = mediaRef.current.buffered.end(mediaRef.current.buffered.length - 1);
+          setBufferedPercent((bufferedEnd / mediaRef.current.duration) * 100);
+        }
       }
     }
   };
@@ -707,21 +718,21 @@ export function MediaPlayer({ file, t }: BinaryViewerProps) {
     <div
       ref={containerRef}
       onMouseMove={handleMouseMove}
-      className="w-full h-full flex flex-col items-center justify-center bg-[#121316] text-[#e2e2e6] p-4 md:p-6 overflow-y-auto"
+      className="w-full h-full flex flex-col items-center justify-center bg-[#f0f2f8] dark:bg-[#121316] text-[#191c20] dark:text-[#e2e2e6] p-4 md:p-6 overflow-y-auto"
     >
-      <div className="max-w-2xl w-full bg-[#1e1f22] border border-[#43474e]/50 rounded-2xl p-5 md:p-6 shadow-2xl space-y-4 m3-dialog-bounce relative overflow-hidden">
+      <div className="max-w-2xl w-full bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/50 rounded-2xl p-5 md:p-6 shadow-2xl space-y-4 m3-dialog-bounce relative overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-[#43474e]/30">
+        <div className="flex items-center justify-between pb-3 border-b border-[#d8dae5] dark:border-[#43474e]/30">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-[#00468b]/40 border border-[#a8c7fa]/30 flex items-center justify-center text-[#a8c7fa] shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-[#00468b]/20 dark:bg-[#00468b]/40 border border-[#0b57d0]/30 dark:border-[#a8c7fa]/30 flex items-center justify-center text-[#0b57d0] dark:text-[#a8c7fa] shrink-0">
               <M3Icon name={isAudio ? 'audiotrack' : 'videocam'} size={28} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-white truncate max-w-sm">{file.name}</h3>
+                <h3 className="text-sm font-semibold text-[#191c20] dark:text-white truncate max-w-sm">{file.name}</h3>
                 <M3Badge variant={isAudio ? 'success' : 'primary'}>{ext.toUpperCase()}</M3Badge>
               </div>
-              <p className="text-xs text-[#8e9199] font-mono mt-0.5">
+              <p className="text-xs text-[#5d6168] dark:text-[#8e9199] font-mono mt-0.5">
                 {formatBytes(file.size)} • {file.path}
               </p>
             </div>
@@ -730,7 +741,7 @@ export function MediaPlayer({ file, t }: BinaryViewerProps) {
           <a
             href={file.content}
             download={file.name}
-            className="px-3 py-1.5 rounded-xl bg-[#2b2d30] hover:bg-[#383a3e] text-[#a8c7fa] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="px-3 py-1.5 rounded-xl bg-[#d3e3fd] hover:bg-[#c2e7ff] text-[#041e49] dark:bg-[#2b2d30] dark:hover:bg-[#383a3e] dark:text-[#a8c7fa] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-[#d8dae5] dark:border-transparent"
             title="Download original file"
           >
             <M3Icon name="download" size={16} />
@@ -898,6 +909,8 @@ export function MediaPlayer({ file, t }: BinaryViewerProps) {
                 src={file.content}
                 controls={false}
                 playsInline
+                preload="metadata"
+                style={{ transform: 'translateZ(0)', willChange: 'transform' }}
                 onClick={togglePlay}
                 onDoubleClick={toggleFullscreen}
                 onTimeUpdate={handleTimeUpdate}

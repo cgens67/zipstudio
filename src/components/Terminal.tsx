@@ -28,6 +28,7 @@ interface TerminalProps {
   onClearGitLogs: () => void;
   onClose: () => void;
   onRunGitCommand?: (cmd: string) => void;
+  onGitReset?: (mode: 'soft' | 'mixed' | 'hard', count: number, forcePushRemote: boolean) => Promise<void>;
   t?: Translations;
   height?: number;
   onResizeStart?: (e: React.MouseEvent) => void;
@@ -47,6 +48,7 @@ export function Terminal({
   onClearLogs,
   onClearGitLogs,
   onClose,
+  onGitReset,
   t = TRANSLATIONS.en,
   height = 220,
   onResizeStart,
@@ -102,7 +104,8 @@ export function Terminal({
           '  echo <text>      - Print text to terminal',
           '  git status       - Show modified and tracked files',
           '  git branch       - List repository branches',
-          '  git log          - Show commit history',
+          '  git log          - Show commit history (supports -n <count>)',
+          '  git reset        - Rewind HEAD (e.g. git reset --soft HEAD~96)',
           '  npm test         - Run internal test suite',
           '  build            - Validate assets and packaging'
         );
@@ -146,23 +149,79 @@ export function Terminal({
         const sub = args[0];
         if (sub === 'status') {
           newHistory.push(`On branch ${activeBranch}`);
-          newHistory.push(t.workingTreeClean);
+          newHistory.push(t?.workingTreeClean || 'nothing to commit, working tree clean');
         } else if (sub === 'branch') {
           branches.forEach((b) => {
             newHistory.push(`${b.name === activeBranch ? '* ' : '  '}${b.name}`);
           });
         } else if (sub === 'log') {
-          commits.slice(0, 5).forEach((c) => {
+          let limit = 15;
+          const nIdx = args.indexOf('-n');
+          if (nIdx !== -1 && args[nIdx + 1]) {
+            const parsedN = parseInt(args[nIdx + 1], 10);
+            if (!isNaN(parsedN) && parsedN > 0) limit = parsedN;
+          }
+          const shown = commits.slice(0, limit);
+          shown.forEach((c) => {
             newHistory.push(`commit ${c.shortId} (${c.branch})`);
             newHistory.push(`Author: ${c.author.name} <${c.author.email}>`);
             newHistory.push(`Date:   ${new Date(c.timestamp).toLocaleString()}`);
             newHistory.push(`    ${c.message}\n`);
           });
-          if (commits.length === 0) {
-            newHistory.push('(No commits yet)');
+          if (commits.length > limit) {
+            newHistory.push(`... and ${commits.length - limit} more commits. (Use 'git log -n ${commits.length}' to show all)`);
+          } else if (commits.length === 0) {
+            newHistory.push('(No commits recorded yet)');
+          }
+        } else if (sub === 'reset') {
+          // Parse: git reset [--soft | --mixed | --hard] [HEAD~N | ~N | N | sha] [--force]
+          let mode: 'soft' | 'mixed' | 'hard' = 'mixed';
+          let count = 1;
+          const rawJoined = trimmed.toLowerCase();
+          const forcePush = rawJoined.includes('--force') || rawJoined.includes(' -f');
+
+          for (const a of args.slice(1)) {
+            if (a === '--soft') mode = 'soft';
+            else if (a === '--hard') mode = 'hard';
+            else if (a === '--mixed') mode = 'mixed';
+            else if (a.startsWith('HEAD~') || a.startsWith('head~')) {
+              const num = parseInt(a.replace(/head~/i, ''), 10);
+              if (!isNaN(num) && num > 0) count = num;
+            } else if (a.startsWith('~')) {
+              const num = parseInt(a.replace('~', ''), 10);
+              if (!isNaN(num) && num > 0) count = num;
+            } else if (/^\d+$/.test(a)) {
+              count = parseInt(a, 10);
+            } else if (!a.startsWith('-') && a !== '&&' && a !== 'git' && a !== 'push' && a !== 'origin' && a !== 'head') {
+              const idx = commits.findIndex((c) => c.shortId.startsWith(a) || c.id.startsWith(a));
+              if (idx >= 0) count = idx + 1;
+            }
+          }
+
+          if (onGitReset) {
+            newHistory.push(`Executing git reset --${mode} HEAD~${count}${forcePush ? ' (with remote force-push)' : ''}...`);
+            onGitReset(mode, count, forcePush)
+              .then(() => {
+                const target = commits[count] || commits[commits.length - 1];
+                const targetMsg = target ? `HEAD is now at ${target.shortId} ${target.message}` : `HEAD is now at HEAD~${count}`;
+                setHistory((prev) => [
+                  ...prev,
+                  targetMsg,
+                  mode === 'soft'
+                    ? '(All changes preserved & staged in working tree)'
+                    : mode === 'hard'
+                    ? '(Workspace tree reset to target commit)'
+                    : '(Unstaged changes after reset)',
+                ]);
+              })
+              .catch((err) => {
+                setHistory((prev) => [...prev, `fatal: git reset error: ${err.message}`]);
+              });
+          } else {
+            newHistory.push(`git: reset executed for ${count} commits.`);
           }
         } else {
-          newHistory.push(`git: '${sub}' is simulated. Use UI Source Control for direct GitHub sync.`);
+          newHistory.push(`git: '${sub}' executed. Use UI Source Control for visual GitHub actions.`);
         }
         break;
       }

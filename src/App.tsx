@@ -937,6 +937,61 @@ export default function App() {
     addGitLog(`Submitted ${state} review on PR #${prId}: "${body}"`);
   };
 
+  // Execute Git Reset (--soft, --mixed, --hard) with optional remote force-push
+  const handleGitReset = async (
+    mode: 'soft' | 'mixed' | 'hard',
+    count: number,
+    forcePushRemote: boolean
+  ) => {
+    if (count <= 0) return;
+    const targetCommitIndex = Math.min(count, commits.length);
+    const targetCommit = commits[targetCommitIndex]; // The commit we are resetting TO
+    const targetSha = targetCommit ? targetCommit.id : 'HEAD';
+
+    addGitLog(`Executing: git reset --${mode} HEAD~${count}${forcePushRemote ? ' && git push origin HEAD --force' : ''}`);
+
+    // Remote branch reset if requested and authenticated
+    if (forcePushRemote && selectedRepo && githubToken && targetCommit) {
+      try {
+        addGitLog(`Force-pushing reset ref to GitHub (${selectedRepo.fullName}@${activeBranch})...`);
+        const [owner, repoName] = selectedRepo.fullName.split('/');
+        const client = new GitHubApiClient(githubToken);
+        await client.resetBranch(owner, repoName, activeBranch, targetCommit.id, true);
+        addGitLog(`Successfully updated remote ${activeBranch} ref to ${targetCommit.shortId} (force-push).`);
+      } catch (err: any) {
+        addGitLog(`Remote force-push failed: ${err.message}`);
+        triggerAlert('Remote Reset Failed', `Failed to update remote branch on GitHub: ${err.message}`, 'error');
+        throw err;
+      }
+    }
+
+    // Adjust local commit history
+    setCommits((prev) => prev.slice(count));
+
+    if (mode === 'hard') {
+      if (githubToken && selectedRepo && targetCommit) {
+        try {
+          addGitLog(`Restoring workspace tree from commit ${targetCommit.shortId}...`);
+          const client = new GitHubApiClient(githubToken);
+          await loadRemoteRepoTree(client, selectedRepo, targetCommit.id);
+        } catch (e: any) {
+          console.warn('Failed restoring tree from target commit:', e);
+        }
+      }
+      addGitLog(`HEAD is now at [${targetCommit?.shortId || 'HEAD'}] ${targetCommit?.message || ''}`);
+    } else if (mode === 'soft') {
+      addGitLog(`Soft reset complete. Commits peeled back by ${count}. Your working directory and staged changes remain preserved.`);
+    } else {
+      addGitLog(`Mixed reset complete. HEAD moved back by ${count}. Changes remain in working tree.`);
+    }
+
+    triggerAlert(
+      'Git Reset Executed',
+      `Successfully performed git reset --${mode} HEAD~${count}${forcePushRemote ? ' (force-pushed to remote)' : ''}.`,
+      'success'
+    );
+  };
+
   // Handle .ZIP Import directly in browser (CLEAN OVERWRITE)
   const handleUploadZip = async (file: File) => {
     try {
@@ -1382,6 +1437,7 @@ export default function App() {
               onRefreshCommits={handleRefreshCommits}
               onCreatePullRequest={handleCreatePullRequest}
               onSubmitPRReview={handleSubmitPRReview}
+              onGitReset={handleGitReset}
             />
           </div>
 
@@ -1396,6 +1452,7 @@ export default function App() {
               onClearLogs={() => setLogs([])}
               onClearGitLogs={() => setGitLogs([])}
               onClose={() => setMobileTab('editor')}
+              onGitReset={handleGitReset}
               t={t}
               isMobile={true}
             />
@@ -1756,6 +1813,7 @@ export default function App() {
                 onRefreshCommits={handleRefreshCommits}
                 onCreatePullRequest={handleCreatePullRequest}
                 onSubmitPRReview={handleSubmitPRReview}
+                onGitReset={handleGitReset}
               />
             )}
 
@@ -1852,6 +1910,7 @@ export default function App() {
               onClearLogs={() => setLogs([])}
               onClearGitLogs={() => setGitLogs([])}
               onClose={() => setShowTerminal(false)}
+              onGitReset={handleGitReset}
               t={t}
               height={terminalHeight}
               onResizeStart={(e) => {
