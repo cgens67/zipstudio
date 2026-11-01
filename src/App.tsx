@@ -811,7 +811,7 @@ export default function App() {
 
       const parentOverride = softResetTarget ? softResetTarget.id : undefined;
       const isForce = Boolean(softResetTarget);
-      const shouldCleanOverwrite = Boolean(isCleanZipImport || softResetTarget);
+      const shouldCleanOverwrite = Boolean(isCleanZipImport);
 
       const commitSha = await client.commitAndPushFiles(
         owner,
