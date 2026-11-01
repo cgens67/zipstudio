@@ -649,6 +649,21 @@ export class GitHubApiClient {
     const commitData: any = await this.request(`/repos/${owner}/${repo}/git/commits/${parentCommitSha}`);
     const baseTreeSha = commitData.tree.sha;
 
+    // Detect all files that exist in the parent commit but no longer exist in the workspace
+    const allDeletedPaths = new Set<string>(deletedPaths);
+    try {
+      const parentTreeRes: any = await this.request(`/repos/${owner}/${repo}/git/trees/${baseTreeSha}?recursive=1`);
+      if (parentTreeRes?.tree && Array.isArray(parentTreeRes.tree)) {
+        for (const item of parentTreeRes.tree) {
+          if (item.type === 'blob' && !changedFiles[item.path]) {
+            allDeletedPaths.add(item.path);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Could not inspect parent tree for deleted files:', e);
+    }
+
     // 3. Separate binary files that require blob creation
     const entries = Object.entries(changedFiles);
     const binaryEntries = entries.filter(
@@ -679,7 +694,7 @@ export class GitHubApiClient {
     const treeItems: any[] = [];
 
     // Handle deleted files (setting sha to null tells GitHub to remove the path from base_tree)
-    for (const delPath of deletedPaths) {
+    for (const delPath of allDeletedPaths) {
       treeItems.push({
         path: delPath,
         mode: '100644',

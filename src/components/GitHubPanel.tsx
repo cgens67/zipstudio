@@ -96,9 +96,11 @@ export function GitHubPanel({
   // Git Reset UI state
   const [showResetUI, setShowResetUI] = useState(false);
   const [resetMode, setResetMode] = useState<'soft' | 'mixed' | 'hard'>('soft');
-  const [resetCount, setResetCount] = useState<number>(1);
+  const [resetCountInput, setResetCountInput] = useState<string>(commits.length > 0 ? '1' : '');
   const [forcePushRemote, setForcePushRemote] = useState(false);
   const [isExecutingReset, setIsExecutingReset] = useState(false);
+
+  const resetCount = Math.max(0, parseInt(resetCountInput, 10) || 0);
 
   // Commit Search & Windowing state (for searching and preventing lag)
   const [commitSearchQuery, setCommitSearchQuery] = useState('');
@@ -831,27 +833,36 @@ export function GitHubPanel({
                       Number of Commits to Rewind (HEAD~N)
                     </label>
                     <span className="font-mono text-xs font-bold text-[#0b57d0] dark:text-[#a8c7fa]">
-                      HEAD~{resetCount}
+                      {resetCount > 0 ? `HEAD~${resetCount}` : commits.length === 0 ? '0 commits' : 'HEAD~...'}
                     </span>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <input
-                      type="number"
-                      min={1}
-                      max={Math.max(1, commits.length || 999)}
-                      value={resetCount}
-                      onChange={(e) => setResetCount(Math.max(1, parseInt(e.target.value) || 1))}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder={commits.length === 0 ? '0' : '1'}
+                      value={resetCountInput}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === '') {
+                          setResetCountInput('');
+                          return;
+                        }
+                        const clean = raw.replace(/[^0-9]/g, '');
+                        setResetCountInput(clean);
+                      }}
                       className="w-24 bg-[#f0f2f8] dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-[#191c20] dark:text-white focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa]"
                     />
 
                     {/* Quick Preset Buttons */}
                     <div className="flex items-center gap-1 flex-wrap">
-                      {[1, 2, 3, 5, 10, 96].map((num) => (
+                      {[1, 2, 3, 5, 10, 38, 41, 96].map((num) => (
                         <button
                           key={num}
                           type="button"
-                          onClick={() => setResetCount(num)}
+                          onClick={() => setResetCountInput(num.toString())}
                           className={`px-2 py-1 rounded-lg text-[10px] font-mono transition-colors cursor-pointer border ${
                             resetCount === num
                               ? 'bg-[#0b57d0] text-white border-[#0b57d0] dark:bg-[#a8c7fa] dark:text-[#003062]'
@@ -947,7 +958,7 @@ export function GitHubPanel({
                   <button
                     type="button"
                     onClick={async () => {
-                      if (!onGitReset) return;
+                      if (!onGitReset || resetCount <= 0) return;
                       setIsExecutingReset(true);
                       try {
                         await onGitReset(resetMode, resetCount, forcePushRemote);
@@ -956,7 +967,7 @@ export function GitHubPanel({
                         setIsExecutingReset(false);
                       }
                     }}
-                    disabled={isExecutingReset}
+                    disabled={isExecutingReset || resetCount <= 0}
                     className={`px-4 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm disabled:opacity-40 ${
                       resetMode === 'hard'
                         ? 'bg-[#ba1a1a] hover:bg-[#93000a] text-white'
@@ -971,7 +982,7 @@ export function GitHubPanel({
                     ) : (
                       <>
                         <M3Icon name="check" size={14} />
-                        <span>Execute git reset --{resetMode} HEAD~{resetCount}</span>
+                        <span>Execute git reset --{resetMode} HEAD~{resetCount > 0 ? resetCount : 1}</span>
                       </>
                     )}
                   </button>
@@ -1078,7 +1089,7 @@ export function GitHubPanel({
                             <div className="flex items-center gap-1 shrink-0">
                               <button
                                 onClick={() => {
-                                  setResetCount(headDistance);
+                                  setResetCountInput(headDistance.toString());
                                   setShowResetUI(true);
                                 }}
                                 title={`Reset HEAD to HEAD~${headDistance}`}

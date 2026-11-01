@@ -781,13 +781,23 @@ export default function App() {
       let filesToCommit: Record<string, VFile> = {};
       const deletedPaths: string[] = [];
 
+      // Collect all deleted paths from diffs and baseFiles
+      for (const diff of diffs) {
+        if (diff.status === 'deleted' && !deletedPaths.includes(diff.path)) {
+          deletedPaths.push(diff.path);
+        }
+      }
+      for (const basePath of Object.keys(baseFiles)) {
+        if (!files[basePath] && !deletedPaths.includes(basePath)) {
+          deletedPaths.push(basePath);
+        }
+      }
+
       if (isCleanZipImport || softResetTarget) {
         filesToCommit = files;
       } else {
         for (const diff of diffs) {
-          if (diff.status === 'deleted') {
-            deletedPaths.push(diff.path);
-          } else if (files[diff.path]) {
+          if (diff.status !== 'deleted' && files[diff.path]) {
             filesToCommit[diff.path] = files[diff.path];
           }
         }
@@ -801,6 +811,7 @@ export default function App() {
 
       const parentOverride = softResetTarget ? softResetTarget.id : undefined;
       const isForce = Boolean(softResetTarget);
+      const shouldCleanOverwrite = Boolean(isCleanZipImport || softResetTarget);
 
       const commitSha = await client.commitAndPushFiles(
         owner,
@@ -808,7 +819,7 @@ export default function App() {
         activeBranch,
         message,
         filesToCommit,
-        isCleanZipImport,
+        shouldCleanOverwrite,
         deletedPaths,
         parentOverride,
         isForce
