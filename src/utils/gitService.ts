@@ -279,9 +279,13 @@ export function computeWorkingTreeChanges(
     if (!base && curr) {
       diffs.push(computeFileDiff(path, null, curr.content));
     } else if (base && !curr) {
-      diffs.push(computeFileDiff(path, base.content, null));
-    } else if (base && curr && base.content !== curr.content) {
-      diffs.push(computeFileDiff(path, base.content, curr.content));
+      diffs.push(computeFileDiff(path, base.content || '', null));
+    } else if (base && curr) {
+      const isShaDiff = Boolean(base.sha && curr.sha && base.sha !== curr.sha);
+      const isContentDiff = base.content !== curr.content;
+      if (isShaDiff || isContentDiff) {
+        diffs.push(computeFileDiff(path, base.content !== undefined ? base.content : null, curr.content));
+      }
     }
   }
 
@@ -592,6 +596,37 @@ export class GitHubApiClient {
     return files;
   }
 
+  async fetchCommitTreeSummary(
+    owner: string,
+    repo: string,
+    commitSha: string
+  ): Promise<Array<{ path: string; mode: string; type: string; sha: string; size?: number }>> {
+    const commitData: any = await this.request(`/repos/${owner}/${repo}/git/commits/${commitSha}`);
+    const treeSha = commitData.tree?.sha || commitSha;
+    const treeData: any = await this.request(`/repos/${owner}/${repo}/git/trees/${treeSha}?recursive=1`);
+    if (!treeData.tree || !Array.isArray(treeData.tree)) {
+      return [];
+    }
+    return treeData.tree.filter((item: any) => item.type === 'blob');
+  }
+
+  async fetchBlobContent(owner: string, repo: string, blobSha: string): Promise<string> {
+    const blobRes: any = await this.request(`/repos/${owner}/${repo}/git/blobs/${blobSha}`);
+    if (blobRes.encoding === 'base64') {
+      try {
+        return decodeURIComponent(
+          atob(blobRes.content.replace(/\s/g, ''))
+            .split('')
+            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+      } catch {
+        return atob(blobRes.content.replace(/\s/g, ''));
+      }
+    }
+    return blobRes.content || '';
+  }
+
   async commitAndPushFiles(
     owner: string,
     repo: string,
@@ -599,11 +634,16 @@ export class GitHubApiClient {
     message: string,
     changedFiles: Record<string, VFileRef>,
     cleanOverwrite = false,
-    deletedPaths: string[] = []
+    deletedPaths: string[] = [],
+    parentCommitShaOverride?: string,
+    forcePush = false
   ): Promise<string> {
-    // 1. Get latest commit SHA on branch
-    const refData: any = await this.request(`/repos/${owner}/${repo}/git/ref/heads/${branch}`);
-    const parentCommitSha = refData.object.sha;
+    // 1. Get latest commit SHA on branch or use override
+    let parentCommitSha = parentCommitShaOverride;
+    if (!parentCommitSha) {
+      const refData: any = await this.request(`/repos/${owner}/${repo}/git/ref/heads/${branch}`);
+      parentCommitSha = refData.object.sha;
+    }
 
     // 2. Get tree SHA of the parent commit
     const commitData: any = await this.request(`/repos/${owner}/${repo}/git/commits/${parentCommitSha}`);
@@ -708,7 +748,7 @@ export class GitHubApiClient {
       method: 'PATCH',
       body: JSON.stringify({
         sha: newCommit.sha,
-        force: cleanOverwrite,
+        force: cleanOverwrite || forcePush || Boolean(parentCommitShaOverride),
       }),
     });
 

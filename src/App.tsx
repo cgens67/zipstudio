@@ -176,6 +176,7 @@ export default function App() {
   ]);
   const [commits, setCommits] = useState<GitCommit[]>([]);
   const [pullRequests, setPullRequests] = useState<PullRequest[]>([]);
+  const [softResetTarget, setSoftResetTarget] = useState<GitCommit | null>(null);
   const [oauthConfigured, setOauthConfigured] = useState(false);
   const [callbackUrl, setCallbackUrl] = useState('');
 
@@ -766,6 +767,7 @@ export default function App() {
       setCommits((prev) => [commit, ...prev]);
       setBaseFiles({ ...files });
       setIsCleanZipImport(false);
+      setSoftResetTarget(null);
       addGitLog(`Committed locally [${commit.shortId}] on ${activeBranch}: "${message}"`);
       return;
     }
@@ -775,11 +777,11 @@ export default function App() {
       const [owner, repoName] = selectedRepo.fullName.split('/');
       const client = new GitHubApiClient(githubToken);
 
-      // Only upload and include files that actually changed
+      // Only upload and include files that actually changed (or all files if clean import or soft reset squash)
       let filesToCommit: Record<string, VFile> = {};
       const deletedPaths: string[] = [];
 
-      if (isCleanZipImport) {
+      if (isCleanZipImport || softResetTarget) {
         filesToCommit = files;
       } else {
         for (const diff of diffs) {
@@ -797,6 +799,9 @@ export default function App() {
         }
       }
 
+      const parentOverride = softResetTarget ? softResetTarget.id : undefined;
+      const isForce = Boolean(softResetTarget);
+
       const commitSha = await client.commitAndPushFiles(
         owner,
         repoName,
@@ -804,7 +809,9 @@ export default function App() {
         message,
         filesToCommit,
         isCleanZipImport,
-        deletedPaths
+        deletedPaths,
+        parentOverride,
+        isForce
       );
 
       const commit: GitCommit = {
@@ -824,8 +831,16 @@ export default function App() {
       setCommits((prev) => [commit, ...prev]);
       setBaseFiles({ ...files });
       setIsCleanZipImport(false);
+      setSoftResetTarget(null);
       addGitLog(
-        `Successfully pushed commit [${commit.shortId}] to https://github.com/${selectedRepo.fullName}/commit/${commitSha}`
+        `Successfully pushed commit [${commit.shortId}] to https://github.com/${selectedRepo.fullName}/commit/${commitSha}${
+          isForce ? ' (squashed rewound commits)' : ''
+        }`
+      );
+      triggerAlert(
+        'Commit Published',
+        `Successfully published commit [${commit.shortId}] on ${activeBranch}. All workspace files were preserved and published.`,
+        'success'
       );
     } catch (err: any) {
       addGitLog(`Commit error: ${err.message}`);
@@ -944,11 +959,86 @@ export default function App() {
     forcePushRemote: boolean
   ) => {
     if (count <= 0) return;
-    const targetCommitIndex = Math.min(count, commits.length);
+    const targetCommitIndex = Math.min(count, Math.max(0, commits.length - 1));
     const targetCommit = commits[targetCommitIndex]; // The commit we are resetting TO
     const targetSha = targetCommit ? targetCommit.id : 'HEAD';
 
     addGitLog(`Executing: git reset --${mode} HEAD~${count}${forcePushRemote ? ' && git push origin HEAD --force' : ''}`);
+
+    if (mode === 'soft' || mode === 'mixed') {
+      if (githubToken && selectedRepo && targetCommit) {
+        try {
+          addGitLog(`Fetching commit tree summary for [${targetCommit.shortId}] to populate staged diffs...`);
+          const [owner, repoName] = selectedRepo.fullName.split('/');
+          const client = new GitHubApiClient(githubToken);
+
+          const targetBlobs = await client.fetchCommitTreeSummary(owner, repoName, targetCommit.id);
+          const targetBaseFiles: Record<string, VFile> = {};
+          const pathsToFetchBlobs: string[] = [];
+
+          for (const item of targetBlobs) {
+            const currentFile = files[item.path];
+            if (currentFile && currentFile.sha === item.sha) {
+              // Same SHA: identical file between target commit and current workspace
+              targetBaseFiles[item.path] = currentFile;
+            } else {
+              targetBaseFiles[item.path] = {
+                path: item.path,
+                name: item.path.split('/').pop() || item.path,
+                content: '',
+                isBinary: false,
+                size: item.size || 0,
+                lastModified: Date.now(),
+                sha: item.sha,
+                mode: item.mode,
+              };
+              if (!currentFile || !currentFile.isBinary) {
+                pathsToFetchBlobs.push(item.path);
+              }
+            }
+          }
+
+          // Fetch blobs for modified text files (limit to 30 for swift performance)
+          const fetchSubset = pathsToFetchBlobs.slice(0, 30);
+          await Promise.all(
+            fetchSubset.map(async (p) => {
+              try {
+                const sha = targetBaseFiles[p]?.sha;
+                if (sha) {
+                  const text = await client.fetchBlobContent(owner, repoName, sha);
+                  if (targetBaseFiles[p]) {
+                    targetBaseFiles[p].content = text;
+                  }
+                }
+              } catch {
+                // Ignore blob read error
+              }
+            })
+          );
+
+          setBaseFiles(targetBaseFiles);
+          setSoftResetTarget(targetCommit);
+          addGitLog(`Target commit baseline [${targetCommit.shortId}] set. All workspace files preserved.`);
+        } catch (err: any) {
+          console.warn('Could not fetch commit tree summary:', err);
+          setBaseFiles({});
+          setSoftResetTarget(targetCommit);
+          setIsCleanZipImport(true);
+        }
+      } else {
+        setBaseFiles({});
+        setSoftResetTarget(targetCommit || {
+          id: `local-${Date.now()}`,
+          shortId: `HEAD~${count}`,
+          message: `Reset HEAD~${count}`,
+          author: { name: githubUser?.name || 'Local User' },
+          timestamp: Date.now(),
+          branch: activeBranch,
+          filesChanged: Object.keys(files).length,
+        });
+        setIsCleanZipImport(true);
+      }
+    }
 
     // Remote branch reset if requested and authenticated
     if (forcePushRemote && selectedRepo && githubToken && targetCommit) {
@@ -978,6 +1068,7 @@ export default function App() {
           console.warn('Failed restoring tree from target commit:', e);
         }
       }
+      setSoftResetTarget(null);
       addGitLog(`HEAD is now at [${targetCommit?.shortId || 'HEAD'}] ${targetCommit?.message || ''}`);
     } else if (mode === 'soft') {
       addGitLog(`Soft reset complete. Commits peeled back by ${count}. Your working directory and staged changes remain preserved.`);
@@ -1461,6 +1552,8 @@ export default function App() {
               onCreatePullRequest={handleCreatePullRequest}
               onSubmitPRReview={handleSubmitPRReview}
               onGitReset={handleGitReset}
+              softResetTarget={softResetTarget}
+              onClearSoftReset={() => setSoftResetTarget(null)}
             />
           </div>
 
@@ -1476,8 +1569,11 @@ export default function App() {
               onClearGitLogs={() => setGitLogs([])}
               onClose={() => setMobileTab('editor')}
               onGitReset={handleGitReset}
+              onCommit={handleCommitAndPush}
               onDeleteFile={handleDeleteNode}
               onCleanBuild={handleCleanBuild}
+              diffsCount={diffs.length}
+              softResetTarget={softResetTarget}
               t={t}
               isMobile={true}
             />
@@ -1839,6 +1935,8 @@ export default function App() {
                 onCreatePullRequest={handleCreatePullRequest}
                 onSubmitPRReview={handleSubmitPRReview}
                 onGitReset={handleGitReset}
+                softResetTarget={softResetTarget}
+                onClearSoftReset={() => setSoftResetTarget(null)}
               />
             )}
 
@@ -1936,8 +2034,11 @@ export default function App() {
               onClearGitLogs={() => setGitLogs([])}
               onClose={() => setShowTerminal(false)}
               onGitReset={handleGitReset}
+              onCommit={handleCommitAndPush}
               onDeleteFile={handleDeleteNode}
               onCleanBuild={handleCleanBuild}
+              diffsCount={diffs.length}
+              softResetTarget={softResetTarget}
               t={t}
               height={terminalHeight}
               onResizeStart={(e) => {

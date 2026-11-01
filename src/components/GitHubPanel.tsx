@@ -48,6 +48,8 @@ interface GitHubPanelProps {
   onSubmitPRReview: (prId: number, state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED', body: string) => Promise<void>;
   onRefreshCommits?: () => Promise<void>;
   onGitReset?: (mode: 'soft' | 'mixed' | 'hard', count: number, forcePushRemote: boolean) => Promise<void>;
+  softResetTarget?: GitCommit | null;
+  onClearSoftReset?: () => void;
 }
 
 export function GitHubPanel({
@@ -79,6 +81,8 @@ export function GitHubPanel({
   onSubmitPRReview,
   onRefreshCommits,
   onGitReset,
+  softResetTarget,
+  onClearSoftReset,
 }: GitHubPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState<'changes' | 'branches' | 'prs' | 'commits'>('changes');
   const [commitMessage, setCommitMessage] = useState('');
@@ -499,7 +503,37 @@ export function GitHubPanel({
         {/* CHANGES TAB */}
         {activeSubTab === 'changes' && (
           <div className="space-y-3">
-            {diffs.length === 0 ? (
+            {/* Soft Reset / Squash Active Banner */}
+            {softResetTarget && (
+              <div className="p-3.5 rounded-xl bg-[#e7f8ed] dark:bg-[#0f5223]/30 border-2 border-[#308745]/60 text-[#0f5223] dark:text-[#b4f3b7] text-xs space-y-2 shadow-xs m3-dialog-bounce">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2">
+                    <M3Icon name="restore" size={18} className="shrink-0 mt-0.5 text-[#0f5223] dark:text-[#b4f3b7]" />
+                    <div>
+                      <div className="font-bold text-xs uppercase tracking-wide">Soft Reset Active (Squash Mode)</div>
+                      <p className="text-[11px] mt-0.5 leading-snug">
+                        HEAD rewound to <span className="font-mono font-bold">{softResetTarget.shortId}</span> ({softResetTarget.message}).
+                      </p>
+                      <p className="text-[11px] mt-1 opacity-90 leading-snug">
+                        All your changes and files in ZipStudio are safely preserved. Committing below will publish all files as a single clean commit on GitHub, discarding the previous intermediate commits.
+                      </p>
+                    </div>
+                  </div>
+                  {onClearSoftReset && (
+                    <button
+                      type="button"
+                      onClick={onClearSoftReset}
+                      title="Cancel soft reset"
+                      className="p-1 rounded text-[#0f5223] dark:text-[#b4f3b7] hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                    >
+                      <M3Icon name="close" size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {diffs.length === 0 && !softResetTarget ? (
               <div className="space-y-3">
                 <div className="text-center py-4 text-xs text-[#5d6168] dark:text-[#8e9199]">
                   <M3Icon name="check_circle" size={32} className="mx-auto mb-2 text-[#137333] dark:text-[#b4f3b7]" />
@@ -533,47 +567,53 @@ export function GitHubPanel({
               </div>
             ) : (
               <>
-                {isCleanZipImport && (
+                {isCleanZipImport && !softResetTarget && (
                   <div className="p-2.5 rounded-lg bg-[#d3e3fd]/40 dark:bg-[#00468b]/30 border border-[#0b57d0]/30 dark:border-[#a8c7fa]/40 text-[#041e49] dark:text-[#d6e3ff] text-[11px] flex items-start gap-2">
                     <M3Icon name="auto_delete" size={16} className="text-[#0b57d0] dark:text-[#a8c7fa] shrink-0 mt-0.5" />
                     <span>{t.cleanOverwriteNotice}</span>
                   </div>
                 )}
-                <div className="space-y-1">
-                  <div className="text-[11px] font-semibold uppercase text-[#5d6168] dark:text-[#8e9199] mb-1">
-                    Staged Files ({diffs.length})
-                  </div>
-                  {diffs.map((diff) => (
-                    <div
-                      key={diff.path}
-                      onClick={() => setSelectedDiff(diff)}
-                      className={`p-2 rounded-lg cursor-pointer flex items-center justify-between text-xs transition-colors ${
-                        selectedDiff?.path === diff.path
-                          ? 'bg-[#d3e3fd] dark:bg-[#00468b]/30 border border-[#0b57d0]/40 dark:border-[#a8c7fa]/50'
-                          : 'bg-[#f0f2f8] hover:bg-[#e4e7ef] dark:bg-[#2b2d30] dark:hover:bg-[#383a3e]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 truncate">
-                        <M3Icon
-                          name={diff.status === 'added' ? 'add_circle' : diff.status === 'deleted' ? 'remove_circle' : 'edit'}
-                          size={14}
-                          className={diff.status === 'added' ? 'text-[#0a6640] dark:text-[#b4f3b7]' : diff.status === 'deleted' ? 'text-[#ba1a1a] dark:text-[#ff8585]' : 'text-[#7e5700] dark:text-[#ffd54f]'}
-                        />
-                        <span className="truncate font-mono text-[#191c20] dark:text-white">{diff.path}</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-[10px] font-mono shrink-0 ml-2 font-semibold">
-                        {diff.additions > 0 && <span className="text-[#0a6640] dark:text-[#b4f3b7]">+{diff.additions}</span>}
-                        {diff.deletions > 0 && <span className="text-[#ba1a1a] dark:text-[#ff8585]">-{diff.deletions}</span>}
-                      </div>
+                {diffs.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-[11px] font-semibold uppercase text-[#5d6168] dark:text-[#8e9199] mb-1">
+                      Staged Files ({diffs.length})
                     </div>
-                  ))}
-                </div>
+                    {diffs.map((diff) => (
+                      <div
+                        key={diff.path}
+                        onClick={() => setSelectedDiff(diff)}
+                        className={`p-2 rounded-lg cursor-pointer flex items-center justify-between text-xs transition-colors ${
+                          selectedDiff?.path === diff.path
+                            ? 'bg-[#d3e3fd] dark:bg-[#00468b]/30 border border-[#0b57d0]/40 dark:border-[#a8c7fa]/50'
+                            : 'bg-[#f0f2f8] hover:bg-[#e4e7ef] dark:bg-[#2b2d30] dark:hover:bg-[#383a3e]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 truncate">
+                          <M3Icon
+                            name={diff.status === 'added' ? 'add_circle' : diff.status === 'deleted' ? 'remove_circle' : 'edit'}
+                            size={14}
+                            className={diff.status === 'added' ? 'text-[#0a6640] dark:text-[#b4f3b7]' : diff.status === 'deleted' ? 'text-[#ba1a1a] dark:text-[#ff8585]' : 'text-[#7e5700] dark:text-[#ffd54f]'}
+                          />
+                          <span className="truncate font-mono text-[#191c20] dark:text-white">{diff.path}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[10px] font-mono shrink-0 ml-2 font-semibold">
+                          {diff.additions > 0 && <span className="text-[#0a6640] dark:text-[#b4f3b7]">+{diff.additions}</span>}
+                          {diff.deletions > 0 && <span className="text-[#ba1a1a] dark:text-[#ff8585]">-{diff.deletions}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Commit Form */}
                 <form onSubmit={handleCommitSubmit} className="pt-2 border-t border-[#d8dae5] dark:border-[#43474e]/30 space-y-2">
                   <textarea
                     rows={2}
-                    placeholder="Commit message (e.g. Update components and styles)"
+                    placeholder={
+                      softResetTarget
+                        ? `Commit message for squashed commit (e.g. Squash previous commits into ${activeBranch})`
+                        : "Commit message (e.g. Update components and styles)"
+                    }
                     value={commitMessage}
                     onChange={(e) => setCommitMessage(e.target.value)}
                     className="w-full bg-white dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg p-2 text-xs text-[#191c20] dark:text-white placeholder-[#74777f] dark:placeholder-[#8e9199] focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa] resize-none font-mono"
@@ -584,9 +624,11 @@ export function GitHubPanel({
                     className="w-full"
                     icon="cloud_upload"
                     loading={isCommitting}
-                    disabled={!commitMessage.trim() || diffs.length === 0}
+                    disabled={!commitMessage.trim() || (!softResetTarget && diffs.length === 0)}
                   >
-                    Commit & Push to GitHub ({activeBranch})
+                    {softResetTarget
+                      ? `Publish Squashed Commit to GitHub (${activeBranch})`
+                      : `Commit & Push to GitHub (${activeBranch})`}
                   </M3Button>
                 </form>
               </>

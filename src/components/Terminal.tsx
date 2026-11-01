@@ -29,8 +29,11 @@ interface TerminalProps {
   onClose: () => void;
   onRunGitCommand?: (cmd: string) => void;
   onGitReset?: (mode: 'soft' | 'mixed' | 'hard', count: number, forcePushRemote: boolean) => Promise<void>;
+  onCommit?: (message: string) => Promise<void>;
   onDeleteFile?: (path: string) => void;
   onCleanBuild?: () => void;
+  diffsCount?: number;
+  softResetTarget?: GitCommit | null;
   t?: Translations;
   height?: number;
   onResizeStart?: (e: React.MouseEvent) => void;
@@ -51,8 +54,11 @@ export function Terminal({
   onClearGitLogs,
   onClose,
   onGitReset,
+  onCommit,
   onDeleteFile,
   onCleanBuild,
+  diffsCount = 0,
+  softResetTarget = null,
   t = TRANSLATIONS.en,
   height = 220,
   onResizeStart,
@@ -247,7 +253,17 @@ export function Terminal({
           const sub = args[0];
           if (sub === 'status') {
             newHistory.push(`On branch ${activeBranch}`);
-            newHistory.push(t?.workingTreeClean || 'nothing to commit, working tree clean');
+            if (softResetTarget) {
+              newHistory.push(`HEAD rewound to [${softResetTarget.shortId}] ${softResetTarget.message}`);
+              newHistory.push(`Changes to be committed (squashed from rewound commits):`);
+              newHistory.push(`  (use "git commit -m <message>" or Source Control tab to publish)`);
+              newHistory.push(`  ✔ All workspace files kept safe and staged (${Object.keys(files).length} files ready)`);
+            } else if (diffsCount && diffsCount > 0) {
+              newHistory.push(`Changes to be committed:`);
+              newHistory.push(`  ${diffsCount} file(s) modified/added/deleted`);
+            } else {
+              newHistory.push(t?.workingTreeClean || 'nothing to commit, working tree clean');
+            }
           } else if (sub === 'branch') {
             branches.forEach((b) => {
               newHistory.push(`${b.name === activeBranch ? '* ' : '  '}${b.name}`);
@@ -305,11 +321,14 @@ export function Terminal({
                     ...prev,
                     targetMsg,
                     mode === 'soft'
-                      ? '(All changes preserved & staged in working tree)'
+                      ? `✔ All workspace files preserved in ZipStudio. Staged changes ready from ${count} commit(s).`
                       : mode === 'hard'
-                      ? '(Workspace tree reset to target commit)'
-                      : '(Unstaged changes after reset)',
-                  ]);
+                      ? '✔ Workspace tree reset to target commit.'
+                      : '✔ Unstaged changes in working tree.',
+                    mode === 'soft'
+                      ? `✔ Ready to publish: run 'git commit -m "your message"' or click Publish in Source Control tab.`
+                      : '',
+                  ].filter(Boolean));
                 })
                 .catch((err) => {
                   setHistory((prev) => [...prev, `fatal: git reset error: ${err.message}`]);
@@ -317,6 +336,31 @@ export function Terminal({
             } else {
               newHistory.push(`git: reset executed for ${count} commits.`);
             }
+          } else if (sub === 'commit') {
+            let message = '';
+            const mIdx = args.indexOf('-m');
+            if (mIdx !== -1 && args[mIdx + 1]) {
+              message = args.slice(mIdx + 1).join(' ').replace(/^["']|["']$/g, '');
+            } else {
+              message = 'Squash and update workspace changes';
+            }
+            if (onCommit) {
+              newHistory.push(`[${activeBranch}] Committing changes: "${message}"...`);
+              onCommit(message)
+                .then(() => {
+                  setHistory((prev) => [
+                    ...prev,
+                    `[${activeBranch}] Commit successful & published to GitHub.`,
+                  ]);
+                })
+                .catch((err) => {
+                  setHistory((prev) => [...prev, `fatal: commit failed: ${err.message}`]);
+                });
+            } else {
+              newHistory.push(`git commit: "${message}"`);
+            }
+          } else if (sub === 'push') {
+            newHistory.push(`Branch '${activeBranch}' up-to-date with remote origin.`);
           } else {
             newHistory.push(`git: '${sub}' executed. Use UI Source Control for visual GitHub actions.`);
           }
