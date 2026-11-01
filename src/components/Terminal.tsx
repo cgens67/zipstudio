@@ -29,6 +29,8 @@ interface TerminalProps {
   onClose: () => void;
   onRunGitCommand?: (cmd: string) => void;
   onGitReset?: (mode: 'soft' | 'mixed' | 'hard', count: number, forcePushRemote: boolean) => Promise<void>;
+  onDeleteFile?: (path: string) => void;
+  onCleanBuild?: () => void;
   t?: Translations;
   height?: number;
   onResizeStart?: (e: React.MouseEvent) => void;
@@ -49,6 +51,8 @@ export function Terminal({
   onClearGitLogs,
   onClose,
   onGitReset,
+  onDeleteFile,
+  onCleanBuild,
   t = TRANSLATIONS.en,
   height = 220,
   onResizeStart,
@@ -81,172 +85,266 @@ export function Terminal({
   }, [history, logs, gitLogs]);
 
   const executeCommand = (rawCmd: string) => {
-    const trimmed = rawCmd.trim();
-    if (!trimmed) return;
+    const rawLines = rawCmd.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+    if (rawLines.length === 0) return;
 
-    setCommandHistory((prev) => [...prev, trimmed]);
+    setCommandHistory((prev) => [...prev, ...rawLines]);
     setHistoryIndex(-1);
     setInputVal('');
 
-    const newHistory = [...history, `$ ${trimmed}`];
-    const parts = trimmed.split(' ');
-    const cmd = parts[0].toLowerCase();
-    const args = parts.slice(1);
+    const newHistory = [...history];
 
-    switch (cmd) {
-      case 'help':
-        newHistory.push(
-          'Available commands:',
-          '  ls               - List files in current project',
-          '  cat <file>       - Display contents of a file',
-          '  pwd              - Print working directory',
-          '  clear            - Clear terminal output',
-          '  echo <text>      - Print text to terminal',
-          '  git status       - Show modified and tracked files',
-          '  git branch       - List repository branches',
-          '  git log          - Show commit history (supports -n <count>)',
-          '  git reset        - Rewind HEAD (e.g. git reset --soft HEAD~96)',
-          '  npm test         - Run internal test suite',
-          '  build            - Validate assets and packaging'
-        );
-        break;
-
-      case 'clear':
-        setHistory([]);
-        return;
-
-      case 'pwd':
-        newHistory.push('/workspace/project');
-        break;
-
-      case 'ls': {
-        const fileList = Object.keys(files);
-        if (fileList.length === 0) {
-          newHistory.push('(empty workspace)');
-        } else {
-          newHistory.push(fileList.join('   '));
-        }
-        break;
+    for (const trimmed of rawLines) {
+      if (trimmed.startsWith('#')) {
+        newHistory.push(trimmed);
+        continue;
       }
 
-      case 'cat': {
-        const target = args[0];
-        if (!target) {
-          newHistory.push('Usage: cat <filename>');
-        } else if (files[target]) {
-          newHistory.push(files[target].content.substring(0, 500) + (files[target].content.length > 500 ? '\n...[truncated]' : ''));
-        } else {
-          newHistory.push(`cat: ${target}: No such file or directory`);
+      newHistory.push(`$ ${trimmed}`);
+      const parts = trimmed.split(/\s+/);
+      const cmd = parts[0].toLowerCase();
+      const args = parts.slice(1);
+
+      switch (cmd) {
+        case 'help':
+          newHistory.push(
+            'Available commands:',
+            '  ls               - List files in current project',
+            '  cat <file>       - Display contents of a file',
+            '  rm [-rf] <path>  - Remove files or directories (e.g. rm -rf <path>)',
+            '  ./gradlew <task> - Execute Gradle build tasks (e.g. ./gradlew clean)',
+            '  pwd              - Print working directory',
+            '  clear            - Clear terminal output',
+            '  echo <text>      - Print text to terminal',
+            '  git status       - Show modified and tracked files',
+            '  git branch       - List repository branches',
+            '  git log          - Show commit history (supports -n <count>)',
+            '  git reset        - Rewind HEAD (e.g. git reset --soft HEAD~96)',
+            '  npm test         - Run internal test suite',
+            '  build            - Validate assets and packaging'
+          );
+          break;
+
+        case 'clear':
+          setHistory([]);
+          return;
+
+        case 'pwd':
+          newHistory.push('/workspace/project');
+          break;
+
+        case 'ls': {
+          const fileList = Object.keys(files);
+          if (fileList.length === 0) {
+            newHistory.push('(empty workspace)');
+          } else {
+            newHistory.push(fileList.join('   '));
+          }
+          break;
         }
-        break;
-      }
 
-      case 'echo':
-        newHistory.push(args.join(' '));
-        break;
-
-      case 'git': {
-        const sub = args[0];
-        if (sub === 'status') {
-          newHistory.push(`On branch ${activeBranch}`);
-          newHistory.push(t?.workingTreeClean || 'nothing to commit, working tree clean');
-        } else if (sub === 'branch') {
-          branches.forEach((b) => {
-            newHistory.push(`${b.name === activeBranch ? '* ' : '  '}${b.name}`);
-          });
-        } else if (sub === 'log') {
-          let limit = 15;
-          const nIdx = args.indexOf('-n');
-          if (nIdx !== -1 && args[nIdx + 1]) {
-            const parsedN = parseInt(args[nIdx + 1], 10);
-            if (!isNaN(parsedN) && parsedN > 0) limit = parsedN;
+        case 'cat': {
+          const target = args[0];
+          if (!target) {
+            newHistory.push('Usage: cat <filename>');
+          } else if (files[target]) {
+            newHistory.push(files[target].content.substring(0, 500) + (files[target].content.length > 500 ? '\n...[truncated]' : ''));
+          } else {
+            newHistory.push(`cat: ${target}: No such file or directory`);
           }
-          const shown = commits.slice(0, limit);
-          shown.forEach((c) => {
-            newHistory.push(`commit ${c.shortId} (${c.branch})`);
-            newHistory.push(`Author: ${c.author.name} <${c.author.email}>`);
-            newHistory.push(`Date:   ${new Date(c.timestamp).toLocaleString()}`);
-            newHistory.push(`    ${c.message}\n`);
-          });
-          if (commits.length > limit) {
-            newHistory.push(`... and ${commits.length - limit} more commits. (Use 'git log -n ${commits.length}' to show all)`);
-          } else if (commits.length === 0) {
-            newHistory.push('(No commits recorded yet)');
-          }
-        } else if (sub === 'reset') {
-          // Parse: git reset [--soft | --mixed | --hard] [HEAD~N | ~N | N | sha] [--force]
-          let mode: 'soft' | 'mixed' | 'hard' = 'mixed';
-          let count = 1;
-          const rawJoined = trimmed.toLowerCase();
-          const forcePush = rawJoined.includes('--force') || rawJoined.includes(' -f');
+          break;
+        }
 
-          for (const a of args.slice(1)) {
-            if (a === '--soft') mode = 'soft';
-            else if (a === '--hard') mode = 'hard';
-            else if (a === '--mixed') mode = 'mixed';
-            else if (a.startsWith('HEAD~') || a.startsWith('head~')) {
-              const num = parseInt(a.replace(/head~/i, ''), 10);
-              if (!isNaN(num) && num > 0) count = num;
-            } else if (a.startsWith('~')) {
-              const num = parseInt(a.replace('~', ''), 10);
-              if (!isNaN(num) && num > 0) count = num;
-            } else if (/^\d+$/.test(a)) {
-              count = parseInt(a, 10);
-            } else if (!a.startsWith('-') && a !== '&&' && a !== 'git' && a !== 'push' && a !== 'origin' && a !== 'head') {
-              const idx = commits.findIndex((c) => c.shortId.startsWith(a) || c.id.startsWith(a));
-              if (idx >= 0) count = idx + 1;
+        case 'echo':
+          newHistory.push(args.join(' '));
+          break;
+
+        case 'rm': {
+          let isForce = false;
+          let isRecursive = false;
+          const targets: string[] = [];
+
+          for (const a of args) {
+            if (a.startsWith('-')) {
+              if (a.includes('f') || a.includes('F')) isForce = true;
+              if (a.includes('r') || a.includes('R')) isRecursive = true;
+            } else {
+              targets.push(a);
             }
           }
 
-          if (onGitReset) {
-            newHistory.push(`Executing git reset --${mode} HEAD~${count}${forcePush ? ' (with remote force-push)' : ''}...`);
-            onGitReset(mode, count, forcePush)
-              .then(() => {
-                const target = commits[count] || commits[commits.length - 1];
-                const targetMsg = target ? `HEAD is now at ${target.shortId} ${target.message}` : `HEAD is now at HEAD~${count}`;
-                setHistory((prev) => [
-                  ...prev,
-                  targetMsg,
-                  mode === 'soft'
-                    ? '(All changes preserved & staged in working tree)'
-                    : mode === 'hard'
-                    ? '(Workspace tree reset to target commit)'
-                    : '(Unstaged changes after reset)',
-                ]);
-              })
-              .catch((err) => {
-                setHistory((prev) => [...prev, `fatal: git reset error: ${err.message}`]);
-              });
-          } else {
-            newHistory.push(`git: reset executed for ${count} commits.`);
+          if (targets.length === 0) {
+            newHistory.push('rm: missing operand');
+            newHistory.push("Try 'rm --help' or 'help' for more information.");
+            break;
           }
-        } else {
-          newHistory.push(`git: '${sub}' executed. Use UI Source Control for visual GitHub actions.`);
+
+          for (const target of targets) {
+            const clean = target.replace(/^\.?\/+/, '');
+            const matchingKeys = Object.keys(files).filter(
+              (k) => k === clean || k.startsWith(`${clean}/`)
+            );
+
+            if (matchingKeys.length > 0) {
+              if (onDeleteFile) {
+                onDeleteFile(clean);
+              }
+              newHistory.push(`removed '${target}'`);
+            } else {
+              if (isForce) {
+                newHistory.push(`removed '${target}' (verified clean)`);
+              } else {
+                newHistory.push(`rm: cannot remove '${target}': No such file or directory`);
+              }
+            }
+          }
+          break;
         }
-        break;
-      }
 
-      case 'npm': {
-        if (args[0] === 'test') {
-          newHistory.push('> project@1.0.0 test');
-          newHistory.push('✔ Virtual file system valid');
-          newHistory.push('✔ In-browser package bundler ready');
-          newHistory.push('✔ All 11 unit tests passed (311ms)');
-        } else {
-          newHistory.push(`npm: running ${args.join(' ')} (simulated)`);
+        case './gradlew':
+        case 'gradlew':
+        case './gradle':
+        case 'gradle': {
+          const task = args[0] || 'help';
+
+          if (task === 'clean') {
+            if (onCleanBuild) {
+              onCleanBuild();
+            }
+            newHistory.push('> Task :clean UP-TO-DATE');
+            newHistory.push('> Task :innertube:clean');
+            newHistory.push('> Task :app:clean');
+            newHistory.push('');
+            newHistory.push('BUILD SUCCESSFUL in 1s');
+            newHistory.push('3 actionable tasks: 2 executed, 1 up-to-date');
+          } else if (task === 'build' || task === 'assemble' || task === 'assembleDebug') {
+            newHistory.push('> Task :innertube:compileKotlin');
+            newHistory.push('> Task :app:compileKotlin');
+            newHistory.push('> Task :app:assembleDebug');
+            newHistory.push('');
+            newHistory.push('BUILD SUCCESSFUL in 2s');
+            newHistory.push('3 actionable tasks: 3 executed');
+          } else if (task === 'test') {
+            newHistory.push('> Task :innertube:test');
+            newHistory.push('> Task :app:test');
+            newHistory.push('BUILD SUCCESSFUL in 1s');
+          } else if (task === '--version' || task === '-v') {
+            newHistory.push('------------------------------------------------------------');
+            newHistory.push('Gradle 8.5');
+            newHistory.push('------------------------------------------------------------');
+            newHistory.push('Build time:   2024-01-15 12:00:00 UTC');
+            newHistory.push('Kotlin:       1.9.22');
+            newHistory.push('Groovy:       3.0.17');
+            newHistory.push('JVM:          17.0.9 (Oracle Corporation 17.0.9+11)');
+          } else {
+            newHistory.push(`> Task :${task}`);
+            newHistory.push('BUILD SUCCESSFUL in 850ms');
+          }
+          break;
         }
-        break;
+
+        case 'git': {
+          const sub = args[0];
+          if (sub === 'status') {
+            newHistory.push(`On branch ${activeBranch}`);
+            newHistory.push(t?.workingTreeClean || 'nothing to commit, working tree clean');
+          } else if (sub === 'branch') {
+            branches.forEach((b) => {
+              newHistory.push(`${b.name === activeBranch ? '* ' : '  '}${b.name}`);
+            });
+          } else if (sub === 'log') {
+            let limit = 15;
+            const nIdx = args.indexOf('-n');
+            if (nIdx !== -1 && args[nIdx + 1]) {
+              const parsedN = parseInt(args[nIdx + 1], 10);
+              if (!isNaN(parsedN) && parsedN > 0) limit = parsedN;
+            }
+            const shown = commits.slice(0, limit);
+            shown.forEach((c) => {
+              newHistory.push(`commit ${c.shortId} (${c.branch})`);
+              newHistory.push(`Author: ${c.author.name} <${c.author.email}>`);
+              newHistory.push(`Date:   ${new Date(c.timestamp).toLocaleString()}`);
+              newHistory.push(`    ${c.message}\n`);
+            });
+            if (commits.length > limit) {
+              newHistory.push(`... and ${commits.length - limit} more commits. (Use 'git log -n ${commits.length}' to show all)`);
+            } else if (commits.length === 0) {
+              newHistory.push('(No commits recorded yet)');
+            }
+          } else if (sub === 'reset') {
+            let mode: 'soft' | 'mixed' | 'hard' = 'mixed';
+            let count = 1;
+            const rawJoined = trimmed.toLowerCase();
+            const forcePush = rawJoined.includes('--force') || rawJoined.includes(' -f');
+
+            for (const a of args.slice(1)) {
+              if (a === '--soft') mode = 'soft';
+              else if (a === '--hard') mode = 'hard';
+              else if (a === '--mixed') mode = 'mixed';
+              else if (a.startsWith('HEAD~') || a.startsWith('head~')) {
+                const num = parseInt(a.replace(/head~/i, ''), 10);
+                if (!isNaN(num) && num > 0) count = num;
+              } else if (a.startsWith('~')) {
+                const num = parseInt(a.replace('~', ''), 10);
+                if (!isNaN(num) && num > 0) count = num;
+              } else if (/^\d+$/.test(a)) {
+                count = parseInt(a, 10);
+              } else if (!a.startsWith('-') && a !== '&&' && a !== 'git' && a !== 'push' && a !== 'origin' && a !== 'head') {
+                const idx = commits.findIndex((c) => c.shortId.startsWith(a) || c.id.startsWith(a));
+                if (idx >= 0) count = idx + 1;
+              }
+            }
+
+            if (onGitReset) {
+              newHistory.push(`Executing git reset --${mode} HEAD~${count}${forcePush ? ' (with remote force-push)' : ''}...`);
+              onGitReset(mode, count, forcePush)
+                .then(() => {
+                  const target = commits[count] || commits[commits.length - 1];
+                  const targetMsg = target ? `HEAD is now at ${target.shortId} ${target.message}` : `HEAD is now at HEAD~${count}`;
+                  setHistory((prev) => [
+                    ...prev,
+                    targetMsg,
+                    mode === 'soft'
+                      ? '(All changes preserved & staged in working tree)'
+                      : mode === 'hard'
+                      ? '(Workspace tree reset to target commit)'
+                      : '(Unstaged changes after reset)',
+                  ]);
+                })
+                .catch((err) => {
+                  setHistory((prev) => [...prev, `fatal: git reset error: ${err.message}`]);
+                });
+            } else {
+              newHistory.push(`git: reset executed for ${count} commits.`);
+            }
+          } else {
+            newHistory.push(`git: '${sub}' executed. Use UI Source Control for visual GitHub actions.`);
+          }
+          break;
+        }
+
+        case 'npm': {
+          if (args[0] === 'test') {
+            newHistory.push('> project@1.0.0 test');
+            newHistory.push('✔ Virtual file system valid');
+            newHistory.push('✔ In-browser package bundler ready');
+            newHistory.push('✔ All 11 unit tests passed (311ms)');
+          } else {
+            newHistory.push(`npm: running ${args.join(' ')} (simulated)`);
+          }
+          break;
+        }
+
+        case 'build':
+          newHistory.push('Building web assets for production distribution...');
+          newHistory.push('✔ HTML/CSS/JS bundled');
+          newHistory.push(`✔ Total workspace size: ${Math.round(Object.values(files).reduce((a, b) => a + b.size, 0) / 1024)} KB`);
+          newHistory.push('Ready for commit or .zip download.');
+          break;
+
+        default:
+          newHistory.push(`bash: ${cmd}: command not found. Type 'help' for available commands.`);
       }
-
-      case 'build':
-        newHistory.push('Building web assets for production distribution...');
-        newHistory.push('✔ HTML/CSS/JS bundled');
-        newHistory.push(`✔ Total workspace size: ${Math.round(Object.values(files).reduce((a, b) => a + b.size, 0) / 1024)} KB`);
-        newHistory.push('Ready for commit or .zip download.');
-        break;
-
-      default:
-        newHistory.push(`bash: ${cmd}: command not found. Type 'help' for available commands.`);
     }
 
     setHistory(newHistory);

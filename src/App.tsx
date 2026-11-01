@@ -1132,6 +1132,29 @@ export default function App() {
     addGitLog(`Deleted: ${path}`);
   };
 
+  const handleCleanBuild = () => {
+    let purgedCount = 0;
+    setFiles((prev) => {
+      const updated = { ...prev };
+      for (const k of Object.keys(updated)) {
+        if (
+          k.startsWith('build/') ||
+          k.includes('/build/') ||
+          k.startsWith('.gradle/') ||
+          k.includes('/.gradle/') ||
+          k.startsWith('.kotlin/') ||
+          k.includes('/.kotlin/') ||
+          k.endsWith('.class')
+        ) {
+          delete updated[k];
+          purgedCount++;
+        }
+      }
+      return updated;
+    });
+    addGitLog(`Gradle clean completed: purged build directory and caches (${purgedCount} generated artifacts removed).`);
+  };
+
   const handleRenameNode = (oldPath: string, newPath: string) => {
     const normOld = normalizePath(oldPath);
     const normNew = normalizePath(newPath);
@@ -1453,6 +1476,8 @@ export default function App() {
               onClearGitLogs={() => setGitLogs([])}
               onClose={() => setMobileTab('editor')}
               onGitReset={handleGitReset}
+              onDeleteFile={handleDeleteNode}
+              onCleanBuild={handleCleanBuild}
               t={t}
               isMobile={true}
             />
@@ -1911,6 +1936,8 @@ export default function App() {
               onClearGitLogs={() => setGitLogs([])}
               onClose={() => setShowTerminal(false)}
               onGitReset={handleGitReset}
+              onDeleteFile={handleDeleteNode}
+              onCleanBuild={handleCleanBuild}
               t={t}
               height={terminalHeight}
               onResizeStart={(e) => {
