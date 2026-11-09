@@ -16,7 +16,7 @@ export interface DragDropResult {
 /**
  * Reads a browser File object and returns a VFile with normalized content.
  */
-async function fileToVFile(file: File, relativePath: string): Promise<VFile> {
+export async function fileToVFile(file: File, relativePath: string): Promise<VFile> {
   const normalized = normalizePath(relativePath || file.name);
   const ext = getFileExtension(normalized);
   const isBinary = isBinaryExtension(ext);
@@ -237,3 +237,5 @@ export async function processDroppedDataTransfer(
     totalSize,
   };
 }
+
+export { fileToVFile as convertFileToVFile };

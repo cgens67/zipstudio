@@ -17,6 +17,7 @@ import { M3Icon, M3IconButton } from './M3Components';
 import { M3Switch } from './M3Switch';
 import { Translations, TRANSLATIONS } from '../utils/i18n';
 import { useDialogAnimation } from '../utils/useDialogAnimation';
+import { ImportFilesModal } from './ImportFilesModal';
 
 interface SidebarProps {
   tree: FileTreeNode[];
@@ -25,6 +26,7 @@ interface SidebarProps {
   t?: Translations;
   onSelectFile: (path: string) => void;
   onUploadZip: (file: File) => void;
+  onImportFiles?: (importedFiles: VFile[], targetDir: string) => void;
   onExportZip: () => void;
   onCreateFile: (path: string) => void;
   onCreateFolder: (path: string) => void;
@@ -39,6 +41,7 @@ export function Sidebar({
   t = TRANSLATIONS.en,
   onSelectFile,
   onUploadZip,
+  onImportFiles,
   onExportZip,
   onCreateFile,
   onCreateFolder,
@@ -56,6 +59,10 @@ export function Sidebar({
   const [targetParentFolder, setTargetParentFolder] = useState('');
   const [newPathInput, setNewPathInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const filesInputRef = useRef<HTMLInputElement>(null);
+  const [importModalFiles, setImportModalFiles] = useState<File[]>([]);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importTargetDir, setImportTargetDir] = useState('');
 
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{
@@ -110,6 +117,15 @@ export function Sidebar({
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       onUploadZip(e.target.files[0]);
+      e.target.value = '';
+    }
+  };
+
+  const handleFilesInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setImportModalFiles(Array.from(e.target.files));
+      setImportTargetDir(targetParentFolder || '');
+      setIsImportModalOpen(true);
       e.target.value = '';
     }
   };
@@ -469,6 +485,14 @@ export function Sidebar({
         onChange={handleFileInputChange}
         className="hidden"
       />
+      {/* Hidden file input for multi-file import */}
+      <input
+        ref={filesInputRef}
+        type="file"
+        multiple
+        onChange={handleFilesInputChange}
+        className="hidden"
+      />
 
       {/* Explorer Header */}
       <div className="p-3 border-b border-[#d8dae5] dark:border-[#43474e]/30 bg-[#f8fafd] dark:bg-[#1e1f22]/50 flex items-center justify-between shrink-0">
@@ -504,6 +528,16 @@ export function Sidebar({
           />
           <M3IconButton
             size="sm"
+            icon="upload_file"
+            label={t.importFiles}
+            className="text-[#191c20] hover:text-[#00639b] hover:bg-black/5 dark:text-[#c4c6d0] dark:hover:text-white dark:hover:bg-white/10"
+            onClick={() => {
+              setTargetParentFolder('');
+              filesInputRef.current?.click();
+            }}
+          />
+          <M3IconButton
+            size="sm"
             icon="download"
             label={t.exportZip}
             className="text-[#191c20] hover:text-[#0b57d0] hover:bg-black/5 dark:text-[#c4c6d0] dark:hover:text-white dark:hover:bg-white/10"
@@ -512,23 +546,37 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* Primary Actions: Import & Export ZIP */}
+      {/* Primary Actions: Import ZIP, Import Files, Export ZIP */}
       <div className="p-2 border-b border-[#d8dae5] dark:border-[#43474e]/20 bg-[#f0f4f9] dark:bg-[#121316]/50 shrink-0 space-y-2">
-        <div className="flex items-center gap-1.5">
+        <div className="grid grid-cols-2 gap-1.5">
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white border border-[#0b57d0] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95"
+            className="py-1.5 px-2 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] text-white border border-[#0b57d0] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95"
             title={t.importZip}
           >
-            <M3Icon name="upload" size={16} className="text-white" />
-            <span className="text-white">{t.importZip}</span>
+            <M3Icon name="folder_zip" size={15} className="text-white" />
+            <span className="truncate">{t.importZip}</span>
           </button>
           <button
+            onClick={() => {
+              setTargetParentFolder('');
+              filesInputRef.current?.click();
+            }}
+            className="py-1.5 px-2 rounded-lg bg-[#00639b] hover:bg-[#004f7d] text-white border border-[#00639b] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95"
+            title="Import individual files (ttf, otf, ogg, aar, mp3, etc.)"
+          >
+            <M3Icon name="upload_file" size={15} className="text-white" />
+            <span className="truncate">{t.importFiles}</span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <button
             onClick={onExportZip}
-            className="py-1.5 px-2.5 rounded-lg bg-white dark:bg-[#2b2d30] hover:bg-[#f8fafd] dark:hover:bg-[#383a3e] text-[#191c20] dark:text-[#e2e2e6] border border-[#d8dae5] dark:border-[#43474e]/60 text-xs font-medium flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-xs active:scale-95"
+            className="w-full py-1.5 px-2.5 rounded-lg bg-white dark:bg-[#2b2d30] hover:bg-[#f8fafd] dark:hover:bg-[#383a3e] text-[#191c20] dark:text-[#e2e2e6] border border-[#d8dae5] dark:border-[#43474e]/60 text-xs font-medium flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-xs active:scale-95"
             title={t.exportZip}
           >
-            <M3Icon name="download" size={16} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
+            <M3Icon name="download" size={15} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
             <span>{t.exportZip}</span>
           </button>
         </div>
@@ -623,13 +671,26 @@ export function Sidebar({
           </div>
 
           {contextMenu.node.isFolder && (
-            <button
-              onClick={() => handleAddFileInFolder(contextMenu.node)}
-              className="w-full px-3 py-2 text-left hover:bg-[#f0f4f9] dark:hover:bg-[#2b2d30] flex items-center gap-2 cursor-pointer text-[#191c20] dark:text-[#e2e2e6]"
-            >
-              <M3Icon name="note_add" size={15} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
-              <span>{t.addFile}</span>
-            </button>
+            <>
+              <button
+                onClick={() => handleAddFileInFolder(contextMenu.node)}
+                className="w-full px-3 py-2 text-left hover:bg-[#f0f4f9] dark:hover:bg-[#2b2d30] flex items-center gap-2 cursor-pointer text-[#191c20] dark:text-[#e2e2e6]"
+              >
+                <M3Icon name="note_add" size={15} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
+                <span>{t.addFile}</span>
+              </button>
+              <button
+                onClick={() => {
+                  setTargetParentFolder(contextMenu.node.path);
+                  setContextMenu(null);
+                  filesInputRef.current?.click();
+                }}
+                className="w-full px-3 py-2 text-left hover:bg-[#f0f4f9] dark:hover:bg-[#2b2d30] flex items-center gap-2 cursor-pointer text-[#191c20] dark:text-[#e2e2e6]"
+              >
+                <M3Icon name="upload_file" size={15} className="text-[#00639b] dark:text-[#a8c7fa]" />
+                <span>Import Files Here...</span>
+              </button>
+            </>
           )}
 
           <button
@@ -694,6 +755,21 @@ export function Sidebar({
       <AnimatedSidebarErrorModal
         error={sidebarError}
         onClose={() => setSidebarError(null)}
+        t={t}
+      />
+
+      {/* Dedicated Import Files Modal with Destination Folder Selection & GitHub 100MB Limit */}
+      <ImportFilesModal
+        isOpen={isImportModalOpen}
+        selectedFiles={importModalFiles}
+        existingFiles={files}
+        defaultDirectory={importTargetDir}
+        onClose={() => setIsImportModalOpen(false)}
+        onImport={(importedVFiles, targetDir) => {
+          if (onImportFiles) {
+            onImportFiles(importedVFiles, targetDir);
+          }
+        }}
         t={t}
       />
     </aside>

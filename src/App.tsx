@@ -1142,6 +1142,43 @@ export default function App() {
     }
   };
 
+  // Handle Individual / Multiple Files Import (NON-DESTRUCTIVE: DOES NOT REPLACE CODE)
+  const handleImportFiles = (importedFiles: VFile[], targetDir: string) => {
+    if (importedFiles.length === 0) return;
+
+    setFiles((prev) => {
+      const updated = { ...prev };
+      for (const file of importedFiles) {
+        updated[file.path] = file;
+      }
+      return updated;
+    });
+
+    // Auto-open first imported file in editor/inspector
+    const firstFile = importedFiles[0];
+    if (firstFile) {
+      handleSelectFile(firstFile.path);
+    }
+
+    const dirLabel = targetDir ? `/${targetDir}` : '/ (root)';
+    const fileNames = importedFiles.map((f) => f.name).join(', ');
+    addGitLog(`Imported ${importedFiles.length} file(s) into ${dirLabel}: ${fileNames}`);
+    setLogs((prev) => [
+      ...prev,
+      {
+        id: Math.random().toString(),
+        type: 'info',
+        message: `Imported ${importedFiles.length} file(s) into ${dirLabel}: ${fileNames}. Existing code preserved.`,
+        timestamp: Date.now(),
+      },
+    ]);
+    triggerAlert(
+      'Files Imported',
+      `Successfully added ${importedFiles.length} file(s) into ${dirLabel}. Existing workspace code remains untouched.`,
+      'success'
+    );
+  };
+
   // Handle .ZIP Export
   const handleExportZip = async () => {
     try {
@@ -1491,6 +1528,7 @@ export default function App() {
               t={t}
               onSelectFile={handleSelectFile}
               onUploadZip={handleUploadZip}
+              onImportFiles={handleImportFiles}
               onExportZip={handleExportZip}
               onCreateFile={handleCreateFile}
               onCreateFolder={handleCreateFolder}
@@ -1901,6 +1939,7 @@ export default function App() {
                 t={t}
                 onSelectFile={handleSelectFile}
                 onUploadZip={handleUploadZip}
+                onImportFiles={handleImportFiles}
                 onExportZip={handleExportZip}
                 onCreateFile={handleCreateFile}
                 onCreateFolder={handleCreateFolder}

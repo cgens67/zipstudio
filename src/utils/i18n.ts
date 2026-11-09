@@ -19,6 +19,7 @@ export interface Translations {
   gitOutput: string;
   diagnostics: string;
   importZip: string;
+  importFiles: string;
   exportZip: string;
   templates: string;
   newFile: string;
@@ -302,6 +303,7 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     gitOutput: 'Git Output',
     diagnostics: 'Diagnostics',
     importZip: 'Import .ZIP',
+    importFiles: 'Import Files',
     exportZip: 'Export .ZIP',
     templates: 'Templates',
     newFile: 'New File',
@@ -583,6 +585,7 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     gitOutput: 'Git 输出',
     diagnostics: '代码诊断',
     importZip: '导入 .ZIP',
+    importFiles: '导入文件',
     exportZip: '导出 .ZIP',
     templates: '模板库',
     newFile: '新建文件',
@@ -864,6 +867,7 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     gitOutput: 'Output Git',
     diagnostics: 'Diagnostik Kod',
     importZip: 'Import .ZIP',
+    importFiles: 'Import Fail',
     exportZip: 'Eksport .ZIP',
     templates: 'Templat',
     newFile: 'Fail Baharu',
