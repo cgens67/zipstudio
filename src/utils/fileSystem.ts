@@ -309,6 +309,13 @@ export function getMimeType(ext: string): string {
     case 'war':
     case 'ear':
       return 'application/java-archive';
+    case 'aar':
+      return 'application/vnd.android.library-archive';
+    case 'klib':
+      return 'application/zip';
+    case 'jks':
+    case 'keystore':
+      return 'application/x-java-keystore';
     case 'apk':
       return 'application/vnd.android.package-archive';
     case 'aab':
@@ -375,9 +382,9 @@ export function isBinaryExtension(ext: string): boolean {
     'woff', 'woff2', 'ttf', 'otf', 'eot',
     'mp3', 'wav', 'ogg', 'oga', 'aac', 'flac', 'm4a', 'opus',
     'mp4', 'webm', 'mkv', 'ogv', 'mov', 'avi',
-    'pdf', 'zip', 'gz', 'tar', 'bz2', 'xz', '7z', 'rar',
-    'jar', 'war', 'ear', 'apk', 'aab', 'apks', 'xapk', 'class', 'so', 'dylib', 'dll', 'exe', 'bin', 'dex',
-    'dat', 'db', 'sqlite', 'sqlite3', 'o', 'obj', 'lib', 'a', 'pak', 'arsc', 'flat', 'node'
+    'pdf', 'zip', 'gz', 'tar', 'bz2', 'xz', '7z', 'rar', 'tgz', 'tbz2',
+    'jar', 'war', 'ear', 'aar', 'klib', 'apk', 'aab', 'apks', 'xapk', 'class', 'so', 'dylib', 'dll', 'exe', 'bin', 'dex',
+    'dat', 'db', 'sqlite', 'sqlite3', 'o', 'obj', 'lib', 'a', 'pak', 'arsc', 'flat', 'node', 'keystore', 'jks'
   ];
   return binaryExts.includes(ext.toLowerCase());
 }
@@ -486,7 +493,7 @@ export async function extractZipInBrowser(zipData: ArrayBuffer | Blob): Promise<
 
     const normalizedPath = normalizePath(relativePath);
     const ext = getFileExtension(normalizedPath);
-    const isBinary = isBinaryExtension(ext);
+    let isBinary = isBinaryExtension(ext);
 
     let content = '';
     let size = 0;
@@ -497,8 +504,28 @@ export async function extractZipInBrowser(zipData: ArrayBuffer | Blob): Promise<
       content = `data:${mime};base64,${base64}`;
       size = Math.round((base64.length * 3) / 4);
     } else {
-      content = await zipEntry.async('text');
-      size = new Blob([content]).size;
+      // Check for binary content safely using raw uint8 bytes to prevent UTF-8 mangling
+      const uint8 = await zipEntry.async('uint8array');
+      let detectedBinary = false;
+      const sampleSize = Math.min(uint8.length, 1024);
+      for (let i = 0; i < sampleSize; i++) {
+        if (uint8[i] === 0) {
+          detectedBinary = true;
+          break;
+        }
+      }
+
+      if (detectedBinary) {
+        isBinary = true;
+        const base64 = await zipEntry.async('base64');
+        const mime = getMimeType(ext);
+        content = `data:${mime};base64,${base64}`;
+        size = uint8.length;
+      } else {
+        const decoder = new TextDecoder('utf-8', { fatal: false });
+        content = decoder.decode(uint8);
+        size = uint8.length;
+      }
     }
 
     let mode = '100644';
@@ -530,10 +557,13 @@ export async function packageZipFromFiles(files: Record<string, VFile>): Promise
   const zip = new JSZip();
 
   for (const [path, file] of Object.entries(files)) {
-    if (file.isBinary && file.content.startsWith('data:')) {
+    const isBin = file.isBinary || isBinaryExtension(getFileExtension(path)) || file.content.startsWith('data:');
+    if (file.content.startsWith('data:')) {
       const commaIndex = file.content.indexOf(',');
       const base64 = file.content.substring(commaIndex + 1);
       zip.file(path, base64, { base64: true });
+    } else if (isBin && file.content && /^[A-Za-z0-9+/=\r\n]+$/.test(file.content.trim()) && file.content.trim().length % 4 === 0) {
+      zip.file(path, file.content.trim(), { base64: true });
     } else {
       zip.file(path, file.content);
     }
@@ -696,10 +726,13 @@ export async function packageSubtreeZip(files: Record<string, VFile>, folderPath
   for (const [path, file] of Object.entries(files)) {
     if (path.startsWith(prefix)) {
       const relative = path.substring(prefix.length);
-      if (file.isBinary && file.content.startsWith('data:')) {
+      const isBin = file.isBinary || isBinaryExtension(getFileExtension(path)) || file.content.startsWith('data:');
+      if (file.content.startsWith('data:')) {
         const commaIndex = file.content.indexOf(',');
         const base64 = file.content.substring(commaIndex + 1);
         zip.file(relative, base64, { base64: true });
+      } else if (isBin && file.content && /^[A-Za-z0-9+/=\r\n]+$/.test(file.content.trim()) && file.content.trim().length % 4 === 0) {
+        zip.file(relative, file.content.trim(), { base64: true });
       } else {
         zip.file(relative, file.content);
       }

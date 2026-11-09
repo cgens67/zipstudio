@@ -50,8 +50,10 @@ test('isBinaryExtension identifies assets', () => {
   assert.equal(isBinaryExtension('woff2'), true);
   assert.equal(isBinaryExtension('apk'), true);
   assert.equal(isBinaryExtension('aab'), true);
+  assert.equal(isBinaryExtension('aar'), true);
   assert.equal(isBinaryExtension('dex'), true);
   assert.equal(isBinaryExtension('so'), true);
+  assert.equal(isBinaryExtension('keystore'), true);
   assert.equal(isBinaryExtension('ts'), false);
   assert.equal(isBinaryExtension('html'), false);
 });

@@ -23,19 +23,38 @@ async function fileToVFile(file: File, relativePath: string): Promise<VFile> {
   const fileName = getFileName(normalized);
 
   let content = '';
+  let finalIsBinary = isBinary;
+
   if (isBinary) {
+    content = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  } else {
     const arrayBuffer = await file.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
-    let binary = '';
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-      binary += String.fromCharCode(bytes[i]);
+    let hasNull = false;
+    const sample = Math.min(bytes.length, 1024);
+    for (let i = 0; i < sample; i++) {
+      if (bytes[i] === 0) {
+        hasNull = true;
+        break;
+      }
     }
-    const base64 = btoa(binary);
-    const mime = getMimeType(ext);
-    content = `data:${mime};base64,${base64}`;
-  } else {
-    content = await file.text();
+    if (hasNull) {
+      finalIsBinary = true;
+      content = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+    } else {
+      const decoder = new TextDecoder('utf-8', { fatal: false });
+      content = decoder.decode(bytes);
+    }
   }
 
   let mode = '100644';
@@ -47,7 +66,7 @@ async function fileToVFile(file: File, relativePath: string): Promise<VFile> {
     path: normalized,
     name: fileName,
     content,
-    isBinary,
+    isBinary: finalIsBinary,
     size: file.size,
     lastModified: file.lastModified || Date.now(),
     mode,

@@ -7,6 +7,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   FileTreeNode,
   getFileExtension,
+  isBinaryExtension,
+  getMimeType,
   VFile,
   formatBytes,
   packageSubtreeZip,
@@ -244,16 +246,26 @@ export function Sidebar({
       if (!file) return;
 
       let blob: Blob;
-      if (file.isBinary && file.content.startsWith('data:')) {
+      const ext = getFileExtension(node.name);
+      const isBin = file.isBinary || isBinaryExtension(ext) || file.content.startsWith('data:');
+
+      if (file.content.startsWith('data:')) {
         const commaIndex = file.content.indexOf(',');
+        const mime = file.content.substring(5, commaIndex).split(';')[0] || getMimeType(ext);
         const base64 = file.content.substring(commaIndex + 1);
         const byteCharacters = atob(base64);
-        const byteNumbers = new Array(byteCharacters.length);
+        const byteArray = new Uint8Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
+          byteArray[i] = byteCharacters.charCodeAt(i);
         }
-        const byteArray = new Uint8Array(byteNumbers);
-        blob = new Blob([byteArray]);
+        blob = new Blob([byteArray], { type: mime });
+      } else if (isBin && file.content && /^[A-Za-z0-9+/=\r\n]+$/.test(file.content.trim()) && file.content.trim().length % 4 === 0) {
+        const byteCharacters = atob(file.content.trim());
+        const byteArray = new Uint8Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteArray[i] = byteCharacters.charCodeAt(i);
+        }
+        blob = new Blob([byteArray], { type: getMimeType(ext) });
       } else {
         blob = new Blob([file.content], { type: 'text/plain;charset=utf-8' });
       }

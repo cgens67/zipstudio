@@ -531,30 +531,45 @@ export class GitHubApiClient {
               const path = blobItem.path;
               const name = path.split('/').pop() || path;
               const ext = name.split('.').pop() || '';
-              const isBinary = isBinaryExtension(ext);
+              let isBinary = isBinaryExtension(ext);
 
               let content = '';
               if (blobRes.encoding === 'base64') {
+                const cleanBase64 = blobRes.content.replace(/\s/g, '');
                 if (isBinary) {
                   const mime = getMimeType(ext);
-                  content = `data:${mime};base64,${blobRes.content.replace(/\s/g, '')}`;
+                  content = `data:${mime};base64,${cleanBase64}`;
                 } else {
-                  // Decode base64 to text (handles UTF-8)
+                  // Attempt UTF-8 decoding
                   try {
-                    content = decodeURIComponent(
-                      atob(blobRes.content.replace(/\s/g, ''))
-                        .split('')
-                        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-                        .join('')
-                    );
-                  } catch {
-                    try {
-                      content = atob(blobRes.content.replace(/\s/g, ''));
-                    } catch {
-                      // Fallback as binary data URL if decoding fails
-                      const mime = getMimeType(ext);
-                      content = `data:${mime};base64,${blobRes.content.replace(/\s/g, '')}`;
+                    const binaryString = atob(cleanBase64);
+                    // Check if binaryString contains null bytes (binary file)
+                    let isActuallyBinary = false;
+                    const sample = Math.min(binaryString.length, 512);
+                    for (let s = 0; s < sample; s++) {
+                      if (binaryString.charCodeAt(s) === 0) {
+                        isActuallyBinary = true;
+                        break;
+                      }
                     }
+
+                    if (isActuallyBinary) {
+                      isBinary = true;
+                      const mime = getMimeType(ext);
+                      content = `data:${mime};base64,${cleanBase64}`;
+                    } else {
+                      content = decodeURIComponent(
+                        binaryString
+                          .split('')
+                          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                          .join('')
+                      );
+                    }
+                  } catch {
+                    // Decoding failed: treat safely as binary data URL
+                    isBinary = true;
+                    const mime = getMimeType(ext);
+                    content = `data:${mime};base64,${cleanBase64}`;
                   }
                 }
               } else {
@@ -649,20 +664,43 @@ export class GitHubApiClient {
     const commitData: any = await this.request(`/repos/${owner}/${repo}/git/commits/${parentCommitSha}`);
     const baseTreeSha = commitData.tree.sha;
 
-    // 3. Separate binary files that require blob creation
+    // 3. Separate binary files that require blob creation from text files
     const entries = Object.entries(changedFiles);
-    const binaryEntries = entries.filter(
-      ([, file]) => file.isBinary && file.content.startsWith('data:')
-    );
-    const textEntries = entries.filter(
-      ([, file]) => !file.isBinary || !file.content.startsWith('data:')
-    );
+    const binaryUploadEntries: Array<[string, VFileRef]> = [];
+    const binaryExistingEntries: Array<[string, VFileRef]> = [];
+    const textEntries: Array<[string, VFileRef]> = [];
 
-    // Upload binary blobs in parallel batches of 6 for speed
+    for (const [filePath, file] of entries) {
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      const isBin = file.isBinary || isBinaryExtension(ext) || file.content.startsWith('data:');
+
+      if (isBin) {
+        if (file.content.startsWith('data:')) {
+          binaryUploadEntries.push([filePath, file]);
+        } else if (file.content && /^[A-Za-z0-9+/=\r\n]+$/.test(file.content.trim()) && file.content.trim().length % 4 === 0) {
+          binaryUploadEntries.push([
+            filePath,
+            { ...file, content: `data:${getMimeType(ext)};base64,${file.content.trim()}` }
+          ]);
+        } else if (file.sha) {
+          // Intact Git blob already exists on GitHub. Reuse SHA directly to preserve 100% binary fidelity!
+          binaryExistingEntries.push([filePath, file]);
+        } else {
+          binaryUploadEntries.push([
+            filePath,
+            { ...file, content: `data:${getMimeType(ext)};base64,` }
+          ]);
+        }
+      } else {
+        textEntries.push([filePath, file]);
+      }
+    }
+
+    // Upload new binary blobs in parallel batches of 6 for speed
     const uploadedBlobMap = new Map<string, string>();
     const batchSize = 6;
-    for (let i = 0; i < binaryEntries.length; i += batchSize) {
-      const batch = binaryEntries.slice(i, i + batchSize);
+    for (let i = 0; i < binaryUploadEntries.length; i += batchSize) {
+      const batch = binaryUploadEntries.slice(i, i + batchSize);
       await Promise.all(
         batch.map(async ([filePath, file]) => {
           const base64Data = file.content.substring(file.content.indexOf(',') + 1);
@@ -673,6 +711,13 @@ export class GitHubApiClient {
           uploadedBlobMap.set(filePath, blobRes.sha);
         })
       );
+    }
+
+    // Map existing intact binary blobs directly
+    for (const [filePath, file] of binaryExistingEntries) {
+      if (file.sha) {
+        uploadedBlobMap.set(filePath, file.sha);
+      }
     }
 
     // 4. Create tree items for changed files
@@ -703,8 +748,8 @@ export class GitHubApiClient {
       });
     }
 
-    // Handle binary files with their uploaded blob SHAs
-    for (const [filePath, file] of binaryEntries) {
+    // Handle binary files with their uploaded or existing blob SHAs
+    for (const [filePath, file] of [...binaryUploadEntries, ...binaryExistingEntries]) {
       const blobSha = uploadedBlobMap.get(filePath);
       if (blobSha) {
         const mode =

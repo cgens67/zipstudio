@@ -1034,8 +1034,8 @@ interface ArchiveEntrySummary {
  */
 export function BinaryAssetViewer({ file, t }: BinaryAssetViewerProps) {
   const ext = getFileExtension(file.name).toLowerCase();
-  const isApk = ext === 'apk' || ext === 'aab' || ext === 'xapk' || ext === 'apks';
-  const isArchive = ['zip', 'jar', 'tar', 'gz', '7z', 'rar', 'war', 'ear'].includes(ext) || isApk;
+  const isApk = ext === 'apk' || ext === 'aab' || ext === 'xapk' || ext === 'apks' || ext === 'aar';
+  const isArchive = ['zip', 'jar', 'tar', 'gz', '7z', 'rar', 'war', 'ear', 'aar', 'klib'].includes(ext) || isApk;
   const isNativeBinary = ['so', 'dylib', 'dll', 'exe', 'bin', 'dex', 'o', 'obj', 'lib'].includes(ext);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'structure'>('overview');
@@ -1150,10 +1150,13 @@ export function BinaryAssetViewer({ file, t }: BinaryAssetViewerProps) {
   };
 
   const getTypeDescription = () => {
+    if (ext === 'aar') return 'Android Archive Library (AAR)';
     if (ext === 'apk') return 'Android Application Package (APK)';
     if (ext === 'aab') return 'Android App Bundle (AAB)';
     if (ext === 'xapk' || ext === 'apks') return 'Android Split / Bundle Package';
     if (ext === 'jar') return 'Java Archive (JAR)';
+    if (ext === 'klib') return 'Kotlin Multiplatform Library (KLIB)';
+    if (ext === 'keystore' || ext === 'jks') return 'Java / Android Signing Keystore';
     if (ext === 'dex') return 'Dalvik Executable (DEX)';
     if (ext === 'so') return 'Linux / Android Shared Object (.so)';
     if (ext === 'dylib') return 'macOS Dynamic Library (.dylib)';

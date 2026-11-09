@@ -11,6 +11,7 @@ import {
   packageZipFromFiles,
   normalizePath,
   getFileName,
+  isBinaryExtension,
 } from './utils/fileSystem';
 import {
   GitBranch,
@@ -993,17 +994,19 @@ export default function App() {
               // Same SHA: identical file between target commit and current workspace
               targetBaseFiles[item.path] = currentFile;
             } else {
+              const ext = (item.path.split('.').pop() || '').toLowerCase();
+              const isBinary = Boolean(currentFile?.isBinary || isBinaryExtension(ext));
               targetBaseFiles[item.path] = {
                 path: item.path,
                 name: item.path.split('/').pop() || item.path,
-                content: '',
-                isBinary: false,
+                content: currentFile?.content || '',
+                isBinary,
                 size: item.size || 0,
                 lastModified: Date.now(),
                 sha: item.sha,
                 mode: item.mode,
               };
-              if (!currentFile || !currentFile.isBinary) {
+              if (!isBinary) {
                 pathsToFetchBlobs.push(item.path);
               }
             }

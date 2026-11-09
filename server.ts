@@ -149,10 +149,6 @@ app.get(['/auth/callback', '/auth/callback/'], async (req, res) => {
 });
 
 /**
-import http from 'http';
-import { WebSocketServer, WebSocket } from 'ws';
-
-/**
  * -------------------------------------------------------------
  * Real-Time Multi-User Collaboration State & WebSocket Server
  * -------------------------------------------------------------
@@ -466,8 +462,13 @@ async function startServer() {
     });
   }
 
-  server.listen(PORT, () => {
-    console.log(`ZipStudio Full-Stack & Collaboration Server running at http://localhost:${PORT}`);
+  const port = Number(PORT) || 3000;
+  server.listen(port, '0.0.0.0', () => {
+    console.log(`ZipStudio Full-Stack & Collaboration Server running at http://0.0.0.0:${port}`);
+  });
+
+  server.on('error', (err: unknown) => {
+    console.error('Server failed to start or encountered an error:', err);
   });
 }
 
