@@ -11,6 +11,7 @@ import {
   packageZipFromFiles,
   normalizePath,
   getFileName,
+  getFileExtension,
   isBinaryExtension,
 } from './utils/fileSystem';
 import {
@@ -1386,15 +1387,24 @@ export default function App() {
     const updatedFiles = { ...files };
 
     for (const [path, file] of Object.entries(updatedFiles)) {
-      if (file.isBinary) continue;
-      const matches = file.content.match(regex);
-      if (matches) {
-        totalReplaced += matches.length;
-        updatedFiles[path] = {
-          ...file,
-          content: file.content.replace(regex, replaceQuery),
-          lastModified: Date.now(),
-        };
+      if (!file || typeof file.content !== 'string' || file.isBinary) continue;
+      if (file.content.startsWith('data:')) continue;
+      const ext = getFileExtension(path);
+      if (isBinaryExtension(ext)) continue;
+      if (file.content.length > 5 * 1024 * 1024) continue;
+
+      try {
+        const matches = file.content.match(regex);
+        if (matches && matches.length > 0) {
+          totalReplaced += matches.length;
+          updatedFiles[path] = {
+            ...file,
+            content: file.content.replace(regex, replaceQuery),
+            lastModified: Date.now(),
+          };
+        }
+      } catch (err) {
+        console.warn(`[ReplaceAll] Failed to replace in ${path}:`, err);
       }
     }
 

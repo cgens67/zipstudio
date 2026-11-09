@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { M3Icon, M3IconButton, M3Button } from './M3Components';
 import { M3Switch } from './M3Switch';
-import { VFile } from '../utils/fileSystem';
+import { VFile, isBinaryExtension, getFileExtension } from '../utils/fileSystem';
 import { Translations, TRANSLATIONS } from '../utils/i18n';
 
 export interface SearchMatch {
@@ -14,12 +14,35 @@ export interface SearchMatch {
   lineContent: string;
   matchStart: number;
   matchLength: number;
+  previewBefore: string;
+  previewMatch: string;
+  previewAfter: string;
 }
 
 export interface FileSearchResult {
   filePath: string;
   fileName: string;
   matches: SearchMatch[];
+}
+
+const MAX_MATCHES_PER_FILE = 50;
+const MAX_MATCHES_PER_LINE = 20;
+const MAX_TOTAL_MATCHES = 500;
+const MAX_LINE_LENGTH_TO_SEARCH = 8000;
+const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB safety limit for live search
+
+function createSnippet(line: string, start: number, len: number) {
+  const maxContext = 40;
+  const snippetStart = Math.max(0, start - maxContext);
+  const snippetEnd = Math.min(line.length, start + len + maxContext);
+
+  const prefix = snippetStart > 0 ? '…' : '';
+  const before = prefix + line.substring(snippetStart, start);
+  const match = line.substring(start, start + len);
+  const suffix = snippetEnd < line.length ? '…' : '';
+  const after = line.substring(start + len, snippetEnd) + suffix;
+
+  return { before, match, after };
 }
 
 interface SearchPanelProps {
@@ -38,6 +61,9 @@ export function SearchPanel({
   t = TRANSLATIONS.en,
 }: SearchPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [replaceQuery, setReplaceQuery] = useState('');
   const [showReplace, setShowReplace] = useState(false);
   const [caseSensitive, setCaseSensitive] = useState(false);
@@ -45,13 +71,35 @@ export function SearchPanel({
   const [useRegex, setUseRegex] = useState(false);
   const [collapsedFiles, setCollapsedFiles] = useState<Record<string, boolean>>({});
 
-  // Perform search across all text files
-  const searchResults: FileSearchResult[] = useMemo(() => {
-    if (!searchQuery.trim()) return [];
+  // Debounce search query to avoid freezing on rapid typing
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      setDebouncedQuery('');
+      setIsSearching(false);
+      setSearchError(null);
+      return;
+    }
+
+    setIsSearching(true);
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+      setIsSearching(false);
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Perform search across all text files with comprehensive safety guards
+  const { results: searchResults, totalMatches, isCapped } = useMemo(() => {
+    const query = debouncedQuery.trim();
+    if (!query) {
+      return { results: [], totalMatches: 0, isCapped: false };
+    }
 
     let regex: RegExp;
     try {
-      let pattern = searchQuery;
+      let pattern = debouncedQuery;
       if (!useRegex) {
         pattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       }
@@ -59,53 +107,109 @@ export function SearchPanel({
         pattern = `\\b${pattern}\\b`;
       }
       regex = new RegExp(pattern, caseSensitive ? 'g' : 'gi');
-    } catch {
-      return [];
+      setSearchError(null);
+    } catch (err) {
+      setSearchError((err as Error).message || 'Invalid regular expression');
+      return { results: [], totalMatches: 0, isCapped: false };
     }
 
     const results: FileSearchResult[] = [];
+    let grandTotalMatches = 0;
+    let hitCap = false;
 
     for (const [filePath, file] of Object.entries(files)) {
-      if (file.isBinary) continue;
+      if (hitCap) break;
 
-      const lines = file.content.split('\n');
-      const fileMatches: SearchMatch[] = [];
+      // Guard 1: Ensure valid file and text content
+      if (!file || typeof file.content !== 'string' || file.isBinary) continue;
 
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        regex.lastIndex = 0;
-        let match: RegExpExecArray | null;
+      // Guard 2: Skip data-URL files (e.g., base64 media/binaries)
+      if (file.content.startsWith('data:')) continue;
 
-        while ((match = regex.exec(line)) !== null) {
-          fileMatches.push({
-            lineNumber: i + 1,
-            lineContent: line,
-            matchStart: match.index,
-            matchLength: match[0].length,
-          });
+      // Guard 3: Skip binary extensions (.aar, .jar, .png, .so, etc.)
+      const ext = getFileExtension(filePath);
+      if (isBinaryExtension(ext)) continue;
 
-          // Prevent infinite loop if match length is 0
-          if (match[0].length === 0) {
-            regex.lastIndex++;
+      // Guard 4: Skip files exceeding size limit
+      if (file.content.length > MAX_FILE_SIZE_BYTES) continue;
+
+      try {
+        const lines = file.content.split('\n');
+        const fileMatches: SearchMatch[] = [];
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+
+          // Guard 5: Skip excessively long minified lines (>8000 chars)
+          if (line.length > MAX_LINE_LENGTH_TO_SEARCH) continue;
+
+          regex.lastIndex = 0;
+          let match: RegExpExecArray | null;
+          let matchesInLine = 0;
+          let safetyLoop = 0;
+
+          while ((match = regex.exec(line)) !== null) {
+            safetyLoop++;
+            if (safetyLoop > 100) break; // Guard against runaway / ReDoS loops
+
+            const matchStart = match.index;
+            const matchLength = match[0].length;
+            const snippet = createSnippet(line, matchStart, matchLength);
+
+            fileMatches.push({
+              lineNumber: i + 1,
+              lineContent: line.length > 300 ? line.substring(0, 300) + '…' : line,
+              matchStart,
+              matchLength,
+              previewBefore: snippet.before,
+              previewMatch: snippet.match,
+              previewAfter: snippet.after,
+            });
+
+            grandTotalMatches++;
+            matchesInLine++;
+
+            if (grandTotalMatches >= MAX_TOTAL_MATCHES) {
+              hitCap = true;
+              break;
+            }
+
+            if (fileMatches.length >= MAX_MATCHES_PER_FILE) {
+              break;
+            }
+
+            if (matchesInLine >= MAX_MATCHES_PER_LINE) {
+              break;
+            }
+
+            // Guard zero-width matches (e.g. ^, $, \b, empty groups)
+            if (matchLength === 0) {
+              regex.lastIndex = Math.max(regex.lastIndex + 1, match.index + 1);
+              if (regex.lastIndex > line.length) {
+                break;
+              }
+            }
+          }
+
+          if (fileMatches.length >= MAX_MATCHES_PER_FILE || hitCap) {
+            break;
           }
         }
-      }
 
-      if (fileMatches.length > 0) {
-        results.push({
-          filePath,
-          fileName: file.name,
-          matches: fileMatches,
-        });
+        if (fileMatches.length > 0) {
+          results.push({
+            filePath,
+            fileName: file.name,
+            matches: fileMatches,
+          });
+        }
+      } catch (fileErr) {
+        console.warn(`[SearchPanel] Error scanning ${filePath}:`, fileErr);
       }
     }
 
-    return results;
-  }, [files, searchQuery, caseSensitive, wholeWord, useRegex]);
-
-  const totalMatches = useMemo(() => {
-    return searchResults.reduce((acc, r) => acc + r.matches.length, 0);
-  }, [searchResults]);
+    return { results, totalMatches: grandTotalMatches, isCapped: hitCap };
+  }, [files, debouncedQuery, caseSensitive, wholeWord, useRegex]);
 
   const [showReplaceConfirm, setShowReplaceConfirm] = useState(false);
   const [preserveCasing, setPreserveCasing] = useState(false);
@@ -234,12 +338,29 @@ export function SearchPanel({
           </div>
         </div>
 
+        {/* Search Error notice if invalid regex */}
+        {searchError && (
+          <div className="text-[11px] text-[#ba1a1a] dark:text-[#ff8585] bg-[#ba1a1a]/10 dark:bg-[#ff8585]/10 px-2 py-1 rounded border border-[#ba1a1a]/20 dark:border-[#ff8585]/20 font-mono">
+            {searchError}
+          </div>
+        )}
+
         {/* Results summary counter */}
         {searchQuery.trim() && (
           <div className="flex items-center justify-between text-[11px] text-[#5d6168] dark:text-[#8e9199] pt-1">
-            <span>
-              <strong className="text-[#0b57d0] dark:text-[#a8c7fa]">{totalMatches}</strong> {t.matchesInFiles} ({searchResults.length} {t.filesCount})
-            </span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span>
+                <strong className="text-[#0b57d0] dark:text-[#a8c7fa]">{totalMatches}</strong> {t.matchesInFiles} ({searchResults.length} {t.filesCount})
+              </span>
+              {isCapped && (
+                <span className="text-[10px] text-[#ba1a1a] dark:text-[#ff8585] bg-[#ba1a1a]/10 dark:bg-[#ff8585]/10 px-1.5 py-0.5 rounded font-mono font-medium">
+                  {MAX_TOTAL_MATCHES}+ (capped)
+                </span>
+              )}
+              {isSearching && (
+                <span className="inline-block w-3 h-3 border-2 border-[#0b57d0] dark:border-[#a8c7fa] border-t-transparent rounded-full animate-spin ml-1" />
+              )}
+            </div>
             {searchResults.length > 0 && (
               <button
                 type="button"
@@ -266,6 +387,11 @@ export function SearchPanel({
           <div className="p-6 text-center text-xs text-[#8e9199]">
             <M3Icon name="search" size={32} className="mx-auto mb-2 opacity-40 text-[#a8c7fa]" />
             <p>{t.searchAcrossWorkspace}</p>
+          </div>
+        ) : isSearching && searchResults.length === 0 ? (
+          <div className="p-6 text-center text-xs text-[#8e9199]">
+            <div className="w-6 h-6 border-2 border-[#0b57d0] dark:border-[#a8c7fa] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+            <p>Searching workspace files...</p>
           </div>
         ) : searchResults.length === 0 ? (
           <div className="p-6 text-center text-xs text-[#8e9199]">
@@ -310,13 +436,6 @@ export function SearchPanel({
                   >
                     <div className="overflow-hidden">
                       {result.matches.map((m, idx) => {
-                        const before = m.lineContent.substring(0, m.matchStart);
-                        const matched = m.lineContent.substring(
-                          m.matchStart,
-                          m.matchStart + m.matchLength
-                        );
-                        const after = m.lineContent.substring(m.matchStart + m.matchLength);
-
                         return (
                           <div
                             key={idx}
@@ -327,11 +446,11 @@ export function SearchPanel({
                               {m.lineNumber}:
                             </span>
                             <span className="text-[#191c20] dark:text-[#c4c6d0] truncate flex-1 text-[11px]">
-                              <span>{before}</span>
+                              <span>{m.previewBefore}</span>
                               <mark className="bg-[#a8c7fa] text-[#003062] font-semibold px-0.5 rounded-xs">
-                                {matched}
+                                {m.previewMatch}
                               </mark>
-                              <span>{after}</span>
+                              <span>{m.previewAfter}</span>
                             </span>
                           </div>
                         );
