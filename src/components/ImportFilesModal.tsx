@@ -4,7 +4,14 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { VFile, formatBytes, getFileExtension, normalizePath } from '../utils/fileSystem';
+import {
+  VFile,
+  formatBytes,
+  getFileExtension,
+  getFileName,
+  normalizePath,
+  extractZipInBrowser,
+} from '../utils/fileSystem';
 import { convertFileToVFile } from '../utils/dragDropHandler';
 import { M3Icon, M3IconButton, M3Badge, M3Button } from './M3Components';
 import { Translations } from '../utils/i18n';
@@ -43,6 +50,7 @@ export function ImportFilesModal({
   const [targetDir, setTargetDir] = useState('');
   const [limitMode, setLimitMode] = useState<'25mb' | '100mb'>('25mb');
   const [conflictStrategy, setConflictStrategy] = useState<'overwrite' | 'rename' | 'skip'>('overwrite');
+  const [zipModes, setZipModes] = useState<Record<string, 'extract' | 'archive'>>({});
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0 });
 
@@ -53,6 +61,15 @@ export function ImportFilesModal({
       setTargetDir(defaultDirectory ? defaultDirectory.replace(/^\/+|\/+$/g, '') : '');
       setIsProcessing(false);
       setProcessingProgress({ current: 0, total: 0 });
+
+      // Detect and initialize mode for any .zip files (defaulting to extract with interactive prompt)
+      const initialZipModes: Record<string, 'extract' | 'archive'> = {};
+      for (const f of selectedFiles) {
+        if (getFileExtension(f.name).toLowerCase() === 'zip') {
+          initialZipModes[f.name] = 'extract';
+        }
+      }
+      setZipModes(initialZipModes);
     }
   }, [isOpen, selectedFiles, defaultDirectory]);
 
@@ -162,6 +179,10 @@ export function ImportFilesModal({
     setFilesToImport((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const zipFiles = useMemo(() => {
+    return filesToImport.filter((f) => getFileExtension(f.name).toLowerCase() === 'zip');
+  }, [filesToImport]);
+
   const handleStartImport = async () => {
     const validItems = fileAnalysis.analyzed.filter((item) => !item.isBlocked);
     if (validItems.length === 0) return;
@@ -175,32 +196,69 @@ export function ImportFilesModal({
 
       for (let i = 0; i < validItems.length; i++) {
         const item = validItems[i];
-        let finalPath = cleanTarget ? `${cleanTarget}/${item.file.name}` : item.file.name;
-        finalPath = normalizePath(finalPath);
+        const isZip = item.ext === 'zip';
+        const zipMode = zipModes[item.file.name] || 'extract';
 
-        // Handle collision strategy
-        if (existingFiles[finalPath]) {
-          if (conflictStrategy === 'skip') {
-            continue;
-          } else if (conflictStrategy === 'rename') {
-            const ext = getFileExtension(item.file.name);
-            const baseName = item.file.name.slice(0, -(ext ? ext.length + 1 : 0));
-            let counter = 1;
-            let candidate = cleanTarget
-              ? `${cleanTarget}/${baseName}_copy.${ext}`
-              : `${baseName}_copy.${ext}`;
-            while (existingFiles[candidate]) {
-              counter++;
-              candidate = cleanTarget
-                ? `${cleanTarget}/${baseName}_copy${counter}.${ext}`
-                : `${baseName}_copy${counter}.${ext}`;
+        if (isZip && zipMode === 'extract') {
+          // Extract internal files & folders from within the ZIP into destination directory
+          const extracted = await extractZipInBrowser(item.file);
+          for (const [relPath, extractedFile] of Object.entries(extracted)) {
+            let finalPath = cleanTarget ? `${cleanTarget}/${relPath}` : relPath;
+            finalPath = normalizePath(finalPath);
+
+            // Handle collision strategy
+            if (existingFiles[finalPath]) {
+              if (conflictStrategy === 'skip') {
+                continue;
+              } else if (conflictStrategy === 'rename') {
+                const ext = getFileExtension(finalPath);
+                const baseName = finalPath.slice(0, -(ext ? ext.length + 1 : 0));
+                let counter = 1;
+                let candidate = `${baseName}_copy.${ext}`;
+                while (existingFiles[candidate]) {
+                  counter++;
+                  candidate = `${baseName}_copy${counter}.${ext}`;
+                }
+                finalPath = candidate;
+              }
             }
-            finalPath = candidate;
+
+            convertedFiles.push({
+              ...extractedFile,
+              path: finalPath,
+              name: getFileName(finalPath),
+            });
           }
+        } else {
+          // Regular file or keep as standalone .zip archive
+          let finalPath = cleanTarget ? `${cleanTarget}/${item.file.name}` : item.file.name;
+          finalPath = normalizePath(finalPath);
+
+          // Handle collision strategy
+          if (existingFiles[finalPath]) {
+            if (conflictStrategy === 'skip') {
+              continue;
+            } else if (conflictStrategy === 'rename') {
+              const ext = getFileExtension(item.file.name);
+              const baseName = item.file.name.slice(0, -(ext ? ext.length + 1 : 0));
+              let counter = 1;
+              let candidate = cleanTarget
+                ? `${cleanTarget}/${baseName}_copy.${ext}`
+                : `${baseName}_copy.${ext}`;
+              while (existingFiles[candidate]) {
+                counter++;
+                candidate = cleanTarget
+                  ? `${cleanTarget}/${baseName}_copy${counter}.${ext}`
+                  : `${baseName}_copy${counter}.${ext}`;
+              }
+              finalPath = candidate;
+            }
+          }
+
+          const vfile = await convertFileToVFile(item.file, finalPath);
+          convertedFiles.push(vfile);
         }
 
-        const vfile = await convertFileToVFile(item.file, finalPath);
-        convertedFiles.push(vfile);
         setProcessingProgress({ current: i + 1, total: validItems.length });
       }
 
@@ -323,6 +381,89 @@ export function ImportFilesModal({
             </div>
           ) : null}
 
+          {/* ZIP Archive Handling Prompt (asks whether to extract files or add zip archive) */}
+          {zipFiles.length > 0 && (
+            <div className="bg-[#f0f4f9] dark:bg-[#121316]/80 border-2 border-[#0b57d0]/40 dark:border-[#a8c7fa]/40 rounded-2xl p-3.5 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#0b57d0]/10 dark:bg-[#a8c7fa]/20 text-[#0b57d0] dark:text-[#a8c7fa] flex items-center justify-center shrink-0 mt-0.5">
+                  <M3Icon name="folder_zip" size={20} />
+                </div>
+                <div>
+                  <span className="font-bold text-xs text-[#191c20] dark:text-white block">
+                    ZIP Archive Detected ({zipFiles.length === 1 ? zipFiles[0].name : `${zipFiles.length} archives`})
+                  </span>
+                  <span className="text-[11px] text-[#5d6168] dark:text-[#8e9199]">
+                    Choose how you want this ZIP to be imported: extract the files inside, or add the ZIP archive file itself to your workspace?
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {zipFiles.map((zf) => {
+                  const mode = zipModes[zf.name] || 'extract';
+                  return (
+                    <div key={zf.name} className="space-y-1.5 pt-0.5">
+                      {zipFiles.length > 1 && (
+                        <span className="text-[11px] font-mono font-semibold text-[#191c20] dark:text-white block">
+                          {zf.name}:
+                        </span>
+                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setZipModes((prev) => ({ ...prev, [zf.name]: 'extract' }))}
+                          className={`p-2.5 rounded-xl border text-left flex flex-col gap-0.5 cursor-pointer transition-all ${
+                            mode === 'extract'
+                              ? 'bg-[#0b57d0] dark:bg-[#a8c7fa] text-white dark:text-[#003062] border-transparent font-semibold shadow-xs'
+                              : 'bg-white dark:bg-[#2b2d30] text-[#44474e] dark:text-[#c4c6d0] border-[#d8dae5] dark:border-[#43474e]/50 hover:bg-[#e8ebf3] dark:hover:bg-[#383a3e]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <M3Icon name="unarchive" size={15} />
+                            <span className="font-bold text-xs">Extract Files in ZIP</span>
+                          </div>
+                          <span
+                            className={`text-[10px] leading-tight ${
+                              mode === 'extract'
+                                ? 'text-white/80 dark:text-[#003062]/80'
+                                : 'text-[#74777f] dark:text-[#8e9199]'
+                            }`}
+                          >
+                            Unpacks all internal files &amp; folders into /{targetDir.trim().replace(/^\/+|\/+$/g, '') || '(root)'} without replacing existing code.
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setZipModes((prev) => ({ ...prev, [zf.name]: 'archive' }))}
+                          className={`p-2.5 rounded-xl border text-left flex flex-col gap-0.5 cursor-pointer transition-all ${
+                            mode === 'archive'
+                              ? 'bg-[#0b57d0] dark:bg-[#a8c7fa] text-white dark:text-[#003062] border-transparent font-semibold shadow-xs'
+                              : 'bg-white dark:bg-[#2b2d30] text-[#44474e] dark:text-[#c4c6d0] border-[#d8dae5] dark:border-[#43474e]/50 hover:bg-[#e8ebf3] dark:hover:bg-[#383a3e]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <M3Icon name="archive" size={15} />
+                            <span className="font-bold text-xs">Add .ZIP Archive File</span>
+                          </div>
+                          <span
+                            className={`text-[10px] leading-tight ${
+                              mode === 'archive'
+                                ? 'text-white/80 dark:text-[#003062]/80'
+                                : 'text-[#74777f] dark:text-[#8e9199]'
+                            }`}
+                          >
+                            Keeps {zf.name} intact as a single binary archive file in /{targetDir.trim().replace(/^\/+|\/+$/g, '') || '(root)'}.
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Destination Directory Prompt */}
           <div className="bg-[#f0f4f9] dark:bg-[#121316]/60 border border-[#d8dae5] dark:border-[#43474e]/40 rounded-2xl p-3.5 space-y-2.5">
             <div className="flex items-center justify-between">
@@ -415,9 +556,47 @@ export function ImportFilesModal({
                             {item.file.name}
                           </span>
                           <M3Badge variant={item.badgeVariant}>{item.typeLabel}</M3Badge>
+                          {item.ext === 'zip' && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setZipModes((prev) => ({
+                                  ...prev,
+                                  [item.file.name]:
+                                    (prev[item.file.name] || 'extract') === 'extract'
+                                      ? 'archive'
+                                      : 'extract',
+                                }))
+                              }
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border cursor-pointer transition-colors flex items-center gap-1 ${
+                                (zipModes[item.file.name] || 'extract') === 'extract'
+                                  ? 'bg-[#d3e3fd] text-[#041e49] dark:bg-[#00468b]/40 dark:text-[#a8c7fa] border-[#0b57d0]/30'
+                                  : 'bg-[#f0f2f8] text-[#44474e] dark:bg-[#2b2d30] dark:text-[#c4c6d0] border-[#d8dae5] dark:border-[#43474e]/50'
+                              }`}
+                              title="Click to toggle: Extract files vs. Keep as .zip archive"
+                            >
+                              <M3Icon
+                                name={
+                                  (zipModes[item.file.name] || 'extract') === 'extract'
+                                    ? 'unarchive'
+                                    : 'archive'
+                                }
+                                size={12}
+                              />
+                              <span>
+                                {(zipModes[item.file.name] || 'extract') === 'extract'
+                                  ? 'Extracts internal files'
+                                  : 'Adds as .zip archive'}
+                              </span>
+                            </button>
+                          )}
                           {item.collides && (
                             <M3Badge variant="warning">
-                              {conflictStrategy === 'overwrite' ? 'Overwrites' : conflictStrategy === 'rename' ? 'Will Auto-Rename' : 'Will Skip'}
+                              {conflictStrategy === 'overwrite'
+                                ? 'Overwrites'
+                                : conflictStrategy === 'rename'
+                                ? 'Will Auto-Rename'
+                                : 'Will Skip'}
                             </M3Badge>
                           )}
                         </div>
@@ -426,7 +605,9 @@ export function ImportFilesModal({
                           <span className="font-mono">{formatBytes(item.file.size)}</span>
                           <span>•</span>
                           <span className="font-mono text-[#0b57d0] dark:text-[#a8c7fa] truncate max-w-[180px] sm:max-w-[240px]">
-                            ➔ /{item.potentialPath}
+                            {item.ext === 'zip' && (zipModes[item.file.name] || 'extract') === 'extract'
+                              ? `➔ Unpacks inside /${targetDir.trim().replace(/^\/+|\/+$/g, '') || '(root)'}`
+                              : `➔ /${item.potentialPath}`}
                           </span>
                           {item.isBlocked && (
                             <span className="text-[#ba1a1a] dark:text-[#ffb4ab] font-semibold">

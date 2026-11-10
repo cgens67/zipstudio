@@ -25,9 +25,11 @@ export interface FileSearchResult {
   matches: SearchMatch[];
 }
 
-const MAX_MATCHES_PER_FILE = 50;
-const MAX_MATCHES_PER_LINE = 20;
-const MAX_TOTAL_MATCHES = 500;
+const MAX_MATCHES_PER_FILE = 200;
+const MAX_MATCHES_PER_LINE = 50;
+const MAX_TOTAL_SCAN_MATCHES = 5000; // Deep workspace scan limit
+const INITIAL_PREVIEW_LIMIT = 500;
+const PREVIEW_INCREMENT = 500;
 const MAX_LINE_LENGTH_TO_SEARCH = 8000;
 const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB safety limit for live search
 
@@ -64,6 +66,7 @@ export function SearchPanel({
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [previewLimit, setPreviewLimit] = useState(INITIAL_PREVIEW_LIMIT);
   const [replaceQuery, setReplaceQuery] = useState('');
   const [showReplace, setShowReplace] = useState(false);
   const [caseSensitive, setCaseSensitive] = useState(false);
@@ -78,6 +81,7 @@ export function SearchPanel({
       setDebouncedQuery('');
       setIsSearching(false);
       setSearchError(null);
+      setPreviewLimit(INITIAL_PREVIEW_LIMIT);
       return;
     }
 
@@ -85,6 +89,7 @@ export function SearchPanel({
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery);
       setIsSearching(false);
+      setPreviewLimit(INITIAL_PREVIEW_LIMIT);
     }, 150);
 
     return () => clearTimeout(timer);
@@ -169,7 +174,7 @@ export function SearchPanel({
             grandTotalMatches++;
             matchesInLine++;
 
-            if (grandTotalMatches >= MAX_TOTAL_MATCHES) {
+            if (grandTotalMatches >= MAX_TOTAL_SCAN_MATCHES) {
               hitCap = true;
               break;
             }
@@ -210,6 +215,26 @@ export function SearchPanel({
 
     return { results, totalMatches: grandTotalMatches, isCapped: hitCap };
   }, [files, debouncedQuery, caseSensitive, wholeWord, useRegex]);
+
+  // Paginated view for DOM rendering: only render up to previewLimit matches to keep the browser 60 FPS
+  const { displayedResults, displayedMatchesCount } = useMemo(() => {
+    let remaining = previewLimit;
+    const sliced: FileSearchResult[] = [];
+    let count = 0;
+
+    for (const res of searchResults) {
+      if (remaining <= 0) break;
+      const fileMatches = res.matches.slice(0, remaining);
+      sliced.push({
+        ...res,
+        matches: fileMatches,
+      });
+      count += fileMatches.length;
+      remaining -= fileMatches.length;
+    }
+
+    return { displayedResults: sliced, displayedMatchesCount: count };
+  }, [searchResults, previewLimit]);
 
   const [showReplaceConfirm, setShowReplaceConfirm] = useState(false);
   const [preserveCasing, setPreserveCasing] = useState(false);
@@ -352,9 +377,14 @@ export function SearchPanel({
               <span>
                 <strong className="text-[#0b57d0] dark:text-[#a8c7fa]">{totalMatches}</strong> {t.matchesInFiles} ({searchResults.length} {t.filesCount})
               </span>
+              {displayedMatchesCount < totalMatches && (
+                <span className="text-[10px] text-[#5d6168] dark:text-[#8e9199] bg-[#e8ebf3] dark:bg-[#2b2d30] px-1.5 py-0.5 rounded font-mono">
+                  Showing {displayedMatchesCount} of {totalMatches}
+                </span>
+              )}
               {isCapped && (
                 <span className="text-[10px] text-[#ba1a1a] dark:text-[#ff8585] bg-[#ba1a1a]/10 dark:bg-[#ff8585]/10 px-1.5 py-0.5 rounded font-mono font-medium">
-                  {MAX_TOTAL_MATCHES}+ (capped)
+                  {MAX_TOTAL_SCAN_MATCHES}+ (capped)
                 </span>
               )}
               {isSearching && (
@@ -401,7 +431,7 @@ export function SearchPanel({
           </div>
         ) : (
           <div className="py-1">
-            {searchResults.map((result) => {
+            {displayedResults.map((result) => {
               const isCollapsed = !!collapsedFiles[result.filePath];
               return (
                 <div key={result.filePath} className="border-b border-[#d8dae5] dark:border-[#43474e]/20 last:border-b-0">
@@ -460,6 +490,23 @@ export function SearchPanel({
                 </div>
               );
             })}
+
+            {/* Load More Matches Pagination Control */}
+            {totalMatches > displayedMatchesCount && (
+              <div className="p-3 text-center border-t border-[#d8dae5] dark:border-[#43474e]/30 bg-[#f8fafd] dark:bg-[#18191c]/50">
+                <button
+                  type="button"
+                  onClick={() => setPreviewLimit((prev) => prev + PREVIEW_INCREMENT)}
+                  className="px-3.5 py-1.5 bg-[#0b57d0] hover:bg-[#0842a0] dark:bg-[#a8c7fa] dark:text-[#003062] dark:hover:bg-[#c2e7ff] text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <M3Icon name="expand_more" size={16} />
+                  <span>Show Next {Math.min(PREVIEW_INCREMENT, totalMatches - displayedMatchesCount)} Matches</span>
+                </button>
+                <p className="text-[10px] text-[#5d6168] dark:text-[#8e9199] mt-1 font-mono">
+                  Showing {displayedMatchesCount} of {totalMatches} • Replace All applies to all files in workspace
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -491,6 +538,14 @@ export function SearchPanel({
                 <span className="text-[#5d6168] dark:text-[#8e9199]">Replace:</span>
                 <span className="text-[#0b57d0] dark:text-[#a8c7fa] truncate font-bold">&ldquo;{replaceQuery}&rdquo;</span>
               </div>
+            </div>
+
+            {/* Note clarifying workspace-wide reach */}
+            <div className="bg-[#e8f0fe] dark:bg-[#00468b]/20 p-2.5 rounded-xl border border-[#0b57d0]/20 text-[11px] text-[#041e49] dark:text-[#c2e7ff] flex items-start gap-2">
+              <M3Icon name="info" size={15} className="text-[#0b57d0] dark:text-[#a8c7fa] shrink-0 mt-0.5" />
+              <span>
+                Replace All updates every match in all workspace files, including results beyond the visible preview window.
+              </span>
             </div>
 
             {/* M3Switch options from material-esm/material */}
