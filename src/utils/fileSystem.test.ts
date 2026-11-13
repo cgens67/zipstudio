@@ -13,6 +13,9 @@ import {
   getLanguageFromExt,
   isBinaryExtension,
   buildFileTree,
+  filterFileTree,
+  hasMatchingDescendant,
+  nodeMatchesSearch,
 } from './fileSystem.ts';
 import type { VFile } from './fileSystem.ts';
 
@@ -92,4 +95,73 @@ test('buildFileTree creates nested hierarchy from flat list', () => {
   assert.ok(srcNode);
   assert.equal(srcNode.isFolder, true);
   assert.equal(srcNode.children?.length, 2); // components folder and main.js
+});
+
+test('filterFileTree finds deeply nested files across multiple folder levels', () => {
+  const files: Record<string, VFile> = {
+    'README.md': {
+      path: 'README.md',
+      name: 'README.md',
+      content: '# App',
+      isBinary: false,
+      size: 5,
+      lastModified: 1000,
+    },
+    'app/src/main/java/com/example/playback/PlayerService.kt': {
+      path: 'app/src/main/java/com/example/playback/PlayerService.kt',
+      name: 'PlayerService.kt',
+      content: 'class PlayerService {}',
+      isBinary: false,
+      size: 22,
+      lastModified: 1000,
+    },
+    'app/src/main/java/com/example/playback/QueueManager.kt': {
+      path: 'app/src/main/java/com/example/playback/QueueManager.kt',
+      name: 'QueueManager.kt',
+      content: 'class QueueManager {}',
+      isBinary: false,
+      size: 21,
+      lastModified: 1000,
+    },
+    'app/src/main/java/com/example/ui/HomeScreen.kt': {
+      path: 'app/src/main/java/com/example/ui/HomeScreen.kt',
+      name: 'HomeScreen.kt',
+      content: 'fun HomeScreen() {}',
+      isBinary: false,
+      size: 19,
+      lastModified: 1000,
+    },
+  };
+
+  const tree = buildFileTree(files);
+
+  // Search for a deeply nested file by filename
+  const byFile = filterFileTree(tree, 'playerservice');
+  assert.equal(byFile.length, 1);
+  assert.equal(byFile[0].name, 'app');
+  assert.equal(hasMatchingDescendant(byFile[0], 'playerservice'), true);
+
+  // Navigate down filtered tree to verify only PlayerService branch remains
+  const playbackNode =
+    byFile[0].children?.[0]?.children?.[0]?.children?.[0]?.children?.[0]?.children?.[0]?.children?.[0];
+  assert.equal(playbackNode?.name, 'playback');
+  assert.equal(playbackNode?.children?.length, 1);
+  assert.equal(playbackNode?.children?.[0].name, 'PlayerService.kt');
+
+  // Search by extension across nested folders
+  const byExt = filterFileTree(tree, '.kt');
+  assert.equal(byExt.length, 1);
+  const comNode = byExt[0].children?.[0]?.children?.[0]?.children?.[0]?.children?.[0];
+  assert.equal(comNode?.name, 'com');
+  const exampleNode = comNode?.children?.[0];
+  assert.equal(exampleNode?.children?.length, 2); // playback + ui
+
+  // Search by path fragment
+  const byPath = filterFileTree(tree, 'playback/Queue');
+  assert.equal(byPath.length, 1);
+  assert.equal(nodeMatchesSearch(byPath[0], 'playback/Queue'), false);
+  assert.equal(hasMatchingDescendant(byPath[0], 'playback/Queue'), true);
+
+  // Non-matching search returns empty array
+  assert.deepEqual(filterFileTree(tree, 'nonexistent_xyz'), []);
 });

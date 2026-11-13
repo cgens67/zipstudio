@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { M3Icon, M3IconButton, M3Button, M3Badge } from './M3Components';
 import { M3Switch } from './M3Switch';
 import { M3Dropdown, DropdownOption } from './M3Dropdown';
@@ -16,6 +16,17 @@ import {
   GitHubRepo,
   RepoLoadProgress,
 } from '../utils/gitService';
+import {
+  CONVENTIONAL_COMMIT_TYPES,
+  COMMIT_ACTION_VERBS,
+  DEFAULT_COMMIT_TEMPLATES,
+  CommitTemplatePreset,
+  formatCommitTemplate,
+  applyCommitTemplateToMessage,
+  extractSuggestedScopes,
+  loadCustomCommitTemplates,
+  saveCustomCommitTemplates,
+} from '../utils/commitTemplates';
 import { Translations } from '../utils/i18n';
 import { useDialogAnimation } from '../utils/useDialogAnimation';
 
@@ -558,27 +569,22 @@ export function GitHubPanel({
                 </div>
                 {/* Allow pushing a fresh project commit directly */}
                 <form onSubmit={handleCommitSubmit} className="pt-2 border-t border-[#d8dae5] dark:border-[#43474e]/30 space-y-2">
-                  <div className="text-[11px] font-semibold text-[#0b57d0] dark:text-[#a8c7fa] flex items-center gap-1">
-                    <M3Icon name="cloud_upload" size={14} />
-                    <span>Push Project Snapshot to GitHub</span>
-                  </div>
-                  <textarea
-                    rows={2}
+                  <CommitMessageComposer
+                    headerTitle={
+                      <div className="text-[11px] font-semibold text-[#0b57d0] dark:text-[#a8c7fa] flex items-center gap-1 min-w-0">
+                        <M3Icon name="cloud_upload" size={14} className="shrink-0" />
+                        <span className="truncate">Push Project Snapshot to GitHub</span>
+                      </div>
+                    }
+                    commitMessage={commitMessage}
+                    onChangeCommitMessage={setCommitMessage}
                     placeholder="Commit message (e.g. Sync imported zip files)"
-                    value={commitMessage}
-                    onChange={(e) => setCommitMessage(e.target.value)}
-                    className="w-full bg-white dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg p-2 text-xs text-[#191c20] dark:text-white placeholder-[#74777f] dark:placeholder-[#8e9199] focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa] resize-none font-mono"
-                  />
-                  <M3Button
-                    variant="filled"
-                    size="sm"
-                    className="w-full"
-                    icon="cloud_upload"
-                    loading={isCommitting}
+                    diffs={diffs}
+                    commits={commits}
+                    submitLabel={`Commit & Push to GitHub (${activeBranch})`}
+                    isCommitting={isCommitting}
                     disabled={!commitMessage.trim()}
-                  >
-                    Commit & Push to GitHub ({activeBranch})
-                  </M3Button>
+                  />
                 </form>
               </div>
             ) : (
@@ -623,29 +629,29 @@ export function GitHubPanel({
 
                 {/* Commit Form */}
                 <form onSubmit={handleCommitSubmit} className="pt-2 border-t border-[#d8dae5] dark:border-[#43474e]/30 space-y-2">
-                  <textarea
-                    rows={2}
+                  <CommitMessageComposer
+                    headerTitle={
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-[#5d6168] dark:text-[#8e9199]">
+                        Commit Message
+                      </span>
+                    }
+                    commitMessage={commitMessage}
+                    onChangeCommitMessage={setCommitMessage}
                     placeholder={
                       softResetTarget
                         ? `Commit message for squashed commit (e.g. Squash previous commits into ${activeBranch})`
-                        : "Commit message (e.g. Update components and styles)"
+                        : "Commit message (e.g. fix(playback): update buffer handling)"
                     }
-                    value={commitMessage}
-                    onChange={(e) => setCommitMessage(e.target.value)}
-                    className="w-full bg-white dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg p-2 text-xs text-[#191c20] dark:text-white placeholder-[#74777f] dark:placeholder-[#8e9199] focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa] resize-none font-mono"
-                  />
-                  <M3Button
-                    variant="filled"
-                    size="sm"
-                    className="w-full"
-                    icon="cloud_upload"
-                    loading={isCommitting}
+                    diffs={diffs}
+                    commits={commits}
+                    submitLabel={
+                      softResetTarget
+                        ? `Publish Squashed Commit to GitHub (${activeBranch})`
+                        : `Commit & Push to GitHub (${activeBranch})`
+                    }
+                    isCommitting={isCommitting}
                     disabled={!commitMessage.trim() || (!softResetTarget && diffs.length === 0)}
-                  >
-                    {softResetTarget
-                      ? `Publish Squashed Commit to GitHub (${activeBranch})`
-                      : `Commit & Push to GitHub (${activeBranch})`}
-                  </M3Button>
+                  />
                 </form>
               </>
             )}
@@ -1631,3 +1637,365 @@ function AnimatedNewPRModal({
     </div>
   );
 }
+
+// -------------------------------------------------------------
+// COMMIT MESSAGE TEMPLATE COMPOSER
+// -------------------------------------------------------------
+function CommitMessageComposer({
+  headerTitle,
+  commitMessage,
+  onChangeCommitMessage,
+  placeholder,
+  diffs,
+  commits,
+  submitLabel,
+  isCommitting,
+  disabled,
+}: {
+  headerTitle?: React.ReactNode;
+  commitMessage: string;
+  onChangeCommitMessage: (val: string) => void;
+  placeholder: string;
+  diffs: FileDiff[];
+  commits: GitCommit[];
+  submitLabel: string;
+  isCommitting: boolean;
+  disabled: boolean;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [selectedType, setSelectedType] = useState<string>('fix');
+  const [selectedScope, setSelectedScope] = useState<string>('playback');
+  const [selectedAction, setSelectedAction] = useState<string>('update');
+  const [customTemplates, setCustomTemplates] = useState<CommitTemplatePreset[]>(() =>
+    loadCustomCommitTemplates()
+  );
+
+  const suggestedScopes = useMemo(
+    () => extractSuggestedScopes(diffs, commits),
+    [diffs, commits]
+  );
+
+  // Default scope follows the repo's most relevant suggested scope on initial mount if available
+  const hasAutoSyncedScope = useRef(false);
+  useEffect(() => {
+    if (!hasAutoSyncedScope.current && suggestedScopes.length > 0 && diffs.length > 0) {
+      setSelectedScope(suggestedScopes[0]);
+      hasAutoSyncedScope.current = true;
+    }
+  }, [suggestedScopes, diffs.length]);
+
+  const builtPrefix = useMemo(
+    () =>
+      formatCommitTemplate({
+        type: selectedType,
+        scope: selectedScope,
+        action: selectedAction,
+      }),
+    [selectedType, selectedScope, selectedAction]
+  );
+
+  const applyTemplateAndFocus = (prefix: string) => {
+    const nextValue = applyCommitTemplateToMessage(commitMessage, prefix);
+    onChangeCommitMessage(nextValue);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        const len = nextValue.length;
+        el.setSelectionRange(len, len);
+      }
+    });
+  };
+
+  const handleSelectPreset = (preset: CommitTemplatePreset) => {
+    setSelectedType(preset.type);
+    setSelectedScope(preset.scope ?? '');
+    setSelectedAction(preset.action ?? '');
+
+    // If a preset uses a generic empty scope (e.g. "refactor(scope): ...") and the builder currently has
+    // a scope selected, or vice versa, prefer the preset's explicit scope if provided.
+    const prefix = formatCommitTemplate({
+      type: preset.type,
+      scope: preset.scope || '',
+      action: preset.action || '',
+    });
+    applyTemplateAndFocus(prefix);
+  };
+
+  const handleSaveCustomTemplate = () => {
+    const cleanScope = selectedScope.trim();
+    const cleanAction = selectedAction.trim();
+    const label = `${selectedType}${cleanScope ? `(${cleanScope})` : ''}: ${cleanAction ? `${cleanAction} ` : ''}...`;
+    const exists =
+      DEFAULT_COMMIT_TEMPLATES.some((t) => t.label === label) ||
+      customTemplates.some((t) => t.label === label);
+    if (exists) {
+      applyTemplateAndFocus(builtPrefix);
+      return;
+    }
+
+    const newPreset: CommitTemplatePreset = {
+      id: `custom-${Date.now()}`,
+      label,
+      type: selectedType,
+      scope: cleanScope,
+      action: cleanAction,
+      isCustom: true,
+    };
+    const updated = [newPreset, ...customTemplates].slice(0, 15);
+    setCustomTemplates(updated);
+    saveCustomCommitTemplates(updated);
+    applyTemplateAndFocus(builtPrefix);
+  };
+
+  const handleDeleteCustomTemplate = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = customTemplates.filter((t) => t.id !== id);
+    setCustomTemplates(updated);
+    saveCustomCommitTemplates(updated);
+  };
+
+  const allPresets = useMemo(
+    () => [...customTemplates, ...DEFAULT_COMMIT_TEMPLATES],
+    [customTemplates]
+  );
+
+  return (
+    <div className="space-y-2">
+      {/* Header row + Templates toggle */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0 flex-1">{headerTitle}</div>
+        <button
+          type="button"
+          onClick={() => setShowTemplatePicker((prev) => !prev)}
+          className={`shrink-0 px-2 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer border ${
+            showTemplatePicker
+              ? 'bg-[#0b57d0] text-white border-[#0b57d0] dark:bg-[#a8c7fa] dark:text-[#003062] dark:border-[#a8c7fa]'
+              : 'bg-[#f0f4f9] hover:bg-[#e4e7ef] text-[#0b57d0] dark:bg-[#2b2d30] dark:hover:bg-[#383a3e] dark:text-[#a8c7fa] border-[#d8dae5] dark:border-[#43474e]/60'
+          }`}
+          title="Pick or build a commit name template"
+        >
+          <M3Icon name="style" size={13} />
+          <span>Templates</span>
+          <M3Icon name={showTemplatePicker ? 'expand_less' : 'expand_more'} size={14} />
+        </button>
+      </div>
+
+      {/* Always-accessible 1-tap quick commit template chips */}
+      <div className="flex flex-wrap items-center gap-1">
+        {allPresets.slice(0, 4).map((preset) => (
+          <button
+            key={preset.id}
+            type="button"
+            onClick={() => handleSelectPreset(preset)}
+            className="px-2 py-0.5 rounded-md bg-[#f0f4f9] hover:bg-[#d3e3fd] text-[#191c20] hover:text-[#041e49] dark:bg-[#2b2d30] dark:hover:bg-[#00468b]/50 dark:text-[#c4c6d0] dark:hover:text-[#a8c7fa] border border-[#d8dae5] dark:border-[#43474e]/50 text-[10px] font-mono transition-colors cursor-pointer truncate max-w-full"
+            title={preset.description || `Insert "${preset.label}"`}
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Expandable Commit Template Picker & Builder */}
+      {showTemplatePicker && (
+        <div className="p-2.5 rounded-xl bg-[#f8fafd] dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/60 space-y-2.5 shadow-xs">
+          {/* Quick Presets List (including custom saved templates) */}
+          <div className="space-y-1">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#5d6168] dark:text-[#8e9199]">
+              Quick Templates
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {allPresets.map((preset) => (
+                <div
+                  key={preset.id}
+                  onClick={() => handleSelectPreset(preset)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSelectPreset(preset);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-[#d3e3fd] text-[#191c20] hover:text-[#041e49] dark:bg-[#121316] dark:hover:bg-[#00468b]/40 dark:text-[#e2e2e6] dark:hover:text-[#a8c7fa] border border-[#d8dae5] dark:border-[#43474e]/60 text-[11px] font-mono cursor-pointer transition-colors max-w-full"
+                >
+                  <span className="truncate">{preset.label}</span>
+                  {preset.isCustom && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteCustomTemplate(preset.id, e)}
+                      title="Remove saved template"
+                      className="p-0.5 rounded hover:bg-[#ffb4ab]/30 text-[#74777f] hover:text-[#ba1a1a] dark:hover:text-[#ff8585] cursor-pointer"
+                    >
+                      <M3Icon name="close" size={11} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-[#d8dae5] dark:border-[#43474e]/30 pt-2 space-y-2">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#5d6168] dark:text-[#8e9199]">
+              Template Builder
+            </div>
+
+            {/* Type Selector */}
+            <div className="space-y-1">
+              <div className="text-[10px] text-[#5d6168] dark:text-[#8e9199] font-medium">Type</div>
+              <div className="flex flex-wrap gap-1">
+                {CONVENTIONAL_COMMIT_TYPES.map((item) => (
+                  <button
+                    key={item.type}
+                    type="button"
+                    onClick={() => {
+                      setSelectedType(item.type);
+                      setSelectedAction(item.defaultAction);
+                    }}
+                    title={item.description}
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold cursor-pointer border transition-colors ${
+                      selectedType === item.type
+                        ? 'bg-[#0b57d0] text-white border-[#0b57d0] dark:bg-[#a8c7fa] dark:text-[#003062] dark:border-[#a8c7fa]'
+                        : 'bg-white dark:bg-[#121316] text-[#191c20] dark:text-[#c4c6d0] border-[#d8dae5] dark:border-[#43474e]/50 hover:border-[#0b57d0]/50'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Scope Input + Suggested Scopes */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-[10px] text-[#5d6168] dark:text-[#8e9199] font-medium">
+                  Scope (optional)
+                </label>
+                {selectedScope && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedScope('')}
+                    className="text-[10px] text-[#0b57d0] dark:text-[#a8c7fa] hover:underline cursor-pointer"
+                  >
+                    Clear scope
+                  </button>
+                )}
+              </div>
+              <input
+                type="text"
+                value={selectedScope}
+                onChange={(e) => setSelectedScope(e.target.value)}
+                placeholder="e.g. playback, ui, audio"
+                className="w-full bg-white dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg px-2 py-1 text-[11px] font-mono text-[#191c20] dark:text-white placeholder-[#74777f] dark:placeholder-[#8e9199] focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa]"
+              />
+              {suggestedScopes.length > 0 && (
+                <div className="flex flex-wrap gap-1 pt-0.5">
+                  {suggestedScopes.map((scope) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      onClick={() => setSelectedScope(scope)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono cursor-pointer border transition-colors ${
+                        selectedScope === scope
+                          ? 'bg-[#d3e3fd] text-[#041e49] border-[#0b57d0]/50 dark:bg-[#00468b]/60 dark:text-[#a8c7fa] dark:border-[#a8c7fa]/50 font-semibold'
+                          : 'bg-white/70 dark:bg-[#121316]/70 text-[#5d6168] dark:text-[#8e9199] border-[#d8dae5] dark:border-[#43474e]/40 hover:text-[#191c20] dark:hover:text-white'
+                      }`}
+                    >
+                      {scope}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Action Verb Chips */}
+            <div className="space-y-1">
+              <div className="text-[10px] text-[#5d6168] dark:text-[#8e9199] font-medium">
+                Starting Verb
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {COMMIT_ACTION_VERBS.map((verb) => (
+                  <button
+                    key={verb || 'none'}
+                    type="button"
+                    onClick={() => setSelectedAction(verb)}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-mono cursor-pointer border transition-colors ${
+                      selectedAction === verb
+                        ? 'bg-[#d3e3fd] text-[#041e49] border-[#0b57d0]/50 dark:bg-[#00468b]/60 dark:text-[#a8c7fa] dark:border-[#a8c7fa]/50 font-semibold'
+                        : 'bg-white dark:bg-[#121316] text-[#5d6168] dark:text-[#c4c6d0] border-[#d8dae5] dark:border-[#43474e]/50'
+                    }`}
+                  >
+                    {verb || '(none)'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Preview + Apply / Save Row */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#d8dae5]/60 dark:border-[#43474e]/30">
+              <code className="text-[11px] font-mono text-[#0b57d0] dark:text-[#a8c7fa] truncate max-w-full">
+                {builtPrefix}...
+              </code>
+              <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                <button
+                  type="button"
+                  onClick={handleSaveCustomTemplate}
+                  className="px-2 py-1 rounded-lg bg-[#f0f4f9] hover:bg-[#e4e7ef] dark:bg-[#2b2d30] dark:hover:bg-[#383a3e] text-[#191c20] dark:text-[#e2e2e6] text-[10px] font-semibold flex items-center gap-0.5 cursor-pointer border border-[#d8dae5] dark:border-[#43474e]/50"
+                  title="Save this template to Quick Templates"
+                >
+                  <M3Icon name="bookmark_add" size={12} />
+                  <span>Save</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyTemplateAndFocus(builtPrefix)}
+                  className="px-2.5 py-1 rounded-lg bg-[#0b57d0] hover:bg-[#0842a0] dark:bg-[#a8c7fa] dark:hover:bg-[#d3e3fd] text-white dark:text-[#003062] text-[10px] font-semibold cursor-pointer shadow-xs"
+                >
+                  Use Template
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Commit Message Textarea */}
+      <div className="relative">
+        <textarea
+          ref={textareaRef}
+          rows={2}
+          placeholder={placeholder}
+          value={commitMessage}
+          onChange={(e) => onChangeCommitMessage(e.target.value)}
+          className="w-full bg-white dark:bg-[#121316] border border-[#d8dae5] dark:border-[#43474e] rounded-lg p-2 pr-7 text-xs text-[#191c20] dark:text-white placeholder-[#74777f] dark:placeholder-[#8e9199] focus:outline-none focus:border-[#0b57d0] dark:focus:border-[#a8c7fa] resize-none font-mono"
+        />
+        {commitMessage && (
+          <button
+            type="button"
+            onClick={() => {
+              onChangeCommitMessage('');
+              textareaRef.current?.focus();
+            }}
+            title="Clear commit message"
+            className="absolute right-1.5 top-1.5 p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 text-[#74777f] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white cursor-pointer"
+          >
+            <M3Icon name="close" size={13} />
+          </button>
+        )}
+      </div>
+
+      <M3Button
+        variant="filled"
+        size="sm"
+        className="w-full"
+        icon="cloud_upload"
+        loading={isCommitting}
+        disabled={disabled}
+      >
+        {submitLabel}
+      </M3Button>
+    </div>
+  );
+}
+

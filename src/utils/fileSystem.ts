@@ -476,6 +476,55 @@ export function buildFileTree(files: Record<string, VFile>): FileTreeNode[] {
 }
 
 /**
+ * Checks whether a single tree node's name or full relative path matches a search query.
+ */
+export function nodeMatchesSearch(node: FileTreeNode, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return node.name.toLowerCase().includes(q) || node.path.toLowerCase().includes(q);
+}
+
+/**
+ * Recursively checks whether any descendant inside a folder matches the search query.
+ */
+export function hasMatchingDescendant(node: FileTreeNode, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q || !node.children || node.children.length === 0) return false;
+  return node.children.some(
+    (child) => nodeMatchesSearch(child, q) || hasMatchingDescendant(child, q)
+  );
+}
+
+/**
+ * Recursively filters a FileTreeNode hierarchy so deeply nested matching files
+ * and their ancestor folders remain visible while non-matching branches are omitted.
+ */
+export function filterFileTree(nodes: FileTreeNode[], query: string): FileTreeNode[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return nodes;
+
+  const filtered: FileTreeNode[] = [];
+  for (const node of nodes) {
+    if (!node.isFolder) {
+      if (nodeMatchesSearch(node, q)) {
+        filtered.push(node);
+      }
+      continue;
+    }
+
+    const filteredChildren = node.children ? filterFileTree(node.children, q) : [];
+    if (filteredChildren.length > 0 || nodeMatchesSearch(node, q)) {
+      filtered.push({
+        ...node,
+        children: filteredChildren,
+      });
+    }
+  }
+
+  return filtered;
+}
+
+/**
  * Extracts a .zip file (ArrayBuffer or Blob) completely in the browser.
  */
 export async function extractZipInBrowser(zipData: ArrayBuffer | Blob): Promise<Record<string, VFile>> {

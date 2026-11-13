@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   FileTreeNode,
   getFileExtension,
@@ -12,6 +12,7 @@ import {
   VFile,
   formatBytes,
   packageSubtreeZip,
+  filterFileTree,
 } from '../utils/fileSystem';
 import { M3Icon, M3IconButton } from './M3Components';
 import { M3Switch } from './M3Switch';
@@ -54,6 +55,12 @@ export function Sidebar({
     styles: true,
   });
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchCollapseOverrides, setSearchCollapseOverrides] = useState<Record<string, boolean>>({});
+  const filteredTree = useMemo(() => filterFileTree(tree, searchQuery), [tree, searchQuery]);
+
+  useEffect(() => {
+    setSearchCollapseOverrides({});
+  }, [searchQuery]);
   const [isCreatingFile, setIsCreatingFile] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [targetParentFolder, setTargetParentFolder] = useState('');
@@ -108,6 +115,13 @@ export function Sidebar({
   }, [contextMenu]);
 
   const toggleFolder = (folderPath: string) => {
+    if (searchQuery.trim()) {
+      setSearchCollapseOverrides((prev) => ({
+        ...prev,
+        [folderPath]: !(prev[folderPath] ?? true),
+      }));
+      return;
+    }
     setExpandedFolders((prev) => ({
       ...prev,
       [folderPath]: !prev[folderPath],
@@ -378,17 +392,34 @@ export function Sidebar({
     }
   };
 
+  const renderHighlightedLabel = (label: string, query: string) => {
+    const q = query.trim();
+    if (!q) return label;
+    const idx = label.toLowerCase().indexOf(q.toLowerCase());
+    if (idx === -1) return label;
+    const before = label.slice(0, idx);
+    const match = label.slice(idx, idx + q.length);
+    const after = label.slice(idx + q.length);
+    return (
+      <>
+        {before}
+        <mark className="bg-[#d3e3fd] dark:bg-[#00468b] text-[#041e49] dark:text-[#d6e3ff] rounded px-0.5 font-semibold">
+          {match}
+        </mark>
+        {after}
+      </>
+    );
+  };
+
   // Render tree node
   const renderTreeNode = (node: FileTreeNode, depth = 0) => {
-    const isExpanded = expandedFolders[node.path];
+    const isSearching = searchQuery.trim().length > 0;
+    const hasChildren = Boolean(node.children && node.children.length > 0);
+    const isExpanded = isSearching
+      ? (searchCollapseOverrides[node.path] ?? hasChildren)
+      : Boolean(expandedFolders[node.path]);
     const isSelected = activeFilePath === node.path;
     const paddingLeft = `${depth * 14 + 10}px`;
-
-    if (searchQuery.trim() && !node.name.toLowerCase().includes(searchQuery.toLowerCase())) {
-      if (!node.children || !node.children.some((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()))) {
-        return null;
-      }
-    }
 
     if (node.isFolder) {
       return (
@@ -412,7 +443,9 @@ export function Sidebar({
               size={16}
               className="text-[#0b57d0] dark:text-[#a8c7fa]"
             />
-            <span className="truncate font-medium flex-1">{node.name}</span>
+            <span className="truncate font-medium flex-1">
+              {renderHighlightedLabel(node.name, searchQuery)}
+            </span>
 
             {/* Quick Context Menu Trigger */}
             <button
@@ -458,7 +491,9 @@ export function Sidebar({
         }`}
       >
         <M3Icon name={icon} size={15} className={color} />
-        <span className="truncate flex-1">{node.name}</span>
+        <span className="truncate flex-1" title={node.path}>
+          {renderHighlightedLabel(node.name, searchQuery)}
+        </span>
 
         {/* Quick Context Menu Trigger */}
         <button
@@ -593,8 +628,22 @@ export function Sidebar({
             placeholder={t.searchFiles}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/40 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-[#191c20] dark:text-[#e2e2e6] placeholder-[#74777f] dark:placeholder-[#8e9199] focus:outline-none focus:ring-2 focus:ring-[#0b57d0] dark:focus:ring-[#a8c7fa] transition-all"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setSearchQuery('');
+            }}
+            className="w-full bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/40 rounded-lg pl-8 pr-7 py-1.5 text-xs text-[#191c20] dark:text-[#e2e2e6] placeholder-[#74777f] dark:placeholder-[#8e9199] focus:outline-none focus:ring-2 focus:ring-[#0b57d0] dark:focus:ring-[#a8c7fa] transition-all"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              title={t.clear}
+              aria-label={t.clear}
+              className="absolute right-1.5 top-1 p-0.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 text-[#74777f] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white cursor-pointer"
+            >
+              <M3Icon name="close" size={14} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -654,8 +703,20 @@ export function Sidebar({
             <p className="font-semibold text-[#191c20] dark:text-[#c4c6d0]">{t.noFilesLoaded}</p>
             <p className="text-[11px] mt-1">{t.noFilesLoadedDesc}</p>
           </div>
+        ) : filteredTree.length === 0 ? (
+          <div className="p-4 text-center text-[#74777f] dark:text-[#8e9199] text-xs leading-relaxed space-y-2">
+            <M3Icon name="search_off" size={28} className="mx-auto text-[#74777f] dark:text-[#8e9199] opacity-70" />
+            <p className="font-medium text-[#191c20] dark:text-[#c4c6d0]">{t.noFilesMatch}</p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="px-2.5 py-1 rounded-lg bg-[#d3e3fd] dark:bg-[#00468b]/40 text-[#041e49] dark:text-[#a8c7fa] text-[11px] font-semibold cursor-pointer hover:opacity-90 transition-opacity"
+            >
+              {t.clear}
+            </button>
+          </div>
         ) : (
-          tree.map((node) => renderTreeNode(node))
+          filteredTree.map((node) => renderTreeNode(node))
         )}
       </div>
 
