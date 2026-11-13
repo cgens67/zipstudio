@@ -18,6 +18,7 @@ import { M3Icon, M3IconButton, M3Badge, M3Button } from './M3Components';
 import { explainCodeInPlainEnglish, CodeBlockExplanation } from '../utils/codeExplainer';
 import { Translations, TRANSLATIONS, SupportedLanguage } from '../utils/i18n';
 import { highlightCode } from '../utils/syntaxHighlighter';
+import { computeDocumentLineMetrics } from '../utils/editorMetrics';
 import { FontSpecimenViewer, MediaPlayer, BinaryAssetViewer } from './BinaryFileViewers';
 import { collabService, RemoteCursor, FileUpdateEvent } from '../utils/collabService';
 
@@ -70,7 +71,10 @@ export function Editor({
   const [scrollTop, setScrollTop] = useState(0);
 
   const showLineNumbers = settings?.lineNumbers !== false;
-  const editorFontFamily = settings?.fontFamily;
+  const tabSize = settings?.tabSize ?? 2;
+  const resolvedFontFamily =
+    settings?.fontFamily ||
+    "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 
   useEffect(() => {
     if (settings?.fontSize) setFontSize(settings.fontSize);
@@ -96,9 +100,12 @@ export function Editor({
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLPreElement>(null);
-  const gutterRef = useRef<HTMLDivElement>(null);
-  const gutterInnerRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const findInputRef = useRef<HTMLInputElement>(null);
+
+  const [stageWidth, setStageWidth] = useState<number>(600);
+  const [viewportHeight, setViewportHeight] = useState<number>(650);
 
   // Undo / Redo history state
   const historyRef = useRef<Record<string, { stack: string[]; pointer: number }>>({});
@@ -106,6 +113,52 @@ export function Editor({
   const [canRedo, setCanRedo] = useState(false);
 
   const lineHeight = Math.round(fontSize * 1.55);
+
+  // Track exact stage width and viewport height for wrap line numbers & virtualization
+  useEffect(() => {
+    const stageEl = stageRef.current;
+    const scrollEl = scrollContainerRef.current;
+    if (!stageEl && !scrollEl) return;
+
+    const updateDimensions = () => {
+      if (stageEl) {
+        setStageWidth(stageEl.clientWidth);
+      }
+      if (scrollEl) {
+        setViewportHeight(scrollEl.clientHeight || 650);
+      }
+    };
+    updateDimensions();
+
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(updateDimensions);
+    if (stageEl) ro.observe(stageEl);
+    if (scrollEl) ro.observe(scrollEl);
+    return () => ro.disconnect();
+  }, [activeFilePath, activeFile?.isBinary, wordWrap, showLineNumbers]);
+
+  // Measure precise monospace glyph advance width matching resolvedFontFamily & fontSize
+  const charWidth = useMemo(() => {
+    if (typeof document !== 'undefined') {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.font = `400 ${fontSize}px ${resolvedFontFamily}`;
+          const measured = ctx.measureText('MMMMMMMMMM').width / 10;
+          if (measured > 0) return measured;
+        }
+      } catch {
+        // fallback below
+      }
+    }
+    return fontSize * 0.6;
+  }, [fontSize, resolvedFontFamily]);
+
+  const maxCols = useMemo(() => {
+    if (!wordWrap || stageWidth <= 32 || charWidth <= 0) return 0;
+    return Math.max(8, Math.floor((stageWidth - 24) / charWidth));
+  }, [wordWrap, stageWidth, charWidth]);
 
   // Accurate file language detection using full filename and extension
   const lang = activeFile ? getLanguageFromFile(activeFile.name) : 'plaintext';
@@ -150,6 +203,14 @@ export function Editor({
     }
   }, [matches, currentMatchIndex]);
 
+  // Compute document wrapping metrics for synchronized line numbers and scroll jumps
+  const lineMetrics = useMemo(() => {
+    if (activeFile?.isBinary) {
+      return { rowsPerLine: [1], topOffsets: [0], totalVisualRows: 1 };
+    }
+    return computeDocumentLineMetrics(content, wordWrap, maxCols, tabSize);
+  }, [content, wordWrap, maxCols, tabSize, activeFile?.isBinary]);
+
   // Navigate to a specific match and select it in the editor
   const goToMatch = useCallback(
     (index: number) => {
@@ -161,21 +222,16 @@ export function Editor({
         textareaRef.current.focus();
         textareaRef.current.setSelectionRange(m.start, m.end);
 
-        const targetScroll = Math.max(0, (m.line - 4) * lineHeight);
-        textareaRef.current.scrollTop = targetScroll;
+        const visualRow = lineMetrics.topOffsets[m.line - 1] ?? m.line - 1;
+        const targetScroll = Math.max(0, (visualRow - 3) * lineHeight);
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = targetScroll;
+        }
         setScrollTop(targetScroll);
-
-        if (gutterInnerRef.current) {
-          gutterInnerRef.current.style.transform = `translateY(-${targetScroll}px)`;
-        }
-        if (highlightRef.current) {
-          highlightRef.current.scrollTop = targetScroll;
-        }
-
         setCursorPos({ line: m.line, col: 1 });
       }
     },
-    [matches, lineHeight]
+    [matches, lineHeight, lineMetrics]
   );
 
   // Replace current match in file
@@ -365,9 +421,9 @@ export function Editor({
     }, 0);
   }, [activeFilePath, onUpdateContent, recordHistory]);
 
-  // Synchronize gutter scroll when jumping to targetLine
+  // Scroll shared viewport cleanly when jumping to targetLine
   useEffect(() => {
-    if (targetLine && textareaRef.current && activeFile) {
+    if (targetLine && textareaRef.current && activeFile && !activeFile.isBinary) {
       const lines = activeFile.content.split('\n');
       let charPos = 0;
       for (let i = 0; i < Math.min(targetLine - 1, lines.length); i++) {
@@ -375,18 +431,15 @@ export function Editor({
       }
       textareaRef.current.focus();
       textareaRef.current.setSelectionRange(charPos, charPos + (lines[targetLine - 1]?.length || 0));
-      const scrollPos = Math.max(0, (targetLine - 4) * lineHeight);
-      textareaRef.current.scrollTop = scrollPos;
+      const visualRow = lineMetrics.topOffsets[targetLine - 1] ?? targetLine - 1;
+      const scrollPos = Math.max(0, (visualRow - 3) * lineHeight);
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollPos;
+      }
       setScrollTop(scrollPos);
-      if (gutterInnerRef.current) {
-        gutterInnerRef.current.style.transform = `translateY(-${scrollPos}px)`;
-      }
-      if (highlightRef.current) {
-        highlightRef.current.scrollTop = scrollPos;
-      }
       setCursorPos({ line: targetLine, col: 1 });
     }
-  }, [targetLine, activeFilePath, activeFile, lineHeight]);
+  }, [targetLine, activeFilePath, activeFile, lineHeight, lineMetrics]);
 
   const updateTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -426,20 +479,6 @@ export function Editor({
     }
   };
 
-  // Synchronize line gutter and syntax highlighted pre with textarea scroll
-  const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
-    const st = e.currentTarget.scrollTop;
-    const sl = e.currentTarget.scrollLeft;
-    setScrollTop(st);
-    if (gutterInnerRef.current) {
-      gutterInnerRef.current.style.transform = `translateY(-${st}px)`;
-    }
-    if (highlightRef.current) {
-      highlightRef.current.scrollTop = st;
-      highlightRef.current.scrollLeft = sl;
-    }
-  };
-
   const jumpToLineIndex = (index: number) => {
     if (!textareaRef.current) return;
     const lines = content.split('\n');
@@ -452,20 +491,32 @@ export function Editor({
     setCursorPos({ line: index + 1, col: 1 });
   };
 
-  const lineCount = useMemo(() => {
-    if (!content || activeFile?.isBinary) return 1;
-    let count = 1;
-    for (let i = 0; i < content.length; i++) {
-      if (content.charCodeAt(i) === 10) count++;
-    }
-    return count;
-  }, [content, activeFile?.isBinary]);
+  const lineCount = lineMetrics.rowsPerLine.length;
 
-  // Virtualized visible line numbers to prevent DOM explosion on large files
-  const viewportHeight = 650;
-  const visibleLineCount = Math.ceil(viewportHeight / lineHeight) + 15;
-  const startLineIndex = Math.max(0, Math.floor(scrollTop / lineHeight) - 5);
-  const endLineIndex = Math.min(lineCount, startLineIndex + visibleLineCount);
+  // Binary search on topOffsets so even wrapped files virtualize cleanly
+  const { startLineIndex, endLineIndex } = useMemo(() => {
+    const topVisualRow = Math.max(0, Math.floor(scrollTop / lineHeight) - 8);
+    const bottomVisualRow = topVisualRow + Math.ceil(viewportHeight / lineHeight) + 20;
+    const offsets = lineMetrics.topOffsets;
+
+    let lo = 0;
+    let hi = offsets.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (offsets[mid] <= topVisualRow) lo = mid;
+      else hi = mid - 1;
+    }
+    const startIdx = Math.max(0, lo);
+
+    let endIdx = startIdx;
+    while (endIdx < offsets.length && offsets[endIdx] <= bottomVisualRow) {
+      endIdx++;
+    }
+    return {
+      startLineIndex: startIdx,
+      endLineIndex: Math.min(offsets.length, Math.max(startIdx + 1, endIdx)),
+    };
+  }, [scrollTop, lineHeight, viewportHeight, lineMetrics.topOffsets]);
 
   const visibleLineNumbers = useMemo(() => {
     const list: number[] = [];
@@ -474,6 +525,16 @@ export function Editor({
     }
     return list;
   }, [startLineIndex, endLineIndex]);
+
+  const topGutterSpacerHeight = (lineMetrics.topOffsets[startLineIndex] ?? 0) * lineHeight;
+  const endOffsetRows =
+    endLineIndex < lineCount
+      ? lineMetrics.topOffsets[endLineIndex]
+      : lineMetrics.totalVisualRows;
+  const bottomGutterSpacerHeight = Math.max(
+    0,
+    (lineMetrics.totalVisualRows - endOffsetRows) * lineHeight
+  );
 
   // Trilingual plain language explanation (only computed if plainEnglishMode is open)
   const explanation = useMemo(() => {
@@ -736,41 +797,42 @@ export function Editor({
           })()
         ) : (
           <div className="editor-viewport flex-1 flex overflow-hidden relative bg-[#121316]">
-            {/* Synchronized Line Numbers Gutter */}
-            {showLineNumbers && (
-              <div
-                ref={gutterRef}
-                title={t.jumpToLine}
-                onWheel={(e) => {
-                  if (textareaRef.current) {
-                    textareaRef.current.scrollTop += e.deltaY;
-                  }
-                }}
-                className="editor-gutter w-12 bg-[#18191c] border-r border-[#43474e]/30 select-none overflow-hidden shrink-0 cursor-default"
-              >
+            {/* Single Unified Scroll Container locking Gutter, <pre>, and <textarea> */}
+            <div
+              ref={scrollContainerRef}
+              onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+              className="flex-1 w-full h-full overflow-auto flex items-stretch relative"
+            >
+              {/* Synchronized Sticky Line Numbers Gutter */}
+              {showLineNumbers && (
                 <div
-                  ref={gutterInnerRef}
-                  className="py-3 text-right pr-2 font-mono will-change-transform"
+                  title={t.jumpToLine}
+                  className="editor-gutter sticky left-0 z-20 w-12 bg-[#18191c] border-r border-[#43474e]/30 select-none shrink-0 cursor-default py-3 pr-2 text-right"
                   style={{
-                    transform: `translateY(-${scrollTop}px)`,
                     fontSize: `${fontSize}px`,
                     lineHeight: `${lineHeight}px`,
-                    fontFamily: editorFontFamily,
+                    fontFamily: resolvedFontFamily,
+                    minHeight: '100%',
+                    height: `${lineMetrics.totalVisualRows * lineHeight + 24}px`,
                   }}
                 >
                   <div
                     style={{
-                      paddingTop: `${startLineIndex * lineHeight}px`,
-                      paddingBottom: `${Math.max(0, (lineCount - endLineIndex) * lineHeight)}px`,
+                      paddingTop: `${topGutterSpacerHeight}px`,
+                      paddingBottom: `${bottomGutterSpacerHeight}px`,
                     }}
                   >
                     {visibleLineNumbers.map((lineNum) => {
                       const isCurrentLine = lineNum === cursorPos.line;
+                      const rows = lineMetrics.rowsPerLine[lineNum - 1] ?? 1;
                       return (
                         <div
                           key={lineNum}
                           onClick={() => jumpToLineIndex(lineNum - 1)}
-                          style={{ height: `${lineHeight}px`, lineHeight: `${lineHeight}px` }}
+                          style={{
+                            height: `${rows * lineHeight}px`,
+                            lineHeight: `${lineHeight}px`,
+                          }}
                           className={`transition-colors cursor-pointer rounded-xs px-1 hover:text-white hover:bg-white/10 ${
                             isCurrentLine
                               ? 'text-[#a8c7fa] font-bold bg-[#a8c7fa]/20'
@@ -783,153 +845,185 @@ export function Editor({
                     })}
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Code Viewport with Syntax Highlighting and Interactive Overlay */}
-            <div className="editor-code-container relative flex-1 h-full overflow-hidden bg-[#121316]">
-              {/* Syntax Highlighted Code Layer underneath */}
-              {syntaxHighlighting && (
+              {/* Grid Stage: <pre> and <textarea> share exact grid cell (1/1), width, height, and metrics */}
+              <div
+                ref={stageRef}
+                className={`editor-code-container relative grid flex-1 min-h-full bg-[#121316] ${
+                  wordWrap ? 'min-w-0 w-full' : 'min-w-full w-max'
+                }`}
+                style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}
+              >
+                {/* Syntax Highlighted Code Layer underneath (also sizes the grid stage) */}
                 <pre
                   ref={highlightRef}
                   aria-hidden="true"
                   style={{
+                    gridColumn: '1 / 1',
+                    gridRow: '1 / 1',
+                    minWidth: 0,
+                    width: '100%',
                     fontSize: `${fontSize}px`,
                     lineHeight: `${lineHeight}px`,
-                    tabSize: settings?.tabSize ?? 2,
-                    fontFamily: editorFontFamily,
+                    tabSize,
+                    fontFamily: resolvedFontFamily,
+                    whiteSpace: wordWrap ? 'pre-wrap' : 'pre',
+                    overflowWrap: wordWrap ? 'break-word' : 'normal',
+                    wordBreak: 'normal',
+                    visibility: syntaxHighlighting ? 'visible' : 'hidden',
                   }}
-                  className={`editor-pre absolute inset-0 pointer-events-none font-mono py-3 px-3 m-0 border-none select-none overflow-hidden will-change-scroll ${
-                    wordWrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'
-                  }`}
-                  dangerouslySetInnerHTML={{ __html: highlightedHtml + '\n' }}
+                  className="editor-pre pointer-events-none py-3 px-3 m-0 border-none select-none overflow-hidden"
+                  dangerouslySetInnerHTML={{
+                    __html:
+                      (content.endsWith('\n')
+                        ? highlightedHtml + '\u200b'
+                        : highlightedHtml) || '\u200b',
+                  }}
                 />
-              )}
 
-              {/* Editable Text Area on top with synchronized scroll */}
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={handleChange}
-                onKeyUp={handleSelection}
-                onClick={handleSelection}
-                onScroll={handleScroll}
-                onKeyDown={(e) => {
-                  // Tab indentation
-                  if (e.key === 'Tab') {
-                    e.preventDefault();
-                    const start = e.currentTarget.selectionStart;
-                    const end = e.currentTarget.selectionEnd;
-                    const val = e.currentTarget.value;
-                    const tabSize = settings?.tabSize ?? 2;
-                    const tabSpaces = ' '.repeat(tabSize);
-                    const newVal = val.substring(0, start) + tabSpaces + val.substring(end);
-                    setContent(newVal);
-                    if (activeFilePath) onUpdateContent(activeFilePath, newVal);
-                    recordHistory(newVal);
-                    setTimeout(() => {
-                      if (textareaRef.current) {
-                        textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + tabSize;
-                      }
-                    }, 0);
-                  }
-                  // In-File Find (Ctrl+F / Cmd+F)
-                  else if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F') && !e.shiftKey) {
-                    e.preventDefault();
-                    openFindBar();
-                  }
-                  // Find in Files / Workspace Search (Ctrl+Shift+F / Cmd+Shift+F)
-                  else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
-                    e.preventDefault();
-                    if (onFindInFiles) onFindInFiles();
-                  }
-                  // Save hotkey (Ctrl+S / Cmd+S)
-                  else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                    e.preventDefault();
-                    if (onSaveFile && activeFilePath) {
-                      onSaveFile(activeFilePath);
+                {/* Editable Textarea locked 1:1 on top of <pre> */}
+                <textarea
+                  ref={textareaRef}
+                  value={content}
+                  onChange={handleChange}
+                  onKeyUp={handleSelection}
+                  onClick={handleSelection}
+                  onSelect={handleSelection}
+                  onKeyDown={(e) => {
+                    // Tab indentation
+                    if (e.key === 'Tab') {
+                      e.preventDefault();
+                      const start = e.currentTarget.selectionStart;
+                      const end = e.currentTarget.selectionEnd;
+                      const val = e.currentTarget.value;
+                      const tabSpaces = ' '.repeat(tabSize);
+                      const newVal = val.substring(0, start) + tabSpaces + val.substring(end);
+                      setContent(newVal);
+                      if (activeFilePath) onUpdateContent(activeFilePath, newVal);
+                      recordHistory(newVal);
+                      setTimeout(() => {
+                        if (textareaRef.current) {
+                          textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + tabSize;
+                        }
+                      }, 0);
                     }
-                  }
-                  // Delete Line (Ctrl+Shift+K / Cmd+Shift+K or Ctrl+D)
-                  else if (
-                    ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) ||
-                    ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'k' || e.key === 'K'))
-                  ) {
-                    e.preventDefault();
-                    handleDeleteLine();
-                  }
-                  // Undo (Ctrl+Z / Cmd+Z without Shift)
-                  else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
-                    e.preventDefault();
-                    handleUndo();
-                  }
-                  // Redo (Ctrl+Y or Ctrl+Shift+Z)
-                  else if (
-                    ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) ||
-                    ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z'))
-                  ) {
-                    e.preventDefault();
-                    handleRedo();
-                  }
-                }}
-                spellCheck={false}
-                wrap={wordWrap ? 'on' : 'off'}
-                className={`editor-textarea absolute inset-0 w-full h-full bg-transparent font-mono py-3 px-3 resize-none focus:outline-none border-none overflow-auto z-10 selection:bg-[#a8c7fa]/30 ${
-                  syntaxHighlighting ? 'text-transparent caret-white' : 'text-[#e2e2e6] caret-[#a8c7fa]'
-                } ${wordWrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'}`}
-                style={{
-                  backgroundColor: 'transparent',
-                  color: syntaxHighlighting ? 'transparent' : undefined,
-                  fontSize: `${fontSize}px`,
-                  lineHeight: `${lineHeight}px`,
-                  tabSize: settings?.tabSize ?? 2,
-                  fontFamily: editorFontFamily,
-                }}
-              />
+                    // In-File Find (Ctrl+F / Cmd+F)
+                    else if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F') && !e.shiftKey) {
+                      e.preventDefault();
+                      openFindBar();
+                    }
+                    // Find in Files / Workspace Search (Ctrl+Shift+F / Cmd+Shift+F)
+                    else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
+                      e.preventDefault();
+                      if (onFindInFiles) onFindInFiles();
+                    }
+                    // Save hotkey (Ctrl+S / Cmd+S)
+                    else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                      e.preventDefault();
+                      if (onSaveFile && activeFilePath) {
+                        onSaveFile(activeFilePath);
+                      }
+                    }
+                    // Delete Line (Ctrl+Shift+K / Cmd+Shift+K or Ctrl+D)
+                    else if (
+                      ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) ||
+                      ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'k' || e.key === 'K'))
+                    ) {
+                      e.preventDefault();
+                      handleDeleteLine();
+                    }
+                    // Undo (Ctrl+Z / Cmd+Z without Shift)
+                    else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
+                      e.preventDefault();
+                      handleUndo();
+                    }
+                    // Redo (Ctrl+Y or Ctrl+Shift+Z)
+                    else if (
+                      ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) ||
+                      ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z'))
+                    ) {
+                      e.preventDefault();
+                      handleRedo();
+                    }
+                  }}
+                  spellCheck={false}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  autoComplete="off"
+                  wrap="soft"
+                  className={`editor-textarea w-full h-full bg-transparent py-3 px-3 m-0 resize-none focus:outline-none border-none overflow-hidden z-10 ${
+                    syntaxHighlighting
+                      ? 'has-highlight text-transparent caret-white'
+                      : 'text-[#e2e2e6] caret-[#a8c7fa] selection:bg-[#a8c7fa]/30'
+                  }`}
+                  style={{
+                    gridColumn: '1 / 1',
+                    gridRow: '1 / 1',
+                    minWidth: 0,
+                    backgroundColor: 'transparent',
+                    color: syntaxHighlighting ? 'transparent' : undefined,
+                    WebkitTextFillColor: syntaxHighlighting ? 'transparent' : undefined,
+                    fontSize: `${fontSize}px`,
+                    lineHeight: `${lineHeight}px`,
+                    tabSize,
+                    fontFamily: resolvedFontFamily,
+                    whiteSpace: wordWrap ? 'pre-wrap' : 'pre',
+                    overflowWrap: wordWrap ? 'break-word' : 'normal',
+                    wordBreak: 'normal',
+                  }}
+                />
 
-              {/* Live Collaborative Remote Cursors Overlay */}
-              <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
-                {remoteCursors.map((c) => {
-                  const topPos = (c.line - 1) * lineHeight - scrollTop + 12;
-                  const charWidth = fontSize * 0.605;
-                  const leftPos = Math.max(12, (c.col - 1) * charWidth + 12);
+                {/* Live Collaborative Remote Cursors Overlay */}
+                <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
+                  {remoteCursors.map((c) => {
+                    const visualRow = lineMetrics.topOffsets[c.line - 1] ?? c.line - 1;
+                    const topPos = visualRow * lineHeight + 12;
+                    const leftPos = Math.max(12, (c.col - 1) * charWidth + 12);
 
-                  if (topPos < -40 || topPos > viewportHeight + 100) return null;
+                    if (
+                      topPos < scrollTop - 40 ||
+                      topPos > scrollTop + viewportHeight + 100
+                    ) {
+                      return null;
+                    }
 
-                  return (
-                    <div
-                      key={c.peerId}
-                      style={{
-                        transform: `translate3d(${leftPos}px, ${topPos}px, 0)`,
-                        transition: 'transform 0.05s ease-out',
-                      }}
-                      className="absolute top-0 left-0 flex flex-col pointer-events-none will-change-transform z-30 select-none"
-                    >
-                      {/* Name Badge */}
+                    return (
                       <div
-                        style={{ backgroundColor: c.color }}
-                        className="px-1.5 py-0.2 rounded text-[10px] font-bold text-[#001d3d] shadow-lg flex items-center gap-1 w-max -translate-y-4"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#001d3d] animate-pulse" />
-                        <span>{c.name}</span>
-                      </div>
-
-                      {/* Blinking Caret */}
-                      <div
+                        key={c.peerId}
                         style={{
-                          backgroundColor: c.color,
-                          height: `${lineHeight}px`,
-                          boxShadow: `0 0 6px ${c.color}`,
+                          transform: `translate3d(${leftPos}px, ${topPos}px, 0)`,
+                          transition: 'transform 0.05s ease-out',
                         }}
-                        className="w-[2px] rounded-full animate-pulse"
-                      />
-                    </div>
-                  );
-                })}
-              </div>
+                        className="absolute top-0 left-0 flex flex-col pointer-events-none will-change-transform z-30 select-none"
+                      >
+                        {/* Name Badge */}
+                        <div
+                          style={{ backgroundColor: c.color }}
+                          className="px-1.5 py-0.2 rounded text-[10px] font-bold text-[#001d3d] shadow-lg flex items-center gap-1 w-max -translate-y-4"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#001d3d] animate-pulse" />
+                          <span>{c.name}</span>
+                        </div>
 
-              {/* Floating Material 3 In-File Search Bar */}
-              {showFindBar && (
+                        {/* Blinking Caret */}
+                        <div
+                          style={{
+                            backgroundColor: c.color,
+                            height: `${lineHeight}px`,
+                            boxShadow: `0 0 6px ${c.color}`,
+                          }}
+                          className="w-[2px] rounded-full animate-pulse"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Floating Material 3 In-File Search Bar (pinned cleanly over viewport) */}
+            {showFindBar && (
                 <div className="absolute top-2 right-4 z-30 max-w-sm w-[92%] sm:w-80 bg-[#1e1f22]/95 backdrop-blur-md border border-[#a8c7fa]/40 rounded-xl p-2 shadow-2xl animate-fadeIn">
                   {/* Find Row */}
                   <div className="flex items-center gap-1.5">
@@ -1075,7 +1169,6 @@ export function Editor({
                   )}
                 </div>
               )}
-            </div>
           </div>
         )}
       </div>
@@ -1086,7 +1179,7 @@ export function Editor({
           <span className="text-[#a8c7fa]">
             {t.linesLabel} {cursorPos.line}, {t.spaces} {cursorPos.col}
           </span>
-          <span>{t.spaces}: 2</span>
+          <span>{t.spaces}: {tabSize}</span>
           <span>UTF-8</span>
         </div>
         <div className="flex items-center gap-3">

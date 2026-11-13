@@ -491,6 +491,56 @@ html.dark .editor-textarea {
   background: transparent !important;
 }
 
+.editor-pre,
+.editor-textarea {
+  font-variant-ligatures: none !important;
+  font-feature-settings: "liga" 0, "calt" 0 !important;
+  font-kerning: none !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+  letter-spacing: 0 !important;
+  word-spacing: 0 !important;
+  text-rendering: optimizeSpeed;
+  box-sizing: border-box;
+}
+
+.editor-pre .token,
+.editor-pre span {
+  font-weight: 400 !important;
+  font-style: normal !important;
+  font-variant-ligatures: none !important;
+  font-feature-settings: "liga" 0, "calt" 0 !important;
+  letter-spacing: 0 !important;
+}
+
+/* Keep selected text transparent so the syntax-highlighted layer beneath remains the sole visible text */
+.editor-textarea.has-highlight {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+.editor-textarea.has-highlight::selection {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  background-color: rgba(168, 199, 250, 0.34) !important;
+}
+
+.editor-textarea.has-highlight::-moz-selection {
+  color: transparent !important;
+  background-color: rgba(168, 199, 250, 0.34) !important;
+}
+
+html.light .editor-textarea.has-highlight::selection {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  background-color: rgba(11, 87, 208, 0.22) !important;
+}
+
+html.light .editor-textarea.has-highlight::-moz-selection {
+  color: transparent !important;
+  background-color: rgba(11, 87, 208, 0.22) !important;
+}
+
 /* In light mode, editor viewport and code container are clean white */
 html.light .editor-viewport,
 html.light .editor-code-container {

@@ -87,6 +87,9 @@ export function ImportFilesModal({
       const parts = filePath.split('/');
       if (parts.length > 1) {
         parts.pop(); // remove file name
+        if (parts[0] === '.aistudio' || parts[0] === '.git' || parts[0] === 'node_modules') {
+          continue;
+        }
         let accumulated = '';
         for (const p of parts) {
           accumulated = accumulated ? `${accumulated}/${p}` : p;
@@ -276,43 +279,43 @@ export function ImportFilesModal({
   return (
     <div
       onClick={triggerClose}
-      className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 ${backdropClass}`}
+      className={`fixed inset-0 z-50 h-[100dvh] max-h-[100dvh] bg-black/60 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-hidden ${backdropClass}`}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/60 rounded-3xl w-full max-w-xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden ${dialogClass}`}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/60 rounded-2xl sm:rounded-3xl w-full max-w-xl max-h-full sm:max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden ${dialogClass}`}
       >
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-[#d8dae5] dark:border-[#43474e]/30 flex items-center justify-between shrink-0 bg-[#f8fafd] dark:bg-[#1e1f22]/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#e8ebf3] dark:bg-[#00468b]/30 border border-[#0b57d0]/20 dark:border-[#a8c7fa]/20 flex items-center justify-center">
-              <M3Icon name="upload_file" size={24} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
+        <div className="p-3.5 sm:p-5 border-b border-[#d8dae5] dark:border-[#43474e]/30 flex items-center justify-between gap-2 shrink-0 bg-[#f8fafd] dark:bg-[#1e1f22]/50">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#e8ebf3] dark:bg-[#00468b]/30 border border-[#0b57d0]/20 dark:border-[#a8c7fa]/20 flex items-center justify-center shrink-0">
+              <M3Icon name="upload_file" size={22} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-[#191c20] dark:text-white flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm sm:text-base font-bold text-[#191c20] dark:text-white flex items-center gap-2 flex-wrap">
                 <span>Import Files</span>
                 <M3Badge variant="primary">
                   {filesToImport.length} file{filesToImport.length === 1 ? '' : 's'}
                 </M3Badge>
               </h2>
-              <p className="text-xs text-[#5d6168] dark:text-[#8e9199]">
+              <p className="text-[11px] sm:text-xs text-[#5d6168] dark:text-[#8e9199] leading-snug">
                 Add assets, libraries, or scripts without replacing existing code
               </p>
             </div>
           </div>
-          <M3IconButton size="sm" icon="close" label={t.close} onClick={triggerClose} />
+          <M3IconButton size="sm" icon="close" label={t.close} onClick={triggerClose} className="shrink-0" />
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1 text-xs">
+        <div className="p-3.5 sm:p-5 overflow-y-auto space-y-3.5 sm:space-y-4 flex-1 min-h-0 text-xs">
           {/* GitHub Limit Mode Selector */}
           <div className="bg-[#f0f4f9] dark:bg-[#121316]/60 border border-[#d8dae5] dark:border-[#43474e]/40 rounded-2xl p-3 space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="font-semibold text-[#191c20] dark:text-[#e2e2e6] flex items-center gap-1.5">
-                <M3Icon name="tune" size={16} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
+                <M3Icon name="tune" size={16} className="text-[#0b57d0] dark:text-[#a8c7fa] shrink-0" />
                 <span>GitHub File Limit Policy:</span>
               </span>
-              <span className="text-[11px] font-mono text-[#5d6168] dark:text-[#8e9199]">
+              <span className="text-[11px] font-mono text-[#5d6168] dark:text-[#8e9199] whitespace-nowrap">
                 Active Limit: {limitMode === '25mb' ? '25 MB' : '100 MB'}
               </span>
             </div>
@@ -466,12 +469,12 @@ export function ImportFilesModal({
 
           {/* Destination Directory Prompt */}
           <div className="bg-[#f0f4f9] dark:bg-[#121316]/60 border border-[#d8dae5] dark:border-[#43474e]/40 rounded-2xl p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-[#191c20] dark:text-[#e2e2e6] flex items-center gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-semibold text-[#191c20] dark:text-[#e2e2e6] flex items-center gap-1.5 shrink-0">
                 <M3Icon name="folder" size={16} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
                 <span>Destination Directory:</span>
               </label>
-              <span className="text-[11px] font-mono text-[#5d6168] dark:text-[#8e9199]">
+              <span className="text-[11px] font-mono text-[#5d6168] dark:text-[#8e9199] truncate max-w-[50%]">
                 /{targetDir.trim().replace(/^\/+|\/+$/g, '') || '(project root)'}
               </span>
             </div>
@@ -499,7 +502,7 @@ export function ImportFilesModal({
                       key={dir || '__root__'}
                       type="button"
                       onClick={() => setTargetDir(dir)}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-mono cursor-pointer transition-colors border ${
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-mono cursor-pointer transition-colors border max-w-full truncate ${
                         isSelected
                           ? 'bg-[#0b57d0] dark:bg-[#a8c7fa] text-white dark:text-[#003062] border-transparent font-semibold shadow-xs'
                           : 'bg-white dark:bg-[#2b2d30] text-[#44474e] dark:text-[#c4c6d0] border-[#d8dae5] dark:border-[#43474e]/50 hover:bg-[#e8ebf3] dark:hover:bg-[#383a3e]'
@@ -551,8 +554,8 @@ export function ImportFilesModal({
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-[#191c20] dark:text-white truncate max-w-[200px] sm:max-w-[260px]">
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                          <span className="font-medium text-[#191c20] dark:text-white truncate max-w-full">
                             {item.file.name}
                           </span>
                           <M3Badge variant={item.badgeVariant}>{item.typeLabel}</M3Badge>
@@ -601,16 +604,18 @@ export function ImportFilesModal({
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2 text-[11px] text-[#74777f] dark:text-[#8e9199] mt-0.5">
-                          <span className="font-mono">{formatBytes(item.file.size)}</span>
-                          <span>•</span>
-                          <span className="font-mono text-[#0b57d0] dark:text-[#a8c7fa] truncate max-w-[180px] sm:max-w-[240px]">
+                        <div className="flex items-center gap-1.5 text-[11px] text-[#74777f] dark:text-[#8e9199] mt-0.5 min-w-0">
+                          <span className="font-mono whitespace-nowrap shrink-0">
+                            {formatBytes(item.file.size)}
+                          </span>
+                          <span className="shrink-0">•</span>
+                          <span className="font-mono text-[#0b57d0] dark:text-[#a8c7fa] truncate min-w-0">
                             {item.ext === 'zip' && (zipModes[item.file.name] || 'extract') === 'extract'
                               ? `➔ Unpacks inside /${targetDir.trim().replace(/^\/+|\/+$/g, '') || '(root)'}`
                               : `➔ /${item.potentialPath}`}
                           </span>
                           {item.isBlocked && (
-                            <span className="text-[#ba1a1a] dark:text-[#ffb4ab] font-semibold">
+                            <span className="text-[#ba1a1a] dark:text-[#ffb4ab] font-semibold whitespace-nowrap shrink-0">
                               (Blocked: &gt;{limitMode === '25mb' ? '25MB' : '100MB'})
                             </span>
                           )}
@@ -660,12 +665,12 @@ export function ImportFilesModal({
         </div>
 
         {/* Footer */}
-        <div className="p-4 sm:p-5 border-t border-[#d8dae5] dark:border-[#43474e]/30 flex items-center justify-between shrink-0 bg-[#f8fafd] dark:bg-[#1e1f22]/50">
-          <div className="text-xs text-[#5d6168] dark:text-[#8e9199]">
+        <div className="p-3.5 sm:p-5 border-t border-[#d8dae5] dark:border-[#43474e]/30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3 shrink-0 bg-[#f8fafd] dark:bg-[#1e1f22]/50">
+          <div className="text-[11px] sm:text-xs text-[#5d6168] dark:text-[#8e9199] min-w-0">
             {isProcessing ? (
               <span className="flex items-center gap-1.5 font-medium text-[#0b57d0] dark:text-[#a8c7fa]">
-                <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                <span>
+                <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
+                <span className="truncate">
                   Processing {processingProgress.current} of {processingProgress.total}...
                 </span>
               </span>
@@ -674,8 +679,14 @@ export function ImportFilesModal({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <M3Button variant="tonal" size="sm" onClick={triggerClose} disabled={isProcessing}>
+          <div className="flex items-center justify-end gap-2 shrink-0 w-full sm:w-auto">
+            <M3Button
+              variant="tonal"
+              size="sm"
+              onClick={triggerClose}
+              disabled={isProcessing}
+              className="whitespace-nowrap flex-1 sm:flex-initial"
+            >
               {t.cancel}
             </M3Button>
             <M3Button
@@ -684,6 +695,7 @@ export function ImportFilesModal({
               icon="upload_file"
               onClick={handleStartImport}
               disabled={isProcessing || fileAnalysis.validFilesCount === 0}
+              className="whitespace-nowrap flex-1 sm:flex-initial"
             >
               Import {fileAnalysis.validFilesCount} File{fileAnalysis.validFilesCount === 1 ? '' : 's'}
             </M3Button>

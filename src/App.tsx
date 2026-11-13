@@ -136,9 +136,11 @@ export default function App() {
   // Clean zip import overwrite flag
   const [isCleanZipImport, setIsCleanZipImport] = useState(false);
 
-  // Loading GitHub repo files state & ETA progress
+  // Loading GitHub repo files state & ETA progress (with cancellation tracking)
   const [isLoadingRepo, setIsLoadingRepo] = useState(false);
   const [repoLoadProgress, setRepoLoadProgress] = useState<RepoLoadProgress | null>(null);
+  const repoLoadAbortRef = useRef<AbortController | null>(null);
+  const repoLoadRequestIdRef = useRef(0);
 
   // Unsaved session persistence & prompt state
   const [pendingSession, setPendingSession] = useState<SavedSession | null>(null);
@@ -298,6 +300,13 @@ export default function App() {
   };
 
   const handleResetWorkspace = () => {
+    repoLoadRequestIdRef.current += 1;
+    if (repoLoadAbortRef.current) {
+      repoLoadAbortRef.current.abort();
+      repoLoadAbortRef.current = null;
+      setIsLoadingRepo(false);
+      setRepoLoadProgress(null);
+    }
     setFiles({});
     setBaseFiles({});
     setOpenTabs([]);
@@ -530,12 +539,42 @@ export default function App() {
     }
   };
 
+  // Cancel any active in-flight repository asset fetch immediately
+  const cancelActiveRepoLoad = useCallback(
+    (reason?: string) => {
+      repoLoadRequestIdRef.current += 1;
+      if (repoLoadAbortRef.current) {
+        repoLoadAbortRef.current.abort();
+        repoLoadAbortRef.current = null;
+        setIsLoadingRepo(false);
+        setRepoLoadProgress(null);
+        if (reason) {
+          addGitLog(reason);
+        }
+      }
+    },
+    [addGitLog]
+  );
+
   // Helper: Load remote repository files directly into editor and preview with ETA progress
   const loadRemoteRepoTree = async (
     client: GitHubApiClient,
     repo: GitHubRepo,
     branch: string
   ) => {
+    // Abort any older in-flight repository or branch asset load before starting the new one
+    if (repoLoadAbortRef.current) {
+      repoLoadAbortRef.current.abort();
+      addGitLog(`Stopped previous repository asset loading; switching to ${repo.fullName}@${branch}.`);
+    }
+
+    const requestId = ++repoLoadRequestIdRef.current;
+    const controller = new AbortController();
+    repoLoadAbortRef.current = controller;
+
+    const isStale = () =>
+      controller.signal.aborted || repoLoadRequestIdRef.current !== requestId;
+
     setIsLoadingRepo(true);
     setRepoLoadProgress(null);
     addGitLog(`Downloading full file tree for ${repo.fullName}@${branch}...`);
@@ -546,8 +585,16 @@ export default function App() {
         owner,
         repoName,
         branch,
-        (progress) => setRepoLoadProgress(progress)
+        (progress) => {
+          if (!isStale()) {
+            setRepoLoadProgress(progress);
+          }
+        },
+        controller.signal
       );
+
+      if (isStale()) return;
+
       const fileCount = Object.keys(repoFiles).length;
 
       if (fileCount > 0) {
@@ -566,7 +613,9 @@ export default function App() {
       }
 
       // Fetch branches and PRs
-      const branchList = await client.getBranches(owner, repoName);
+      const branchList = await client.getBranches(owner, repoName, controller.signal);
+      if (isStale()) return;
+
       if (branchList.length > 0) {
         setBranches(
           branchList.map((b) => ({
@@ -578,7 +627,9 @@ export default function App() {
         );
       }
 
-      const prs = await client.getPullRequests(owner, repoName);
+      const prs = await client.getPullRequests(owner, repoName, controller.signal);
+      if (isStale()) return;
+
       setPullRequests(
         prs.map((p) => ({
           id: p.id,
@@ -600,17 +651,31 @@ export default function App() {
 
       // Fetch repository commit history
       try {
-        const repoCommits = await client.getRepoCommits(owner, repoName, branch);
+        const repoCommits = await client.getRepoCommits(
+          owner,
+          repoName,
+          branch,
+          400,
+          controller.signal
+        );
+        if (isStale()) return;
         setCommits(repoCommits);
         addGitLog(`Loaded ${repoCommits.length} commits from ${repo.fullName}@${branch}`);
       } catch (commitErr: any) {
+        if (commitErr?.name === 'AbortError' || isStale()) return;
         console.warn('Failed loading commits:', commitErr);
       }
     } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted) {
+        return;
+      }
       addGitLog(`Failed loading repository tree: ${err.message}`);
     } finally {
-      setIsLoadingRepo(false);
-      setRepoLoadProgress(null);
+      if (repoLoadRequestIdRef.current === requestId) {
+        repoLoadAbortRef.current = null;
+        setIsLoadingRepo(false);
+        setRepoLoadProgress(null);
+      }
     }
   };
 
@@ -623,6 +688,7 @@ export default function App() {
 
   // Handle Disconnect
   const handleDisconnect = () => {
+    cancelActiveRepoLoad('Cancelled repository loading on GitHub disconnect.');
     setIsAuthenticated(false);
     setGithubToken(null);
     setGithubUser(null);
@@ -634,6 +700,7 @@ export default function App() {
 
   // Select target repository
   const handleSelectRepo = async (repo: GitHubRepo) => {
+    cancelActiveRepoLoad(`Stopped loading previous repository assets before opening ${repo.fullName}.`);
     setSelectedRepo(repo);
     setActiveBranch(repo.defaultBranch);
     addGitLog(`Switched active repository to ${repo.fullName}`);
@@ -690,6 +757,7 @@ export default function App() {
 
   // Switch branch
   const handleSwitchBranch = async (branchName: string) => {
+    cancelActiveRepoLoad(`Stopped previous asset load before switching to branch "${branchName}".`);
     setActiveBranch(branchName);
     setBranches((prev) =>
       prev.map((b) => ({
@@ -1101,6 +1169,7 @@ export default function App() {
   // Handle .ZIP Import directly in browser (CLEAN OVERWRITE)
   const handleUploadZip = async (file: File) => {
     try {
+      cancelActiveRepoLoad(`Stopped repository load before importing archive "${file.name}".`);
       addGitLog(`Extracting archive "${file.name}" in browser...`);
       const extracted = await extractZipInBrowser(file);
       const count = Object.keys(extracted).length;
@@ -1209,6 +1278,34 @@ export default function App() {
       setMobileTab('editor');
     }
   };
+
+  const handleApplyFilesFromTerminal = useCallback(
+    (nextFiles: Record<string, VFile>, meta?: { deletedPaths?: string[]; openedFile?: string }) => {
+      setFiles(nextFiles);
+      const deletedSet = new Set(meta?.deletedPaths || []);
+
+      setOpenTabs((prev) => {
+        const filtered = prev.filter((p) => nextFiles[p] && !deletedSet.has(p));
+        if (meta?.openedFile && nextFiles[meta.openedFile] && !filtered.includes(meta.openedFile)) {
+          filtered.push(meta.openedFile);
+        }
+        return filtered;
+      });
+
+      if (meta?.openedFile && nextFiles[meta.openedFile]) {
+        setActiveFilePath(meta.openedFile);
+        if (isMobile) {
+          setMobileTab('editor');
+        }
+      } else {
+        setActiveFilePath((curr) => {
+          if (curr && nextFiles[curr] && !deletedSet.has(curr)) return curr;
+          return Object.keys(nextFiles)[0] || '';
+        });
+      }
+    },
+    [isMobile]
+  );
 
   const handleCloseTab = (path: string) => {
     const nextTabs = openTabs.filter((tab) => tab !== path);
@@ -1606,6 +1703,7 @@ export default function App() {
               onDisconnect={handleDisconnect}
               onSelectRepo={handleSelectRepo}
               onLoadRepoFiles={handleLoadRepoFilesExplicit}
+              onCancelRepoLoad={() => cancelActiveRepoLoad('Cancelled repository asset download.')}
               onCreateRepo={handleCreateRepo}
               onSwitchBranch={handleSwitchBranch}
               onCreateBranch={handleCreateBranch}
@@ -1622,6 +1720,10 @@ export default function App() {
           <div className={`flex-1 w-full h-full overflow-hidden flex flex-col ${mobileTab === 'terminal' ? '' : 'hidden'}`}>
             <Terminal
               files={files}
+              baseFiles={baseFiles}
+              diffs={diffs}
+              selectedRepo={selectedRepo}
+              gitUser={githubUser}
               logs={logs}
               gitLogs={gitLogs}
               activeBranch={activeBranch}
@@ -1634,6 +1736,10 @@ export default function App() {
               onCommit={handleCommitAndPush}
               onDeleteFile={handleDeleteNode}
               onCleanBuild={handleCleanBuild}
+              onApplyFilesFromTerminal={handleApplyFilesFromTerminal}
+              onOpenFile={handleSelectFile}
+              onSwitchBranch={handleSwitchBranch}
+              onCreateBranch={handleCreateBranch}
               diffsCount={diffs.length}
               softResetTarget={softResetTarget}
               t={t}
@@ -1990,6 +2096,7 @@ export default function App() {
                 onDisconnect={handleDisconnect}
                 onSelectRepo={handleSelectRepo}
                 onLoadRepoFiles={handleLoadRepoFilesExplicit}
+                onCancelRepoLoad={() => cancelActiveRepoLoad('Cancelled repository asset download.')}
                 onCreateRepo={handleCreateRepo}
                 onSwitchBranch={handleSwitchBranch}
                 onCreateBranch={handleCreateBranch}
@@ -2088,6 +2195,10 @@ export default function App() {
           {showTerminal && (
             <Terminal
               files={files}
+              baseFiles={baseFiles}
+              diffs={diffs}
+              selectedRepo={selectedRepo}
+              gitUser={githubUser}
               logs={logs}
               gitLogs={gitLogs}
               activeBranch={activeBranch}
@@ -2100,6 +2211,10 @@ export default function App() {
               onCommit={handleCommitAndPush}
               onDeleteFile={handleDeleteNode}
               onCleanBuild={handleCleanBuild}
+              onApplyFilesFromTerminal={handleApplyFilesFromTerminal}
+              onOpenFile={handleSelectFile}
+              onSwitchBranch={handleSwitchBranch}
+              onCreateBranch={handleCreateBranch}
               diffsCount={diffs.length}
               softResetTarget={softResetTarget}
               t={t}

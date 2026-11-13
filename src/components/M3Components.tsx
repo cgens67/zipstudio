@@ -52,7 +52,7 @@ export function M3Button({
   ...props
 }: M3ButtonProps) {
   const baseClasses =
-    'm3-morph-btn inline-flex items-center justify-center font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none';
+    'm3-morph-btn inline-flex items-center justify-center font-medium whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none';
 
   const sizeClasses = {
     sm: 'text-xs px-3.5 py-1.5 gap-1.5',
@@ -79,13 +79,13 @@ export function M3Button({
       {...props}
     >
       {loading ? (
-        <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+        <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
       ) : icon ? (
-        <M3Icon name={icon} size={size === 'sm' ? 16 : size === 'lg' ? 22 : 18} />
+        <M3Icon name={icon} size={size === 'sm' ? 16 : size === 'lg' ? 22 : 18} className="shrink-0" />
       ) : null}
-      <span>{children}</span>
+      <span className="truncate">{children}</span>
       {!loading && iconEnd && (
-        <M3Icon name={iconEnd} size={size === 'sm' ? 16 : size === 'lg' ? 22 : 18} />
+        <M3Icon name={iconEnd} size={size === 'sm' ? 16 : size === 'lg' ? 22 : 18} className="shrink-0" />
       )}
     </button>
   );

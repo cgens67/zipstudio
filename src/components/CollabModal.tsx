@@ -86,15 +86,15 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
 
   return (
     <div
-      className={`fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 ${backdropClass}`}
+      className={`fixed inset-0 z-50 h-[100dvh] max-h-[100dvh] bg-black/75 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-hidden ${backdropClass}`}
       onClick={triggerClose}
     >
       <div
-        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e] rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${dialogClass}`}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e] rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-full sm:max-h-[85dvh] ${dialogClass}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="px-5 py-4 border-b border-[#d8dae5] dark:border-[#43474e]/40 flex items-center justify-between bg-[#f8fafd] dark:bg-[#18191c]">
+        <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-[#d8dae5] dark:border-[#43474e]/40 flex items-center justify-between gap-2 shrink-0 bg-[#f8fafd] dark:bg-[#18191c]">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-[#00468b]/20 dark:bg-[#00468b]/40 border border-[#0b57d0]/30 dark:border-[#a8c7fa]/30 flex items-center justify-center text-[#0b57d0] dark:text-[#a8c7fa]">
               <M3Icon name="group" size={20} />
@@ -134,10 +134,10 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
         </div>
 
         {/* Modal Tabs */}
-        <div className="flex items-center px-5 border-b border-[#d8dae5] dark:border-[#43474e]/30 bg-[#f8fafd] dark:bg-[#1e1f22] text-xs">
+        <div className="flex items-center px-3 sm:px-5 border-b border-[#d8dae5] dark:border-[#43474e]/30 bg-[#f8fafd] dark:bg-[#1e1f22] text-xs shrink-0 overflow-x-auto">
           <button
             onClick={() => setActiveTab('peers')}
-            className={`py-2.5 px-3 font-medium border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`py-2.5 px-3 font-medium border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
               activeTab === 'peers'
                 ? 'border-[#0b57d0] text-[#0b57d0] dark:border-[#a8c7fa] dark:text-[#a8c7fa]'
                 : 'border-transparent text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white'
@@ -148,7 +148,7 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
           </button>
           <button
             onClick={() => setActiveTab('conflicts')}
-            className={`py-2.5 px-3 font-medium border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`py-2.5 px-3 font-medium border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
               activeTab === 'conflicts'
                 ? 'border-[#0b57d0] text-[#0b57d0] dark:border-[#a8c7fa] dark:text-[#a8c7fa]'
                 : 'border-transparent text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white'
@@ -159,7 +159,7 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`py-2.5 px-3 font-medium border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`py-2.5 px-3 font-medium border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
               activeTab === 'settings'
                 ? 'border-[#0b57d0] text-[#0b57d0] dark:border-[#a8c7fa] dark:text-[#a8c7fa]'
                 : 'border-transparent text-[#5d6168] dark:text-[#8e9199] hover:text-[#191c20] dark:hover:text-white'
@@ -171,7 +171,7 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
         </div>
 
         {/* Modal Content */}
-        <div className="p-5 flex-1 overflow-y-auto space-y-4">
+        <div className="p-4 sm:p-5 flex-1 min-h-0 overflow-y-auto space-y-4">
           {activeTab === 'peers' && (
             <div className="space-y-3">
               {/* Invite Link Card */}
@@ -389,13 +389,13 @@ export function CollabModal({ isOpen, onClose, t }: CollabModalProps) {
         </div>
 
         {/* Modal Footer */}
-        <div className="px-5 py-3 border-t border-[#d8dae5] dark:border-[#43474e]/30 bg-[#f8fafd] dark:bg-[#18191c] flex items-center justify-between text-xs">
-          <span className="text-[#5d6168] dark:text-[#8e9199] font-mono text-[11px]">
+        <div className="px-4 sm:px-5 py-3 border-t border-[#d8dae5] dark:border-[#43474e]/30 bg-[#f8fafd] dark:bg-[#18191c] flex items-center justify-between gap-2 shrink-0 text-xs">
+          <span className="text-[#5d6168] dark:text-[#8e9199] font-mono text-[11px] truncate">
             WebSocket Status: {isConnected ? 'Connected' : 'Connecting...'}
           </span>
           <button
             onClick={triggerClose}
-            className="px-5 py-1.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-semibold cursor-pointer transition-colors shadow-sm"
+            className="px-5 py-1.5 rounded-xl bg-[#0b57d0] hover:bg-[#0842a0] text-white font-semibold cursor-pointer transition-colors shadow-sm shrink-0 whitespace-nowrap"
           >
             {t?.done || 'Done'}
           </button>

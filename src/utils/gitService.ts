@@ -335,7 +335,15 @@ export class GitHubApiClient {
     this.token = token;
   }
 
+  private throwIfAborted(signal?: AbortSignal | null) {
+    if (signal?.aborted) {
+      throw new DOMException('Request aborted', 'AbortError');
+    }
+  }
+
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    this.throwIfAborted(options.signal);
+
     const res = await fetch(`https://api.github.com${endpoint}`, {
       ...options,
       headers: {
@@ -345,6 +353,8 @@ export class GitHubApiClient {
         ...(options.headers || {}),
       },
     });
+
+    this.throwIfAborted(options.signal);
 
     if (!res.ok) {
       const errorBody = await res.json().catch(() => ({}));
@@ -401,13 +411,13 @@ export class GitHubApiClient {
     };
   }
 
-  async getBranches(owner: string, repo: string): Promise<string[]> {
-    const data: any[] = await this.request(`/repos/${owner}/${repo}/branches`);
+  async getBranches(owner: string, repo: string, signal?: AbortSignal): Promise<string[]> {
+    const data: any[] = await this.request(`/repos/${owner}/${repo}/branches`, { signal });
     return data.map((b) => b.name);
   }
 
-  async getPullRequests(owner: string, repo: string): Promise<any[]> {
-    return await this.request(`/repos/${owner}/${repo}/pulls?state=all&per_page=20`);
+  async getPullRequests(owner: string, repo: string, signal?: AbortSignal): Promise<any[]> {
+    return await this.request(`/repos/${owner}/${repo}/pulls?state=all&per_page=20`, { signal });
   }
 
   async createPullRequest(owner: string, repo: string, title: string, head: string, base: string, body: string): Promise<any> {
@@ -443,7 +453,8 @@ export class GitHubApiClient {
     owner: string,
     repo: string,
     branch?: string,
-    maxCommits = 400
+    maxCommits = 400,
+    signal?: AbortSignal
   ): Promise<GitCommit[]> {
     const allCommits: GitCommit[] = [];
     const perPage = 100;
@@ -451,10 +462,11 @@ export class GitHubApiClient {
 
     try {
       while (allCommits.length < maxCommits) {
+        this.throwIfAborted(signal);
         const query = branch
           ? `?sha=${encodeURIComponent(branch)}&per_page=${perPage}&page=${page}`
           : `?per_page=${perPage}&page=${page}`;
-        const data: any[] = await this.request(`/repos/${owner}/${repo}/commits${query}`);
+        const data: any[] = await this.request(`/repos/${owner}/${repo}/commits${query}`, { signal });
         if (!Array.isArray(data) || data.length === 0) break;
 
         const mapped: GitCommit[] = data.map((item: any) => ({
@@ -482,6 +494,9 @@ export class GitHubApiClient {
       }
       return allCommits;
     } catch (err: any) {
+      if (err?.name === 'AbortError' || signal?.aborted) {
+        throw err;
+      }
       console.warn(`Could not load commits for ${owner}/${repo}:`, err.message);
       return allCommits;
     }
@@ -491,13 +506,19 @@ export class GitHubApiClient {
     owner: string,
     repo: string,
     branch: string,
-    onProgress?: (progress: RepoLoadProgress) => void
+    onProgress?: (progress: RepoLoadProgress) => void,
+    signal?: AbortSignal
   ): Promise<Record<string, VFileRef>> {
     const files: Record<string, VFileRef> = {};
     try {
+      this.throwIfAborted(signal);
+
       const treeData: any = await this.request(
-        `/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`
+        `/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
+        { signal }
       );
+
+      this.throwIfAborted(signal);
 
       if (!treeData.tree || !Array.isArray(treeData.tree)) {
         return files;
@@ -520,12 +541,16 @@ export class GitHubApiClient {
       // Fetch file contents in parallel batches of 8 to avoid rate limit spikes
       const batchSize = 8;
       for (let i = 0; i < blobs.length; i += batchSize) {
+        this.throwIfAborted(signal);
+
         const batch = blobs.slice(i, i + batchSize);
         await Promise.all(
           batch.map(async (blobItem: any) => {
+            this.throwIfAborted(signal);
             try {
               const blobRes: any = await this.request(
-                `/repos/${owner}/${repo}/git/blobs/${blobItem.sha}`
+                `/repos/${owner}/${repo}/git/blobs/${blobItem.sha}`,
+                { signal }
               );
 
               const path = blobItem.path;
@@ -586,11 +611,16 @@ export class GitHubApiClient {
                 mode: blobItem.mode || (name === 'gradlew' || path.endsWith('.sh') ? '100755' : '100644'),
                 sha: blobItem.sha,
               };
-            } catch (blobErr) {
+            } catch (blobErr: any) {
+              if (blobErr?.name === 'AbortError' || signal?.aborted) {
+                throw blobErr;
+              }
               console.warn(`Failed to fetch blob ${blobItem.path}:`, blobErr);
             }
           })
         );
+
+        this.throwIfAborted(signal);
 
         loaded = Math.min(total, i + batch.length);
         const elapsedSec = (performance.now() - startTime) / 1000;
@@ -606,6 +636,9 @@ export class GitHubApiClient {
         });
       }
     } catch (err: any) {
+      if (err?.name === 'AbortError' || signal?.aborted) {
+        throw err;
+      }
       console.warn(`Could not load tree for ${owner}/${repo}@${branch}:`, err.message);
     }
     return files;

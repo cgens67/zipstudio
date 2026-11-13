@@ -40,6 +40,7 @@ interface GitHubPanelProps {
   onDisconnect: () => void;
   onSelectRepo: (repo: GitHubRepo) => void;
   onLoadRepoFiles: () => Promise<void>;
+  onCancelRepoLoad?: () => void;
   onCreateRepo: (name: string, description: string, isPrivate: boolean) => Promise<void>;
   onSwitchBranch: (branchName: string) => Promise<void>;
   onCreateBranch: (branchName: string) => Promise<void>;
@@ -73,6 +74,7 @@ export function GitHubPanel({
   onDisconnect,
   onSelectRepo,
   onLoadRepoFiles,
+  onCancelRepoLoad,
   onCreateRepo,
   onSwitchBranch,
   onCreateBranch,
@@ -383,16 +385,28 @@ export function GitHubPanel({
           <>
             {isLoadingRepo ? (
               <div className="w-full mt-2 p-2.5 rounded-xl bg-[#d3e3fd]/40 dark:bg-[#a8c7fa]/10 border border-[#0b57d0]/30 dark:border-[#a8c7fa]/30 text-xs">
-                <div className="flex items-center justify-between mb-1.5 text-[#0b57d0] dark:text-[#a8c7fa] font-medium">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    <span>{t.loadingRepo}</span>
+                <div className="flex items-center justify-between mb-1.5 text-[#0b57d0] dark:text-[#a8c7fa] font-medium gap-2">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span className="truncate">{t.loadingRepo}</span>
                   </span>
-                  {repoLoadProgress && (
-                    <span className="font-mono text-[11px] text-[#191c20] dark:text-[#c4c6d0]">
-                      {repoLoadProgress.loaded}/{repoLoadProgress.total}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {repoLoadProgress && (
+                      <span className="font-mono text-[11px] text-[#191c20] dark:text-[#c4c6d0]">
+                        {repoLoadProgress.loaded}/{repoLoadProgress.total}
+                      </span>
+                    )}
+                    {onCancelRepoLoad && (
+                      <button
+                        type="button"
+                        onClick={onCancelRepoLoad}
+                        title={t.cancel}
+                        className="px-1.5 py-0.5 rounded bg-[#ba1a1a]/15 hover:bg-[#ba1a1a]/25 text-[#ba1a1a] dark:text-[#ffb4ab] text-[10px] font-semibold cursor-pointer transition-colors"
+                      >
+                        {t.cancel}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {repoLoadProgress && (
                   <>
@@ -1215,11 +1229,11 @@ function AnimatedDiffModal({
   return (
     <div
       onClick={triggerClose}
-      className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 ${backdropClass}`}
+      className={`fixed inset-0 z-50 h-[100dvh] max-h-[100dvh] bg-black/60 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-hidden ${backdropClass}`}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e] rounded-2xl max-w-2xl w-full max-h-[80vh] flex flex-col shadow-2xl overflow-hidden ${dialogClass}`}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e] rounded-2xl max-w-2xl w-full max-h-full sm:max-h-[85dvh] flex flex-col shadow-2xl overflow-hidden ${dialogClass}`}
       >
         <div className="p-3 bg-[#f8fafd] dark:bg-[#2b2d30] border-b border-[#d8dae5] dark:border-[#43474e] flex items-center justify-between">
           <div className="flex items-center gap-2">

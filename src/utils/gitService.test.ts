@@ -9,6 +9,7 @@ import {
   computeFileDiff,
   computeWorkingTreeChanges,
   createCommit,
+  GitHubApiClient,
 } from './gitService.ts';
 import type { VFile } from './gitService.ts';
 
@@ -95,4 +96,49 @@ test('createCommit generates valid commit object with shortId', () => {
   assert.equal(commit.author.name, 'Alice');
   assert.equal(commit.shortId.length, 7);
   assert.equal(commit.id.length, 40);
+});
+
+test('GitHubApiClient.fetchRepoTree aborts remaining batches immediately on AbortSignal', async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCount = 0;
+  const controller = new AbortController();
+
+  // Mock 12 blobs (> 1 batch of 8) so abort after tree or batch 1 stops batch 2
+  const tree = Array.from({ length: 12 }, (_, idx) => ({
+    path: `file${idx}.txt`,
+    type: 'blob',
+    sha: `sha-${idx}`,
+    mode: '100644',
+  }));
+
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    fetchCount++;
+    if (init?.signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+    const u = String(url);
+    if (u.includes('/git/trees/')) {
+      return new Response(JSON.stringify({ tree }), { status: 200 });
+    }
+    // Abort on the 2nd blob request so batch 2 never runs
+    if (fetchCount >= 3) {
+      controller.abort();
+    }
+    return new Response(
+      JSON.stringify({ encoding: 'base64', content: btoa('hello'), size: 5 }),
+      { status: 200 }
+    );
+  }) as typeof fetch;
+
+  try {
+    const client = new GitHubApiClient('test-token');
+    await assert.rejects(
+      () => client.fetchRepoTree('owner', 'repo', 'main', undefined, controller.signal),
+      (err: any) => err?.name === 'AbortError'
+    );
+    // Should have stopped after batch 1 (1 tree + <= 8 blobs = <= 9 fetches, never all 13)
+    assert.ok(fetchCount <= 9, `Expected <= 9 fetches after abort, got ${fetchCount}`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

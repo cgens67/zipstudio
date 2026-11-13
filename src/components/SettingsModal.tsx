@@ -122,11 +122,11 @@ export function SettingsModal({
 
   return (
     <div
-      className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 ${backdropClass}`}
+      className={`fixed inset-0 z-50 h-[100dvh] max-h-[100dvh] bg-black/60 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-5 overflow-hidden ${backdropClass}`}
       onClick={triggerClose}
     >
       <div
-        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e] rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[88vh] ${dialogClass}`}
+        className={`bg-white dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e] rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-full sm:max-h-[88dvh] ${dialogClass}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -196,7 +196,7 @@ export function SettingsModal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-5 bg-white dark:bg-[#1e1f22]">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-5 bg-white dark:bg-[#1e1f22]">
           {/* 1. APPEARANCE & LANGUAGE */}
           {activeCategory === 'appearance' && (
             <div className="space-y-4">

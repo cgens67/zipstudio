@@ -5,10 +5,16 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { M3Icon, M3IconButton } from './M3Components';
-import { M3Dropdown, DropdownOption } from './M3Dropdown';
+import { M3Dropdown } from './M3Dropdown';
 import { VFile } from '../utils/fileSystem';
-import { GitBranch, GitCommit } from '../utils/gitService';
+import { FileDiff, GitBranch, GitCommit, GitHubRepo } from '../utils/gitService';
 import { Translations, TRANSLATIONS } from '../utils/i18n';
+import {
+  executeShellCommandLine,
+  formatPromptCwd,
+  getAutocompleteSuggestions,
+  virtualDirExists,
+} from '../utils/terminalShell';
 
 export interface ConsoleLogEntry {
   id: string;
@@ -19,6 +25,10 @@ export interface ConsoleLogEntry {
 
 interface TerminalProps {
   files: Record<string, VFile>;
+  baseFiles?: Record<string, VFile>;
+  diffs?: FileDiff[];
+  selectedRepo?: GitHubRepo | null;
+  gitUser?: { name?: string; login?: string } | null;
   logs: ConsoleLogEntry[];
   gitLogs: string[];
   activeBranch: string;
@@ -32,6 +42,13 @@ interface TerminalProps {
   onCommit?: (message: string) => Promise<void>;
   onDeleteFile?: (path: string) => void;
   onCleanBuild?: () => void;
+  onApplyFilesFromTerminal?: (
+    nextFiles: Record<string, VFile>,
+    meta?: { deletedPaths?: string[]; openedFile?: string }
+  ) => void;
+  onOpenFile?: (path: string) => void;
+  onSwitchBranch?: (branchName: string) => Promise<void>;
+  onCreateBranch?: (branchName: string) => Promise<void>;
   diffsCount?: number;
   softResetTarget?: GitCommit | null;
   t?: Translations;
@@ -45,6 +62,10 @@ interface TerminalProps {
 
 export function Terminal({
   files,
+  baseFiles = {},
+  diffs = [],
+  selectedRepo = null,
+  gitUser = null,
   logs,
   gitLogs,
   activeBranch,
@@ -57,6 +78,10 @@ export function Terminal({
   onCommit,
   onDeleteFile,
   onCleanBuild,
+  onApplyFilesFromTerminal,
+  onOpenFile,
+  onSwitchBranch,
+  onCreateBranch,
   diffsCount = 0,
   softResetTarget = null,
   t = TRANSLATIONS.en,
@@ -76,6 +101,9 @@ export function Terminal({
   const toggleMaximize = onToggleMaximize || (() => setInternalMaximized(!internalMaximized));
 
   // Interactive virtual terminal state
+  const [cwd, setCwd] = useState('');
+  const [prevCwd, setPrevCwd] = useState('');
+  const [shellEnv, setShellEnv] = useState<Record<string, string>>({});
   const [history, setHistory] = useState<string[]>([
     t.welcomeTerminal,
     t.typeHelp,
@@ -84,323 +112,133 @@ export function Terminal({
   const [inputVal, setInputVal] = useState('');
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [isRunningCmd, setIsRunningCmd] = useState(false);
   const terminalBottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Reset cwd safely if current directory disappears (e.g. repo switch or zip upload)
+  useEffect(() => {
+    if (cwd && !virtualDirExists(files, cwd)) {
+      setCwd('');
+    }
+  }, [files, cwd]);
 
   useEffect(() => {
     terminalBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [history, logs, gitLogs]);
 
-  const executeCommand = (rawCmd: string) => {
+  const executeCommand = async (rawCmd: string) => {
     const rawLines = rawCmd.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
     if (rawLines.length === 0) return;
 
-    setCommandHistory((prev) => [...prev, ...rawLines]);
+    const updatedCmdHistory = [...commandHistory, ...rawLines];
+    setCommandHistory(updatedCmdHistory);
     setHistoryIndex(-1);
     setInputVal('');
+    setIsRunningCmd(true);
 
-    const newHistory = [...history];
+    let runningCwd = cwd;
+    let runningPrevCwd = prevCwd;
+    let runningEnv = shellEnv;
+    let workingFiles = { ...files };
+    let cleared = false;
+    const batchLines: string[] = [];
 
-    for (const trimmed of rawLines) {
-      if (trimmed.startsWith('#')) {
-        newHistory.push(trimmed);
-        continue;
+    try {
+      for (const trimmed of rawLines) {
+        if (trimmed.startsWith('#')) {
+          batchLines.push(trimmed);
+          continue;
+        }
+
+        const promptLabel = `zipstudio:${formatPromptCwd(runningCwd)} (${activeBranch})$`;
+        batchLines.push(`${promptLabel} ${trimmed}`);
+
+        const result = await executeShellCommandLine(trimmed, {
+          files: workingFiles,
+          baseFiles,
+          cwd: runningCwd,
+          prevCwd: runningPrevCwd,
+          env: runningEnv,
+          activeBranch,
+          branches,
+          commits,
+          diffs,
+          selectedRepo,
+          softResetTarget,
+          commandHistory: updatedCmdHistory,
+          gitUser,
+          onOpenFile,
+          onSwitchBranch,
+          onCreateBranch,
+          onGitReset,
+          onCommit,
+          onCleanBuild,
+        });
+
+        runningCwd = result.nextCwd;
+        runningPrevCwd = result.nextPrevCwd;
+        runningEnv = result.nextEnv;
+
+        if (result.clearRequested) {
+          cleared = true;
+          batchLines.length = 0;
+        }
+        if (result.outputLines.length > 0) {
+          batchLines.push(...result.outputLines);
+        }
+
+        if (result.filesChanged) {
+          workingFiles = result.nextFiles;
+          if (onApplyFilesFromTerminal) {
+            onApplyFilesFromTerminal(result.nextFiles, {
+              deletedPaths: result.deletedPaths,
+              openedFile: result.openedFile,
+            });
+          } else if (onDeleteFile) {
+            result.deletedPaths.forEach((p) => onDeleteFile(p));
+          }
+        } else if (result.openedFile && onOpenFile) {
+          onOpenFile(result.openedFile);
+        }
       }
 
-      newHistory.push(`$ ${trimmed}`);
-      const parts = trimmed.split(/\s+/);
-      const cmd = parts[0].toLowerCase();
-      const args = parts.slice(1);
+      setCwd(runningCwd);
+      setPrevCwd(runningPrevCwd);
+      setShellEnv(runningEnv);
 
-      switch (cmd) {
-        case 'help':
-          newHistory.push(
-            'Available commands:',
-            '  ls               - List files in current project',
-            '  cat <file>       - Display contents of a file',
-            '  rm [-rf] <path>  - Remove files or directories (e.g. rm -rf <path>)',
-            '  ./gradlew <task> - Execute Gradle build tasks (e.g. ./gradlew clean)',
-            '  pwd              - Print working directory',
-            '  clear            - Clear terminal output',
-            '  echo <text>      - Print text to terminal',
-            '  git status       - Show modified and tracked files',
-            '  git branch       - List repository branches',
-            '  git log          - Show commit history (supports -n <count>)',
-            '  git reset        - Rewind HEAD (e.g. git reset --soft HEAD~96)',
-            '  npm test         - Run internal test suite',
-            '  build            - Validate assets and packaging'
-          );
-          break;
-
-        case 'clear':
-          setHistory([]);
-          return;
-
-        case 'pwd':
-          newHistory.push('/workspace/project');
-          break;
-
-        case 'ls': {
-          const fileList = Object.keys(files);
-          if (fileList.length === 0) {
-            newHistory.push('(empty workspace)');
-          } else {
-            newHistory.push(fileList.join('   '));
-          }
-          break;
-        }
-
-        case 'cat': {
-          const target = args[0];
-          if (!target) {
-            newHistory.push('Usage: cat <filename>');
-          } else if (files[target]) {
-            newHistory.push(files[target].content.substring(0, 500) + (files[target].content.length > 500 ? '\n...[truncated]' : ''));
-          } else {
-            newHistory.push(`cat: ${target}: No such file or directory`);
-          }
-          break;
-        }
-
-        case 'echo':
-          newHistory.push(args.join(' '));
-          break;
-
-        case 'rm': {
-          let isForce = false;
-          let isRecursive = false;
-          const targets: string[] = [];
-
-          for (const a of args) {
-            if (a.startsWith('-')) {
-              if (a.includes('f') || a.includes('F')) isForce = true;
-              if (a.includes('r') || a.includes('R')) isRecursive = true;
-            } else {
-              targets.push(a);
-            }
-          }
-
-          if (targets.length === 0) {
-            newHistory.push('rm: missing operand');
-            newHistory.push("Try 'rm --help' or 'help' for more information.");
-            break;
-          }
-
-          for (const target of targets) {
-            const clean = target.replace(/^\.?\/+/, '');
-            const matchingKeys = Object.keys(files).filter(
-              (k) => k === clean || k.startsWith(`${clean}/`)
-            );
-
-            if (matchingKeys.length > 0) {
-              if (onDeleteFile) {
-                onDeleteFile(clean);
-              }
-              newHistory.push(`removed '${target}'`);
-            } else {
-              if (isForce) {
-                newHistory.push(`removed '${target}' (verified clean)`);
-              } else {
-                newHistory.push(`rm: cannot remove '${target}': No such file or directory`);
-              }
-            }
-          }
-          break;
-        }
-
-        case './gradlew':
-        case 'gradlew':
-        case './gradle':
-        case 'gradle': {
-          const task = args[0] || 'help';
-
-          if (task === 'clean') {
-            if (onCleanBuild) {
-              onCleanBuild();
-            }
-            newHistory.push('> Task :clean UP-TO-DATE');
-            newHistory.push('> Task :innertube:clean');
-            newHistory.push('> Task :app:clean');
-            newHistory.push('');
-            newHistory.push('BUILD SUCCESSFUL in 1s');
-            newHistory.push('3 actionable tasks: 2 executed, 1 up-to-date');
-          } else if (task === 'build' || task === 'assemble' || task === 'assembleDebug') {
-            newHistory.push('> Task :innertube:compileKotlin');
-            newHistory.push('> Task :app:compileKotlin');
-            newHistory.push('> Task :app:assembleDebug');
-            newHistory.push('');
-            newHistory.push('BUILD SUCCESSFUL in 2s');
-            newHistory.push('3 actionable tasks: 3 executed');
-          } else if (task === 'test') {
-            newHistory.push('> Task :innertube:test');
-            newHistory.push('> Task :app:test');
-            newHistory.push('BUILD SUCCESSFUL in 1s');
-          } else if (task === '--version' || task === '-v') {
-            newHistory.push('------------------------------------------------------------');
-            newHistory.push('Gradle 8.5');
-            newHistory.push('------------------------------------------------------------');
-            newHistory.push('Build time:   2024-01-15 12:00:00 UTC');
-            newHistory.push('Kotlin:       1.9.22');
-            newHistory.push('Groovy:       3.0.17');
-            newHistory.push('JVM:          17.0.9 (Oracle Corporation 17.0.9+11)');
-          } else {
-            newHistory.push(`> Task :${task}`);
-            newHistory.push('BUILD SUCCESSFUL in 850ms');
-          }
-          break;
-        }
-
-        case 'git': {
-          const sub = args[0];
-          if (sub === 'status') {
-            newHistory.push(`On branch ${activeBranch}`);
-            if (softResetTarget) {
-              newHistory.push(`HEAD rewound to [${softResetTarget.shortId}] ${softResetTarget.message}`);
-              newHistory.push(`Changes to be committed (squashed from rewound commits):`);
-              newHistory.push(`  (use "git commit -m <message>" or Source Control tab to publish)`);
-              newHistory.push(`  ✔ All workspace files kept safe and staged (${Object.keys(files).length} files ready)`);
-            } else if (diffsCount && diffsCount > 0) {
-              newHistory.push(`Changes to be committed:`);
-              newHistory.push(`  ${diffsCount} file(s) modified/added/deleted`);
-            } else {
-              newHistory.push(t?.workingTreeClean || 'nothing to commit, working tree clean');
-            }
-          } else if (sub === 'branch') {
-            branches.forEach((b) => {
-              newHistory.push(`${b.name === activeBranch ? '* ' : '  '}${b.name}`);
-            });
-          } else if (sub === 'log') {
-            let limit = 15;
-            const nIdx = args.indexOf('-n');
-            if (nIdx !== -1 && args[nIdx + 1]) {
-              const parsedN = parseInt(args[nIdx + 1], 10);
-              if (!isNaN(parsedN) && parsedN > 0) limit = parsedN;
-            }
-            const shown = commits.slice(0, limit);
-            shown.forEach((c) => {
-              newHistory.push(`commit ${c.shortId} (${c.branch})`);
-              newHistory.push(`Author: ${c.author.name} <${c.author.email}>`);
-              newHistory.push(`Date:   ${new Date(c.timestamp).toLocaleString()}`);
-              newHistory.push(`    ${c.message}\n`);
-            });
-            if (commits.length > limit) {
-              newHistory.push(`... and ${commits.length - limit} more commits. (Use 'git log -n ${commits.length}' to show all)`);
-            } else if (commits.length === 0) {
-              newHistory.push('(No commits recorded yet)');
-            }
-          } else if (sub === 'reset') {
-            let mode: 'soft' | 'mixed' | 'hard' = 'mixed';
-            let count = 1;
-            const rawJoined = trimmed.toLowerCase();
-            const forcePush = rawJoined.includes('--force') || rawJoined.includes(' -f');
-
-            for (const a of args.slice(1)) {
-              if (a === '--soft') mode = 'soft';
-              else if (a === '--hard') mode = 'hard';
-              else if (a === '--mixed') mode = 'mixed';
-              else if (a.startsWith('HEAD~') || a.startsWith('head~')) {
-                const num = parseInt(a.replace(/head~/i, ''), 10);
-                if (!isNaN(num) && num > 0) count = num;
-              } else if (a.startsWith('~')) {
-                const num = parseInt(a.replace('~', ''), 10);
-                if (!isNaN(num) && num > 0) count = num;
-              } else if (/^\d+$/.test(a)) {
-                count = parseInt(a, 10);
-              } else if (!a.startsWith('-') && a !== '&&' && a !== 'git' && a !== 'push' && a !== 'origin' && a !== 'head') {
-                const idx = commits.findIndex((c) => c.shortId.startsWith(a) || c.id.startsWith(a));
-                if (idx >= 0) count = idx + 1;
-              }
-            }
-
-            if (onGitReset) {
-              newHistory.push(`Executing git reset --${mode} HEAD~${count}${forcePush ? ' (with remote force-push)' : ''}...`);
-              onGitReset(mode, count, forcePush)
-                .then(() => {
-                  const target = commits[count] || commits[commits.length - 1];
-                  const targetMsg = target ? `HEAD is now at ${target.shortId} ${target.message}` : `HEAD is now at HEAD~${count}`;
-                  setHistory((prev) => [
-                    ...prev,
-                    targetMsg,
-                    mode === 'soft'
-                      ? `✔ All workspace files preserved in ZipStudio. Staged changes ready from ${count} commit(s).`
-                      : mode === 'hard'
-                      ? '✔ Workspace tree reset to target commit.'
-                      : '✔ Unstaged changes in working tree.',
-                    mode === 'soft'
-                      ? `✔ Ready to publish: run 'git commit -m "your message"' or click Publish in Source Control tab.`
-                      : '',
-                  ].filter(Boolean));
-                })
-                .catch((err) => {
-                  setHistory((prev) => [...prev, `fatal: git reset error: ${err.message}`]);
-                });
-            } else {
-              newHistory.push(`git: reset executed for ${count} commits.`);
-            }
-          } else if (sub === 'commit') {
-            let message = '';
-            const mIdx = args.indexOf('-m');
-            if (mIdx !== -1 && args[mIdx + 1]) {
-              message = args.slice(mIdx + 1).join(' ').replace(/^["']|["']$/g, '');
-            } else {
-              message = 'Squash and update workspace changes';
-            }
-            if (onCommit) {
-              newHistory.push(`[${activeBranch}] Committing changes: "${message}"...`);
-              onCommit(message)
-                .then(() => {
-                  setHistory((prev) => [
-                    ...prev,
-                    `[${activeBranch}] Commit successful & published to GitHub.`,
-                  ]);
-                })
-                .catch((err) => {
-                  setHistory((prev) => [...prev, `fatal: commit failed: ${err.message}`]);
-                });
-            } else {
-              newHistory.push(`git commit: "${message}"`);
-            }
-          } else if (sub === 'push') {
-            newHistory.push(`Branch '${activeBranch}' up-to-date with remote origin.`);
-          } else {
-            newHistory.push(`git: '${sub}' executed. Use UI Source Control for visual GitHub actions.`);
-          }
-          break;
-        }
-
-        case 'npm': {
-          if (args[0] === 'test') {
-            newHistory.push('> project@1.0.0 test');
-            newHistory.push('✔ Virtual file system valid');
-            newHistory.push('✔ In-browser package bundler ready');
-            newHistory.push('✔ All 11 unit tests passed (311ms)');
-          } else {
-            newHistory.push(`npm: running ${args.join(' ')} (simulated)`);
-          }
-          break;
-        }
-
-        case 'build':
-          newHistory.push('Building web assets for production distribution...');
-          newHistory.push('✔ HTML/CSS/JS bundled');
-          newHistory.push(`✔ Total workspace size: ${Math.round(Object.values(files).reduce((a, b) => a + b.size, 0) / 1024)} KB`);
-          newHistory.push('Ready for commit or .zip download.');
-          break;
-
-        default:
-          newHistory.push(`bash: ${cmd}: command not found. Type 'help' for available commands.`);
+      if (cleared) {
+        setHistory(batchLines);
+      } else {
+        setHistory((prev) => [...prev, ...batchLines]);
       }
+    } catch (err: any) {
+      setHistory((prev) => [...prev, ...batchLines, `fatal: ${err?.message || 'Shell execution error'}`]);
+    } finally {
+      setIsRunningCmd(false);
     }
-
-    setHistory(newHistory);
   };
 
   const handleCommandSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    executeCommand(inputVal);
+    if (!isRunningCmd) {
+      executeCommand(inputVal);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowUp') {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const { completedInput, candidates } = getAutocompleteSuggestions(inputVal, cwd, files);
+      if (completedInput !== null) {
+        setInputVal(completedInput);
+      } else if (candidates.length > 1) {
+        setHistory((prev) => [...prev, candidates.join('   ')]);
+      }
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
+      e.preventDefault();
+      setHistory([]);
+    } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (commandHistory.length === 0) return;
       const nextIndex = historyIndex + 1;
@@ -576,25 +414,48 @@ export function Terminal({
       </div>
 
       {/* Tab Contents */}
-      <div className="flex-1 overflow-y-auto p-3 font-mono text-xs text-[#191c20] dark:text-[#e2e2e6]">
+      <div
+        onClick={() => {
+          if (activeTab === 'terminal' && typeof window !== 'undefined' && !window.getSelection()?.toString()) {
+            inputRef.current?.focus();
+          }
+        }}
+        className="flex-1 overflow-y-auto p-3 font-mono text-xs text-[#191c20] dark:text-[#e2e2e6]"
+      >
         {/* Terminal Tab */}
         {activeTab === 'terminal' && (
-          <div className="space-y-1">
-            {history.map((line, idx) => (
-              <div
-                key={idx}
-                className={line.startsWith('$') ? 'text-[#0b57d0] dark:text-[#a8c7fa] font-semibold' : 'text-[#44474e] dark:text-[#c4c6d0]'}
-              >
-                {line}
-              </div>
-            ))}
+          <div className="space-y-1 select-text">
+            {history.map((line, idx) => {
+              const isPromptLine = line.startsWith('zipstudio:') || line.startsWith('$');
+              const isDiffAdd = line.startsWith('+') && !line.startsWith('+++');
+              const isDiffDel = line.startsWith('-') && !line.startsWith('---');
+              return (
+                <div
+                  key={idx}
+                  className={`whitespace-pre-wrap break-words leading-relaxed ${
+                    isPromptLine
+                      ? 'text-[#0b57d0] dark:text-[#a8c7fa] font-semibold'
+                      : isDiffAdd
+                      ? 'text-[#0a6640] dark:text-[#b4f3b7]'
+                      : isDiffDel
+                      ? 'text-[#ba1a1a] dark:text-[#ffb4ab]'
+                      : 'text-[#44474e] dark:text-[#c4c6d0]'
+                  }`}
+                >
+                  {line}
+                </div>
+              );
+            })}
             {/* Quick Command Chips */}
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-2 pb-1">
-              {['ls', 'git status', 'git log', 'pwd', 'npm test', 'build', 'clear', 'help'].map((cmd) => (
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-2 pb-1 select-none">
+              {['ls -la', 'tree -L 2', 'git status', 'git diff', 'git log --oneline', 'pwd', 'clear', 'help'].map((cmd) => (
                 <button
                   key={cmd}
                   type="button"
-                  onClick={() => executeCommand(cmd)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    executeCommand(cmd);
+                  }}
                   className="px-2.5 py-1 rounded-full bg-[#f0f2f8] dark:bg-[#2b2d30] hover:bg-[#e4e7ef] dark:hover:bg-[#383a3e] active:scale-95 text-[#0b57d0] dark:text-[#a8c7fa] text-[11px] font-mono border border-[#d8dae5] dark:border-[#43474e]/40 shrink-0 cursor-pointer transition-all shadow-xs"
                 >
                   {cmd}
@@ -602,14 +463,22 @@ export function Terminal({
               ))}
             </div>
 
-            <form onSubmit={handleCommandSubmit} className="flex items-center gap-2 mt-1.5 bg-[#f8fafd] dark:bg-[#121316] rounded-xl px-2.5 py-1.5 border border-[#d8dae5] dark:border-[#43474e]/40">
-              <span className="text-[#0b57d0] dark:text-[#a8c7fa] font-bold text-xs select-none shrink-0">zipstudio:~$</span>
+            <form
+              onSubmit={handleCommandSubmit}
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-2 mt-1.5 bg-[#f8fafd] dark:bg-[#121316] rounded-xl px-2.5 py-1.5 border border-[#d8dae5] dark:border-[#43474e]/40 select-none"
+            >
+              <span className="text-[#0b57d0] dark:text-[#a8c7fa] font-bold text-xs select-none shrink-0 max-w-[45%] truncate">
+                zipstudio:{formatPromptCwd(cwd)} ({activeBranch})$
+              </span>
               <input
+                ref={inputRef}
                 type="text"
                 value={inputVal}
                 onChange={(e) => setInputVal(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={t.typeCommandPrompt}
+                placeholder={isRunningCmd ? 'Running...' : t.typeCommandPrompt}
+                disabled={isRunningCmd}
                 autoCapitalize="none"
                 autoCorrect="off"
                 autoComplete="off"
@@ -619,6 +488,7 @@ export function Terminal({
               {inputVal.trim() && (
                 <button
                   type="submit"
+                  disabled={isRunningCmd}
                   className="w-7 h-7 rounded-full bg-[#0b57d0] text-white dark:bg-[#a8c7fa] dark:text-[#003062] flex items-center justify-center shrink-0 cursor-pointer active:scale-90 transition-transform shadow-xs"
                   title="Run command"
                 >
