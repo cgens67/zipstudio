@@ -3,10 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import JSZip from 'jszip';
 import {
   VFile,
+  extractZipInBrowser,
   formatBytes,
+  getFileExtension,
   getFileName,
+  isBinaryExtension,
 } from './fileSystem';
 import {
   FileDiff,
@@ -14,9 +18,26 @@ import {
   GitCommit,
   GitHubRepo,
   computeFileDiff,
+  computeWorkingTreeChanges,
 } from './gitService';
+import { formatUnifiedDiff } from './diffUtils';
 
 export const WORKSPACE_ROOT_DISPLAY = '/workspace/project';
+
+export interface ShellStashFileChange {
+  path: string;
+  action: 'modified' | 'added' | 'deleted';
+  /** Snapshot of the working-tree file before stashing (absent when deleted) */
+  file?: VFile;
+}
+
+export interface ShellStashEntry {
+  id: string;
+  message: string;
+  branch: string;
+  createdAt: number;
+  changes: ShellStashFileChange[];
+}
 
 export interface ShellContext {
   files: Record<string, VFile>;
@@ -28,6 +49,7 @@ export interface ShellContext {
   branches: GitBranch[];
   commits: GitCommit[];
   diffs: FileDiff[];
+  stashes?: ShellStashEntry[];
   selectedRepo?: GitHubRepo | null;
   softResetTarget?: GitCommit | null;
   commandHistory: string[];
@@ -35,6 +57,7 @@ export interface ShellContext {
   onOpenFile?: (path: string) => void;
   onSwitchBranch?: (branch: string) => Promise<void>;
   onCreateBranch?: (branch: string) => Promise<void>;
+  onDeleteBranch?: (branch: string) => Promise<void>;
   onGitReset?: (mode: 'soft' | 'mixed' | 'hard', count: number, forcePushRemote: boolean) => Promise<void>;
   onCommit?: (message: string) => Promise<void>;
   onCleanBuild?: () => void;
@@ -46,10 +69,13 @@ export interface ShellExecutionResult {
   nextPrevCwd: string;
   nextEnv: Record<string, string>;
   nextFiles: Record<string, VFile>;
+  nextStashes: ShellStashEntry[];
+  stashesChanged: boolean;
   filesChanged: boolean;
   deletedPaths: string[];
   openedFile?: string;
   clearRequested: boolean;
+  clearCommandHistoryRequested: boolean;
   exitCode: number;
 }
 
@@ -74,10 +100,11 @@ interface PipelineSegment {
 export const KNOWN_COMMANDS = [
   'ls', 'cd', 'pwd', 'tree', 'cat', 'head', 'tail', 'grep', 'find', 'wc',
   'sort', 'uniq', 'cut', 'tr', 'sed', 'diff', 'stat', 'du', 'mkdir', 'touch',
-  'cp', 'mv', 'rm', 'rmdir', 'echo', 'printf', 'env', 'export', 'printenv', 'unset',
-  'which', 'type', 'whoami', 'id', 'uname', 'date', 'history', 'base64', 'jq', 'json',
-  'node', 'open', 'code', 'git', 'npm', './gradlew', 'gradlew', 'build', 'clear',
-  'help', 'true', 'false',
+  'cp', 'mv', 'rm', 'rmdir', 'zip', 'unzip', 'tee', 'xargs', 'basename',
+  'dirname', 'realpath', 'echo', 'printf', 'env', 'export', 'printenv', 'unset',
+  'which', 'type', 'whoami', 'id', 'uname', 'date', 'history', 'base64', 'jq',
+  'json', 'node', 'open', 'code', 'git', 'npm', './gradlew', 'gradlew', 'build',
+  'clear', 'help', 'true', 'false',
 ];
 
 /**
@@ -179,7 +206,11 @@ export function listDirectChildren(
   return entries;
 }
 
-function globToRegex(glob: string, caseInsensitive = false): RegExp {
+function globToRegex(
+  glob: string,
+  caseInsensitive = false,
+  wildcardMatchesSlash = false
+): RegExp {
   let pattern = '^';
   for (let i = 0; i < glob.length; i++) {
     const c = glob[i];
@@ -188,10 +219,10 @@ function globToRegex(glob: string, caseInsensitive = false): RegExp {
         pattern += '.*';
         i++;
       } else {
-        pattern += '[^/]*';
+        pattern += wildcardMatchesSlash ? '.*' : '[^/]*';
       }
     } else if (c === '?') {
-      pattern += '[^/]';
+      pattern += wildcardMatchesSlash ? '.' : '[^/]';
     } else if ('\\^$.|+()[]{}'.includes(c)) {
       pattern += '\\' + c;
     } else {
@@ -470,13 +501,17 @@ export async function executeShellCommandLine(
   context: ShellContext
 ): Promise<ShellExecutionResult> {
   const workingFiles: Record<string, VFile> = { ...context.files };
+  let workingStashes: ShellStashEntry[] = [...(context.stashes || [])];
+  let stashesChanged = false;
+  let activeBranch = context.activeBranch;
+  let workingBranches: GitBranch[] = context.branches.map((b) => ({ ...b }));
   let cwd = context.cwd;
   let prevCwd = context.prevCwd;
   const env: Record<string, string> = {
     HOME: WORKSPACE_ROOT_DISPLAY,
     USER: context.gitUser?.login || 'developer',
     SHELL: '/bin/bash',
-    BRANCH: context.activeBranch,
+    BRANCH: activeBranch,
     ...context.env,
     PWD: formatDisplayCwd(cwd),
   };
@@ -485,6 +520,7 @@ export async function executeShellCommandLine(
   const deletedPaths: string[] = [];
   let openedFile: string | undefined;
   let clearRequested = false;
+  let clearCommandHistoryRequested = false;
   const outputLines: string[] = [];
 
   const tokens = tokenizeShellLine(rawLine, env);
@@ -526,14 +562,15 @@ export async function executeShellCommandLine(
         pipeData = f.isBinary ? '' : f.content;
       }
 
-      const res = await runSingleCommand(cmdName, expandedArgs, pipeData, {
+      const runtimeState: SingleCmdRuntime = {
         workingFiles,
         baseFiles: context.baseFiles,
+        stashes: workingStashes,
         cwd,
         prevCwd,
         env,
-        activeBranch: context.activeBranch,
-        branches: context.branches,
+        activeBranch,
+        branches: workingBranches,
         commits: context.commits,
         diffs: context.diffs,
         selectedRepo: context.selectedRepo,
@@ -543,21 +580,34 @@ export async function executeShellCommandLine(
         onOpenFile: context.onOpenFile,
         onSwitchBranch: context.onSwitchBranch,
         onCreateBranch: context.onCreateBranch,
+        onDeleteBranch: context.onDeleteBranch,
         onGitReset: context.onGitReset,
         onCommit: context.onCommit,
         onCleanBuild: context.onCleanBuild,
-      });
+      };
+
+      const res = await runSingleCommand(cmdName, expandedArgs, pipeData, runtimeState);
 
       cwd = res.nextCwd;
       prevCwd = res.nextPrevCwd;
+      activeBranch = runtimeState.activeBranch;
+      workingBranches = runtimeState.branches;
       env.PWD = formatDisplayCwd(cwd);
+      env.BRANCH = activeBranch;
 
       if (res.filesChanged) filesChanged = true;
+      if (res.stashesChanged) {
+        stashesChanged = true;
+        workingStashes = res.nextStashes;
+      }
       if (res.deletedPaths.length > 0) deletedPaths.push(...res.deletedPaths);
       if (res.openedFile) openedFile = res.openedFile;
       if (res.clearRequested) {
         clearRequested = true;
         outputLines.length = 0;
+      }
+      if (res.clearCommandHistoryRequested) {
+        clearCommandHistoryRequested = true;
       }
 
       lastExitCode = res.exitCode;
@@ -602,10 +652,13 @@ export async function executeShellCommandLine(
     nextPrevCwd: prevCwd,
     nextEnv: env,
     nextFiles: workingFiles,
+    nextStashes: workingStashes,
+    stashesChanged,
     filesChanged,
     deletedPaths,
     openedFile,
     clearRequested,
+    clearCommandHistoryRequested,
     exitCode: lastExitCode,
   };
 }
@@ -613,6 +666,7 @@ export async function executeShellCommandLine(
 interface SingleCmdRuntime {
   workingFiles: Record<string, VFile>;
   baseFiles: Record<string, VFile>;
+  stashes: ShellStashEntry[];
   cwd: string;
   prevCwd: string;
   env: Record<string, string>;
@@ -627,6 +681,7 @@ interface SingleCmdRuntime {
   onOpenFile?: (path: string) => void;
   onSwitchBranch?: (branch: string) => Promise<void>;
   onCreateBranch?: (branch: string) => Promise<void>;
+  onDeleteBranch?: (branch: string) => Promise<void>;
   onGitReset?: (mode: 'soft' | 'mixed' | 'hard', count: number, forcePushRemote: boolean) => Promise<void>;
   onCommit?: (message: string) => Promise<void>;
   onCleanBuild?: () => void;
@@ -638,10 +693,13 @@ interface SingleCmdResult {
   exitCode: number;
   nextCwd: string;
   nextPrevCwd: string;
+  nextStashes: ShellStashEntry[];
+  stashesChanged: boolean;
   filesChanged: boolean;
   deletedPaths: string[];
   openedFile?: string;
   clearRequested: boolean;
+  clearCommandHistoryRequested: boolean;
 }
 
 async function runSingleCommand(
@@ -653,10 +711,13 @@ async function runSingleCommand(
   const { workingFiles } = rt;
   let nextCwd = rt.cwd;
   let nextPrevCwd = rt.prevCwd;
+  let nextStashes = rt.stashes;
+  let stashesChanged = false;
   let filesChanged = false;
   const deletedPaths: string[] = [];
   let openedFile: string | undefined;
   let clearRequested = false;
+  let clearCommandHistoryRequested = false;
 
   const ok = (stdout = '', stderr = ''): SingleCmdResult => ({
     stdout,
@@ -664,10 +725,13 @@ async function runSingleCommand(
     exitCode: 0,
     nextCwd,
     nextPrevCwd,
+    nextStashes,
+    stashesChanged,
     filesChanged,
     deletedPaths,
     openedFile,
     clearRequested,
+    clearCommandHistoryRequested,
   });
 
   const fail = (stderr: string, code = 1, stdout = ''): SingleCmdResult => ({
@@ -676,10 +740,13 @@ async function runSingleCommand(
     exitCode: code,
     nextCwd,
     nextPrevCwd,
+    nextStashes,
+    stashesChanged,
     filesChanged,
     deletedPaths,
     openedFile,
     clearRequested,
+    clearCommandHistoryRequested,
   });
 
   // Handle inline VAR=val assignment
@@ -734,17 +801,19 @@ async function runSingleCommand(
         return ok(
           [
             'Git commands:',
-            '  git status [-s]              Show working tree status and changed files',
-            '  git diff [file]              Show line-by-line diff against base snapshot',
-            '  git branch [name | -d name]  List, create, or delete branches',
-            '  git checkout [-b] <branch>   Switch to or create a branch',
-            '  git switch [-c] <branch>     Switch to or create a branch',
-            '  git add <path | .>           Stage files for commit',
-            '  git commit -m "<msg>"        Commit and publish changes',
-            '  git log [-n N] [--oneline]   Display commit history',
-            '  git show [sha]               Show commit summary',
-            '  git rev-parse [--short] HEAD Show HEAD commit/branch ref',
-            '  git remote [-v]              Show connected GitHub remote URL',
+            '  git status [-s]                   Show working tree status and changed files',
+            '  git diff [file] [--stat]          Show unified line-by-line diff against baseline',
+            '  git branch [-a|-v|name|-d name]   List, create, or delete branches',
+            '  git checkout [-b] <branch|file>   Switch/create branch or revert <file>',
+            '  git restore <file>                Discard working tree changes in <file>',
+            '  git switch [-c] <branch>          Switch to or create a branch',
+            '  git stash [push|list|show|apply|pop|drop|clear]  Stash or restore changes',
+            '  git add <path | .>                Stage files for commit',
+            '  git commit -m "<msg>"             Commit and publish changes',
+            '  git log [-n N] [--oneline]        Display commit history',
+            '  git show [sha]                    Show commit summary',
+            '  git rev-parse [--short] HEAD      Show HEAD commit/branch ref',
+            '  git remote [-v]                   Show connected GitHub remote URL',
             '  git reset [--soft|--hard] HEAD~N  Reset HEAD commit history',
           ].join('\n')
         );
@@ -755,13 +824,15 @@ async function runSingleCommand(
           '  Navigation & Files:',
           '    pwd, cd [dir|-], ls [-l -a -R], tree [-L n], mkdir [-p], touch,',
           '    cp [-r], mv, rm [-rf], rmdir, stat, du [-sh], open/code <file>',
-          '  Viewing & Text Processing:',
-          '    cat [-n], head [-n], tail [-n], grep [-i -n -r -v -c -l -E],',
-          '    find [-name -iname -type -maxdepth], wc [-l -w -c], sort [-r -u -n],',
-          '    uniq [-c -d], cut -d<sep> -f<list>, tr, sed s/pat/rep/g, diff, jq, base64',
+          '  Archives & Text Processing:',
+          '    zip [-r] <out.zip> <paths...>, unzip [-l] <in.zip> [-d dir],',
+          '    cat [-n], head [-n|-c], tail [-n|-c], grep [-r -n -i -w -v -c -l -E],',
+          '    find [-name -iname -path -type -maxdepth -empty], wc [-l -w -c],',
+          '    sort [-r -u -n], uniq [-c -d], cut -d<sep> -f<list>, tr, sed,',
+          '    diff [-u -i -w -q -r], jq, base64 [-d], xargs, tee [-a]',
           '  Shell & Utilities:',
-          '    echo [-n -e], printf, export, env, unset, which, whoami, uname, date,',
-          '    history, node [-e code | file.js], clear',
+          '    echo [-n -e], printf, basename, dirname, realpath, export, env, unset,',
+          '    which, whoami, uname, date, history [-c], node [-e code | file.js], clear',
           '    Supports pipes (|), chains (&&, ||, ;), globs (*, ?), quotes, > and >> redirection.',
           '  Git & Build Tools:',
           '    git (type "help git" for all subcommands), npm [test|run|ls],',
@@ -1178,13 +1249,38 @@ async function runSingleCommand(
     case 'head':
     case 'tail': {
       let count = 10;
+      let tailFromLine: number | null = null;
+      let byteMode = false;
       const fileArgs: string[] = [];
+
       for (let i = 0; i < args.length; i++) {
         const a = args[i];
         if (a === '-n' && args[i + 1]) {
-          const parsed = parseInt(args[i + 1], 10);
+          const rawVal = args[++i];
+          if (cmd === 'tail' && rawVal.startsWith('+')) {
+            const parsed = parseInt(rawVal.slice(1), 10);
+            if (!Number.isNaN(parsed) && parsed >= 1) tailFromLine = parsed;
+          } else {
+            const parsed = parseInt(rawVal, 10);
+            if (!Number.isNaN(parsed) && parsed >= 0) count = parsed;
+          }
+        } else if (a.startsWith('-n') && a.length > 2) {
+          const rawVal = a.slice(2);
+          if (cmd === 'tail' && rawVal.startsWith('+')) {
+            const parsed = parseInt(rawVal.slice(1), 10);
+            if (!Number.isNaN(parsed) && parsed >= 1) tailFromLine = parsed;
+          } else {
+            const parsed = parseInt(rawVal, 10);
+            if (!Number.isNaN(parsed) && parsed >= 0) count = parsed;
+          }
+        } else if (a === '-c' && args[i + 1]) {
+          byteMode = true;
+          const parsed = parseInt(args[++i], 10);
           if (!Number.isNaN(parsed) && parsed >= 0) count = parsed;
-          i++;
+        } else if (a.startsWith('-c') && a.length > 2) {
+          byteMode = true;
+          const parsed = parseInt(a.slice(2), 10);
+          if (!Number.isNaN(parsed) && parsed >= 0) count = parsed;
         } else if (/^-\d+$/.test(a)) {
           count = parseInt(a.slice(1), 10);
         } else if (!a.startsWith('-')) {
@@ -1196,8 +1292,22 @@ async function runSingleCommand(
       if (err && texts.length === 0) return fail(err);
 
       const blocks = texts.map((t) => {
+        if (byteMode) {
+          const body = cmd === 'head' ? t.content.slice(0, count) : (count === 0 ? '' : t.content.slice(-count));
+          return texts.length > 1 ? `==> ${t.label} <==\n${body}` : body;
+        }
+        if (t.content === '') {
+          return texts.length > 1 ? `==> ${t.label} <==\n` : '';
+        }
         const lines = t.content.replace(/\n$/, '').split('\n');
-        const sliced = cmd === 'head' ? lines.slice(0, count) : lines.slice(-count);
+        let sliced: string[];
+        if (cmd === 'head') {
+          sliced = lines.slice(0, count);
+        } else if (tailFromLine !== null) {
+          sliced = lines.slice(tailFromLine - 1);
+        } else {
+          sliced = count === 0 ? [] : lines.slice(-count);
+        }
         const body = sliced.join('\n');
         return texts.length > 1 ? `==> ${t.label} <==\n${body}` : body;
       });
@@ -1265,10 +1375,29 @@ async function runSingleCommand(
       let countOnly = false;
       let filesWithMatches = false;
       let extendedRegex = true;
+      let wholeWord = false;
+      let noFilename = false;
+      let quiet = false;
+      const explicitPatterns: string[] = [];
+      const includeGlobs: RegExp[] = [];
+      const excludeGlobs: RegExp[] = [];
       const positional: string[] = [];
 
-      for (const a of args) {
-        if (a.startsWith('-') && a.length > 1) {
+      for (let i = 0; i < args.length; i++) {
+        const a = args[i];
+        if (a === '-e' && args[i + 1] !== undefined) {
+          explicitPatterns.push(args[++i]);
+        } else if (a.startsWith('-e') && a.length > 2) {
+          explicitPatterns.push(a.slice(2));
+        } else if (a.startsWith('--include=')) {
+          includeGlobs.push(globToRegex(a.slice(10), true));
+        } else if (a === '--include' && args[i + 1]) {
+          includeGlobs.push(globToRegex(args[++i], true));
+        } else if (a.startsWith('--exclude=')) {
+          excludeGlobs.push(globToRegex(a.slice(10), true));
+        } else if (a === '--exclude' && args[i + 1]) {
+          excludeGlobs.push(globToRegex(args[++i], true));
+        } else if (a.startsWith('-') && a.length > 1 && a !== '--') {
           if (a.includes('i')) ignoreCase = true;
           if (a.includes('n')) lineNumbers = true;
           if (a.includes('r') || a.includes('R')) recursive = true;
@@ -1276,33 +1405,63 @@ async function runSingleCommand(
           if (a.includes('c')) countOnly = true;
           if (a.includes('l')) filesWithMatches = true;
           if (a.includes('F')) extendedRegex = false;
-        } else {
+          if (a.includes('w')) wholeWord = true;
+          if (a.includes('h')) noFilename = true;
+          if (a.includes('q')) quiet = true;
+        } else if (a !== '--') {
           positional.push(a);
         }
       }
 
-      const pattern = positional[0];
-      if (!pattern) return fail('grep: missing search pattern');
+      const patternsToUse = explicitPatterns.length > 0
+        ? explicitPatterns
+        : positional[0]
+        ? [positional[0]]
+        : [];
+      if (patternsToUse.length === 0) return fail('grep: missing search pattern');
+
+      const targetPaths = explicitPatterns.length > 0 ? positional : positional.slice(1);
 
       let regex: RegExp;
       try {
-        const src = extendedRegex ? pattern : pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        regex = new RegExp(src, ignoreCase ? 'i' : '');
+        const alts = patternsToUse.map((p) => {
+          const base = extendedRegex ? p : p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          return wholeWord ? `\\b(?:${base})\\b` : `(?:${base})`;
+        });
+        regex = new RegExp(alts.join('|'), ignoreCase ? 'i' : '');
       } catch (e: any) {
         return fail(`grep: invalid pattern: ${e.message}`);
       }
 
-      const targetPaths = positional.slice(1);
+      const matchesFileFilter = (filePath: string): boolean => {
+        const name = getFileName(filePath);
+        if (includeGlobs.length > 0 && !includeGlobs.some((r) => r.test(name) || r.test(filePath))) {
+          return false;
+        }
+        if (excludeGlobs.length > 0 && excludeGlobs.some((r) => r.test(name) || r.test(filePath))) {
+          return false;
+        }
+        return true;
+      };
+
       const candidates: Array<{ label: string; content: string }> = [];
+      const seenLabels = new Set<string>();
+
+      const pushCandidate = (label: string, content: string) => {
+        if (seenLabels.has(label)) return;
+        seenLabels.add(label);
+        candidates.push({ label, content });
+      };
 
       if (targetPaths.length === 0) {
         if (stdin !== null) {
           candidates.push({ label: '', content: stdin });
         } else if (recursive) {
           const prefix = rt.cwd ? `${rt.cwd}/` : '';
-          for (const [k, f] of Object.entries(workingFiles)) {
-            if (k.startsWith(prefix) && !f.isBinary && !f.content.startsWith('data:')) {
-              candidates.push({ label: k, content: f.content });
+          for (const k of Object.keys(workingFiles).sort()) {
+            const f = workingFiles[k];
+            if (k.startsWith(prefix) && !f.isBinary && !f.content.startsWith('data:') && matchesFileFilter(k)) {
+              pushCandidate(k, f.content);
             }
           }
         } else {
@@ -1313,17 +1472,18 @@ async function runSingleCommand(
           const resolved = resolveVirtualPath(rt.cwd, tp);
           const f = workingFiles[resolved];
           if (f) {
-            if (!f.isBinary && !f.content.startsWith('data:')) {
-              candidates.push({ label: resolved, content: f.content });
+            if (!f.isBinary && !f.content.startsWith('data:') && matchesFileFilter(resolved)) {
+              pushCandidate(resolved, f.content);
             }
           } else if (virtualDirExists(workingFiles, resolved)) {
             if (!recursive) {
               return fail(`grep: ${tp}: Is a directory (use -r)`);
             }
             const prefix = resolved ? `${resolved}/` : '';
-            for (const [k, df] of Object.entries(workingFiles)) {
-              if (k.startsWith(prefix) && !df.isBinary && !df.content.startsWith('data:')) {
-                candidates.push({ label: k, content: df.content });
+            for (const k of Object.keys(workingFiles).sort()) {
+              const df = workingFiles[k];
+              if (k.startsWith(prefix) && !df.isBinary && !df.content.startsWith('data:') && matchesFileFilter(k)) {
+                pushCandidate(k, df.content);
               }
             }
           } else {
@@ -1332,7 +1492,7 @@ async function runSingleCommand(
         }
       }
 
-      const showPrefix = candidates.length > 1 || recursive;
+      const showPrefix = !noFilename && (candidates.length > 1 || recursive);
       const matches: string[] = [];
       let totalMatches = 0;
 
@@ -1345,6 +1505,7 @@ async function runSingleCommand(
           if (invert ? !isMatch : isMatch) {
             fileCount++;
             totalMatches++;
+            if (quiet) return ok('');
             if (filesWithMatches) {
               matches.push(item.label || '(standard input)');
               break;
@@ -1369,17 +1530,23 @@ async function runSingleCommand(
     }
 
     case 'find': {
-      let baseArg = '.';
+      const startArgs: string[] = [];
       let nameGlob: string | null = null;
       let nameInsensitive = false;
+      let pathGlob: string | null = null;
+      let pathInsensitive = false;
       let typeFilter: 'f' | 'd' | null = null;
       let maxDepth = Infinity;
+      let minDepth = 0;
+      let emptyOnly = false;
 
       let i = 0;
-      if (args[0] && !args[0].startsWith('-')) {
-        baseArg = args[0];
-        i = 1;
+      while (i < args.length && !args[i].startsWith('-') && args[i] !== '!' && args[i] !== '(') {
+        startArgs.push(args[i]);
+        i++;
       }
+      if (startArgs.length === 0) startArgs.push('.');
+
       for (; i < args.length; i++) {
         if (args[i] === '-name' && args[i + 1]) {
           nameGlob = args[++i];
@@ -1387,53 +1554,84 @@ async function runSingleCommand(
         } else if (args[i] === '-iname' && args[i + 1]) {
           nameGlob = args[++i];
           nameInsensitive = true;
+        } else if (args[i] === '-path' && args[i + 1]) {
+          pathGlob = args[++i];
+          pathInsensitive = false;
+        } else if (args[i] === '-ipath' && args[i + 1]) {
+          pathGlob = args[++i];
+          pathInsensitive = true;
         } else if (args[i] === '-type' && args[i + 1]) {
           const t = args[++i];
           if (t === 'f' || t === 'd') typeFilter = t;
         } else if (args[i] === '-maxdepth' && args[i + 1]) {
           const d = parseInt(args[++i], 10);
           if (!Number.isNaN(d)) maxDepth = d;
+        } else if (args[i] === '-mindepth' && args[i + 1]) {
+          const d = parseInt(args[++i], 10);
+          if (!Number.isNaN(d)) minDepth = d;
+        } else if (args[i] === '-empty') {
+          emptyOnly = true;
         }
-      }
-
-      const baseResolved = resolveVirtualPath(rt.cwd, baseArg);
-      if (!virtualDirExists(workingFiles, baseResolved) && !workingFiles[baseResolved]) {
-        return fail(`find: '${baseArg}': No such file or directory`);
       }
 
       const nameRegex = nameGlob ? globToRegex(nameGlob, nameInsensitive) : null;
-      const prefix = baseResolved ? `${baseResolved}/` : '';
-      const baseDepth = baseResolved ? baseResolved.split('/').length : 0;
+      const pathRegex = pathGlob
+        ? globToRegex(pathGlob.replace(/^\.\//, ''), pathInsensitive, true)
+        : null;
 
-      const results: string[] = [];
-      const dirs = getAllDirectories(workingFiles).filter((d) =>
-        baseResolved ? d === baseResolved || d.startsWith(prefix) : true
-      );
+      const allDirs = getAllDirectories(workingFiles);
+      const resultSet = new Set<string>();
 
-      if (typeFilter !== 'f') {
-        if (!baseResolved) {
-          if (!nameRegex || nameRegex.test('.')) results.push('.');
-        } else if (dirs.includes(baseResolved)) {
-          if (!nameRegex || nameRegex.test(getFileName(baseResolved))) results.push(baseResolved);
+      const matchesFilters = (relPath: string, isDir: boolean, depth: number): boolean => {
+        if (depth < minDepth || depth > maxDepth) return false;
+        const name = relPath === '.' ? '.' : getFileName(relPath);
+        if (nameRegex && !nameRegex.test(name)) return false;
+        if (pathRegex && !pathRegex.test(relPath) && !pathRegex.test(`./${relPath}`)) return false;
+        if (emptyOnly) {
+          if (isDir) {
+            const children = listDirectChildren(workingFiles, relPath === '.' ? '' : relPath, true);
+            if (children.length > 0) return false;
+          } else {
+            const f = workingFiles[relPath];
+            if (!f || f.size > 0) return false;
+          }
         }
-        for (const d of dirs) {
-          if (d === baseResolved) continue;
-          const depth = d.split('/').length - baseDepth;
-          if (depth > maxDepth) continue;
-          if (!nameRegex || nameRegex.test(getFileName(d))) results.push(d);
+        return true;
+      };
+
+      for (const baseArg of startArgs) {
+        const baseResolved = resolveVirtualPath(rt.cwd, baseArg);
+        if (!virtualDirExists(workingFiles, baseResolved) && !workingFiles[baseResolved]) {
+          return fail(`find: '${baseArg}': No such file or directory`);
+        }
+
+        const prefix = baseResolved ? `${baseResolved}/` : '';
+        const baseDepth = baseResolved ? baseResolved.split('/').length : 0;
+
+        if (typeFilter !== 'f') {
+          if (!baseResolved) {
+            if (matchesFilters('.', true, 0)) resultSet.add('.');
+          } else if (allDirs.includes(baseResolved)) {
+            if (matchesFilters(baseResolved, true, 0)) resultSet.add(baseResolved);
+          }
+          for (const d of allDirs) {
+            if (d === baseResolved) continue;
+            if (baseResolved && !d.startsWith(prefix)) continue;
+            const depth = d.split('/').length - baseDepth;
+            if (matchesFilters(d, true, depth)) resultSet.add(d);
+          }
+        }
+
+        if (typeFilter !== 'd') {
+          for (const fPath of Object.keys(workingFiles).sort()) {
+            if (baseResolved && fPath !== baseResolved && !fPath.startsWith(prefix)) continue;
+            const depth = fPath === baseResolved ? 0 : fPath.split('/').length - baseDepth;
+            if (matchesFilters(fPath, false, depth)) resultSet.add(fPath);
+          }
         }
       }
 
-      if (typeFilter !== 'd') {
-        for (const fPath of Object.keys(workingFiles).sort()) {
-          if (baseResolved && fPath !== baseResolved && !fPath.startsWith(prefix)) continue;
-          const depth = fPath.split('/').length - baseDepth;
-          if (depth > maxDepth) continue;
-          if (!nameRegex || nameRegex.test(getFileName(fPath))) results.push(fPath);
-        }
-      }
-
-      return ok(results.sort().slice(0, 500).join('\n'));
+      return ok(Array.from(resultSet).sort().slice(0, 500).join('\n'));
     }
 
     case 'sort': {
@@ -1578,24 +1776,349 @@ async function runSingleCommand(
     }
 
     case 'diff': {
-      const positional = args.filter((a) => !a.startsWith('-'));
+      let unified = true;
+      let ignoreCase = false;
+      let ignoreSpace = false;
+      let briefOnly = false;
+      let recursive = false;
+      const positional: string[] = [];
+
+      for (const a of args) {
+        if (a === '--unified') unified = true;
+        else if (a === '--brief') briefOnly = true;
+        else if (a.startsWith('-') && a.length > 1) {
+          if (a.includes('u')) unified = true;
+          if (a.includes('i')) ignoreCase = true;
+          if (a.includes('w') || a.includes('b')) ignoreSpace = true;
+          if (a.includes('q')) briefOnly = true;
+          if (a.includes('r')) recursive = true;
+        } else {
+          positional.push(a);
+        }
+      }
+
       if (positional.length < 2) return fail('diff: missing operand after diff');
       const p1 = resolveVirtualPath(rt.cwd, positional[0]);
       const p2 = resolveVirtualPath(rt.cwd, positional[1]);
       const f1 = workingFiles[p1];
       const f2 = workingFiles[p2];
-      if (!f1) return fail(`diff: ${positional[0]}: No such file`);
-      if (!f2) return fail(`diff: ${positional[1]}: No such file`);
+      const d1 = virtualDirExists(workingFiles, p1);
+      const d2 = virtualDirExists(workingFiles, p2);
 
-      const diff = computeFileDiff(`${p1} -> ${p2}`, f1.content, f2.content);
-      const changed = diff.lines.filter((l) => l.type !== 'normal');
-      if (changed.length === 0) return ok('');
-      const header = [`--- ${p1}`, `+++ ${p2}`];
-      for (const line of diff.lines) {
-        if (line.type === 'delete') header.push(`- ${line.content}`);
-        else if (line.type === 'add') header.push(`+ ${line.content}`);
+      const normalizeText = (s: string) => {
+        let res = s;
+        if (ignoreCase) res = res.toLowerCase();
+        if (ignoreSpace) {
+          res = res
+            .split('\n')
+            .map((line) => line.replace(/\s+/g, ' ').trim())
+            .join('\n');
+        }
+        return res;
+      };
+
+      if (d1 && d2 && (!f1 || !f2)) {
+        if (!recursive) return fail(`Common subdirectories or directories given (use -r for recursive diff)`);
+        const pref1 = p1 ? `${p1}/` : '';
+        const pref2 = p2 ? `${p2}/` : '';
+        const rels1 = new Map<string, VFile>();
+        const rels2 = new Map<string, VFile>();
+        for (const [k, f] of Object.entries(workingFiles)) {
+          if (k.startsWith(pref1)) rels1.set(k.slice(pref1.length), f);
+          if (k.startsWith(pref2)) rels2.set(k.slice(pref2.length), f);
+        }
+        const allRels = Array.from(new Set([...rels1.keys(), ...rels2.keys()])).sort();
+        const outLines: string[] = [];
+        for (const rel of allRels) {
+          const aFile = rels1.get(rel);
+          const bFile = rels2.get(rel);
+          if (aFile && !bFile) {
+            outLines.push(`Only in ${p1 || '.'}: ${rel}`);
+          } else if (!aFile && bFile) {
+            outLines.push(`Only in ${p2 || '.'}: ${rel}`);
+          } else if (aFile && bFile) {
+            const left = normalizeText(aFile.content);
+            const right = normalizeText(bFile.content);
+            if (left !== right) {
+              if (briefOnly) {
+                outLines.push(`Files ${aFile.path} and ${bFile.path} differ`);
+              } else {
+                const fileDiff = computeFileDiff(rel, left, right);
+                outLines.push(
+                  ...formatUnifiedDiff(fileDiff, {
+                    leftLabel: aFile.path,
+                    rightLabel: bFile.path,
+                    gitHeader: false,
+                  })
+                );
+              }
+            }
+          }
+        }
+        if (outLines.length === 0) return ok('');
+        return fail('', 1, outLines.join('\n'));
       }
-      return fail('', 1, header.join('\n'));
+
+      if (!f1) return fail(`diff: ${positional[0]}: No such file or directory`, 2);
+      if (!f2) return fail(`diff: ${positional[1]}: No such file or directory`, 2);
+
+      const leftText = f1.isBinary ? f1.content : normalizeText(f1.content);
+      const rightText = f2.isBinary ? f2.content : normalizeText(f2.content);
+      const rawDiff = computeFileDiff(p2, leftText, rightText);
+      const changed = rawDiff.lines.filter((l) => l.type !== 'normal');
+      if (changed.length === 0 && rawDiff.additions === 0 && rawDiff.deletions === 0) {
+        return ok('');
+      }
+      if (briefOnly) {
+        return fail('', 1, `Files ${p1} and ${p2} differ`);
+      }
+      if (unified) {
+        const formatted = formatUnifiedDiff(rawDiff, {
+          leftLabel: p1,
+          rightLabel: p2,
+          gitHeader: false,
+        });
+        return fail('', 1, formatted.join('\n'));
+      }
+      const fallback = [`--- ${p1}`, `+++ ${p2}`];
+      for (const line of rawDiff.lines) {
+        if (line.type === 'delete') fallback.push(`< ${line.content}`);
+        else if (line.type === 'add') fallback.push(`> ${line.content}`);
+      }
+      return fail('', 1, fallback.join('\n'));
+    }
+
+    case 'zip': {
+      let quiet = false;
+      const positional: string[] = [];
+      for (const a of args) {
+        if (a.startsWith('-')) {
+          if (a.includes('q')) quiet = true;
+        } else {
+          positional.push(a);
+        }
+      }
+      if (positional.length < 2) {
+        return fail('zip error: Invalid command arguments (usage: zip [-r] <archive.zip> <paths...>)');
+      }
+      const rawArchive = positional[0];
+      const outPath = resolveVirtualPath(rt.cwd, rawArchive.endsWith('.zip') ? rawArchive : `${rawArchive}.zip`);
+      const targets = positional.slice(1);
+      const zip = new JSZip();
+      const addedLogs: string[] = [];
+      const seenFiles = new Set<string>();
+
+      const addVFileToZip = (file: VFile) => {
+        if (seenFiles.has(file.path) || file.path === outPath) return;
+        seenFiles.add(file.path);
+        const isBin =
+          file.isBinary ||
+          isBinaryExtension(getFileExtension(file.path)) ||
+          file.content.startsWith('data:');
+        if (file.content.startsWith('data:')) {
+          const commaIdx = file.content.indexOf(',');
+          const b64 = file.content.slice(commaIdx + 1);
+          zip.file(file.path, b64, { base64: true });
+        } else if (
+          isBin &&
+          file.content &&
+          /^[A-Za-z0-9+/=\r\n]+$/.test(file.content.trim()) &&
+          file.content.trim().length % 4 === 0
+        ) {
+          zip.file(file.path, file.content.trim(), { base64: true });
+        } else {
+          zip.file(file.path, file.content);
+        }
+        addedLogs.push(`  adding: ${file.path} (${formatBytes(file.size)})`);
+      };
+
+      for (const target of targets) {
+        const resolved = resolveVirtualPath(rt.cwd, target);
+        if (workingFiles[resolved]) {
+          addVFileToZip(workingFiles[resolved]);
+        } else if (virtualDirExists(workingFiles, resolved)) {
+          const prefix = resolved ? `${resolved}/` : '';
+          for (const k of Object.keys(workingFiles).sort()) {
+            if (k.startsWith(prefix)) {
+              addVFileToZip(workingFiles[k]);
+            }
+          }
+        } else {
+          return fail(`zip warning: name not matched: ${target}`, 12);
+        }
+      }
+
+      if (seenFiles.size === 0) {
+        return fail('zip error: Nothing to do!');
+      }
+
+      const uint8 = await zip.generateAsync({
+        type: 'uint8array',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 },
+      });
+      let binaryStr = '';
+      for (let i = 0; i < uint8.length; i++) {
+        binaryStr += String.fromCharCode(uint8[i]);
+      }
+      const b64 = btoa(binaryStr);
+      workingFiles[outPath] = {
+        path: outPath,
+        name: getFileName(outPath),
+        content: `data:application/zip;base64,${b64}`,
+        isBinary: true,
+        size: uint8.length,
+        lastModified: Date.now(),
+        mode: '100644',
+      };
+      filesChanged = true;
+
+      if (quiet) return ok('');
+      return ok([...addedLogs, `Created ${outPath} (${formatBytes(uint8.length)})`].join('\n'));
+    }
+
+    case 'unzip': {
+      let listOnly = false;
+      let overwrite = true;
+      let quiet = false;
+      let destDir = '';
+      let archiveArg = '';
+
+      for (let i = 0; i < args.length; i++) {
+        const a = args[i];
+        if (a === '-l') listOnly = true;
+        else if (a === '-o') overwrite = true;
+        else if (a === '-n') overwrite = false;
+        else if (a === '-q') quiet = true;
+        else if (a === '-d' && args[i + 1]) {
+          destDir = resolveVirtualPath(rt.cwd, args[++i]);
+        } else if (!a.startsWith('-')) {
+          if (!archiveArg) archiveArg = a;
+        }
+      }
+
+      if (!archiveArg) {
+        return fail('Usage: unzip [-l] [-o|-n] <archive.zip> [-d dest_dir]');
+      }
+      const zipPath = resolveVirtualPath(rt.cwd, archiveArg);
+      const zipFile = workingFiles[zipPath];
+      if (!zipFile) {
+        return fail(`unzip: cannot find or open ${archiveArg}`);
+      }
+
+      let rawBase64 = zipFile.content;
+      if (rawBase64.startsWith('data:')) {
+        const commaIdx = rawBase64.indexOf(',');
+        rawBase64 = rawBase64.slice(commaIdx + 1);
+      }
+
+      let bytes: Uint8Array;
+      try {
+        const bin = atob(rawBase64.replace(/\s+/g, ''));
+        bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+      } catch (e: any) {
+        return fail(`unzip: invalid archive encoding (${e.message})`);
+      }
+
+      try {
+        const extracted = await extractZipInBrowser(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+        const entries = Object.values(extracted).sort((a, b) => a.path.localeCompare(b.path));
+
+        if (listOnly) {
+          const listOut = [`Archive:  ${zipPath}`, '  Length      Name', '---------  ----'];
+          let totalBytes = 0;
+          for (const entry of entries) {
+            totalBytes += entry.size;
+            listOut.push(`${String(entry.size).padStart(9)}  ${entry.path}`);
+          }
+          listOut.push('---------  ----', `${String(totalBytes).padStart(9)}  ${entries.length} files`);
+          return ok(listOut.join('\n'));
+        }
+
+        const outLogs: string[] = [`Archive:  ${zipPath}`];
+        for (const entry of entries) {
+          const targetPath = destDir ? `${destDir}/${entry.path}` : entry.path;
+          if (!overwrite && workingFiles[targetPath]) {
+            outLogs.push(`  skipping: ${targetPath}`);
+            continue;
+          }
+          workingFiles[targetPath] = {
+            ...entry,
+            path: targetPath,
+            name: getFileName(targetPath),
+            lastModified: Date.now(),
+          };
+          outLogs.push(`  inflating: ${targetPath}`);
+          filesChanged = true;
+        }
+        return ok(quiet ? '' : outLogs.join('\n'));
+      } catch (e: any) {
+        return fail(`unzip: failed to read zip archive: ${e.message}`);
+      }
+    }
+
+    case 'tee': {
+      let append = false;
+      const targets: string[] = [];
+      for (const a of args) {
+        if (a === '-a' || a === '--append') append = true;
+        else if (!a.startsWith('-')) targets.push(a);
+      }
+      const input = stdin ?? '';
+      for (const target of targets) {
+        const resolved = resolveVirtualPath(rt.cwd, target);
+        if (!resolved) continue;
+        const prev = workingFiles[resolved];
+        const nextContent = append && prev && !prev.isBinary ? prev.content + input : input;
+        workingFiles[resolved] = makeTextFile(resolved, nextContent);
+        filesChanged = true;
+      }
+      return ok(input);
+    }
+
+    case 'basename': {
+      const target = args[0];
+      if (!target) return fail('basename: missing operand');
+      const clean = target.replace(/\/+$/, '');
+      const base = clean.split('/').pop() || clean;
+      const suffix = args[1];
+      if (suffix && base.endsWith(suffix)) {
+        return ok(base.slice(0, base.length - suffix.length));
+      }
+      return ok(base);
+    }
+
+    case 'dirname': {
+      const target = args[0];
+      if (!target) return fail('dirname: missing operand');
+      const clean = target.replace(/\/+$/, '');
+      const idx = clean.lastIndexOf('/');
+      return ok(idx <= 0 ? (clean.startsWith('/') ? '/' : '.') : clean.slice(0, idx));
+    }
+
+    case 'realpath': {
+      const targets = args.filter((a) => !a.startsWith('-'));
+      if (targets.length === 0) return ok(formatDisplayCwd(rt.cwd));
+      return ok(
+        targets
+          .map((t) => {
+            const rel = resolveVirtualPath(rt.cwd, t);
+            return rel ? `${WORKSPACE_ROOT_DISPLAY}/${rel}` : WORKSPACE_ROOT_DISPLAY;
+          })
+          .join('\n')
+      );
+    }
+
+    case 'xargs': {
+      if (stdin === null) return ok('');
+      const items = stdin
+        .split(/\s+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (items.length === 0) return ok('');
+      const subCmd = args[0] || 'echo';
+      const subArgs = [...args.slice(1), ...items];
+      return runSingleCommand(subCmd, subArgs, null, rt);
     }
 
     case 'stat': {
@@ -1758,8 +2281,21 @@ async function runSingleCommand(
     case 'date':
       return ok(new Date().toString());
 
-    case 'history':
-      return ok(rt.commandHistory.map((c, idx) => `${String(idx + 1).padStart(4)}  ${c}`).join('\n'));
+    case 'history': {
+      if (args.includes('-c')) {
+        clearCommandHistoryRequested = true;
+        return ok('');
+      }
+      const limitArg = args.find((a) => /^\d+$/.test(a));
+      const limit = limitArg ? parseInt(limitArg, 10) : rt.commandHistory.length;
+      const sliceStart = Math.max(0, rt.commandHistory.length - limit);
+      return ok(
+        rt.commandHistory
+          .slice(sliceStart)
+          .map((c, idx) => `${String(sliceStart + idx + 1).padStart(4)}  ${c}`)
+          .join('\n')
+      );
+    }
 
     case 'base64': {
       let decode = false;
@@ -1768,10 +2304,42 @@ async function runSingleCommand(
         if (a === '-d' || a === '--decode') decode = true;
         else if (!a.startsWith('-')) fileArgs.push(a);
       }
-      const { texts, err } = readTextSources(fileArgs, 'base64');
-      if (err && texts.length === 0) return fail(err);
-      const input = texts.map((t) => t.content).join('');
+
+      if (fileArgs.length === 0 && stdin === null) {
+        return fail('base64: missing file operand or stdin');
+      }
+
       try {
+        if (fileArgs.length > 0) {
+          const outputs: string[] = [];
+          for (const arg of fileArgs) {
+            const p = resolveVirtualPath(rt.cwd, arg);
+            const f = workingFiles[p];
+            if (!f) {
+              return fail(`base64: ${arg}: No such file or directory`);
+            }
+            if (decode) {
+              const rawContent = f.content.startsWith('data:')
+                ? f.content.slice(f.content.indexOf(',') + 1)
+                : f.content;
+              const binary = atob(rawContent.replace(/\s+/g, ''));
+              const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+              outputs.push(new TextDecoder('utf-8', { fatal: false }).decode(bytes));
+            } else if (f.content.startsWith('data:')) {
+              outputs.push(f.content.slice(f.content.indexOf(',') + 1));
+            } else if (f.isBinary) {
+              outputs.push(f.content);
+            } else {
+              const bytes = new TextEncoder().encode(f.content);
+              let bin = '';
+              for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+              outputs.push(btoa(bin));
+            }
+          }
+          return ok(outputs.join('\n'));
+        }
+
+        const input = stdin || '';
         if (decode) {
           const clean = input.replace(/\s+/g, '');
           const binary = atob(clean);
@@ -1780,7 +2348,7 @@ async function runSingleCommand(
         } else {
           const bytes = new TextEncoder().encode(input);
           let bin = '';
-          bytes.forEach((b) => (bin += String.fromCharCode(b)));
+          for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
           return ok(btoa(bin));
         }
       } catch (e: any) {
@@ -2014,11 +2582,12 @@ async function runSingleCommand(
       }
 
       if (sub === 'status') {
+        const liveDiffs = computeWorkingTreeChanges(rt.baseFiles, workingFiles);
         const isShort = args.includes('-s') || args.includes('--short');
         if (isShort) {
-          if (rt.diffs.length === 0) return ok('');
+          if (liveDiffs.length === 0) return ok('');
           return ok(
-            rt.diffs
+            liveDiffs
               .map((d) => `${d.status === 'added' ? 'A ' : d.status === 'deleted' ? 'D ' : ' M'} ${d.path}`)
               .join('\n')
           );
@@ -2030,13 +2599,13 @@ async function runSingleCommand(
             `  (use "git commit -m <message>" to publish squashed workspace)`,
             `  ${Object.keys(workingFiles).length} workspace files staged`
           );
-        } else if (rt.diffs.length > 0) {
+        } else if (liveDiffs.length > 0) {
           out.push('Changes not staged / ready for commit:');
-          rt.diffs.slice(0, 50).forEach((d) => {
+          liveDiffs.slice(0, 50).forEach((d) => {
             out.push(`  ${d.status.padEnd(9)} ${d.path}`);
           });
-          if (rt.diffs.length > 50) {
-            out.push(`  ... and ${rt.diffs.length - 50} more files`);
+          if (liveDiffs.length > 50) {
+            out.push(`  ... and ${liveDiffs.length - 50} more files`);
           }
         } else {
           out.push('nothing to commit, working tree clean');
@@ -2045,14 +2614,31 @@ async function runSingleCommand(
       }
 
       if (sub === 'diff') {
-        const targetArg = args.slice(1).find((a) => !a.startsWith('-'));
+        const showStat = args.includes('--stat');
+        const nameOnly = args.includes('--name-only');
+        const nameStatus = args.includes('--name-status');
+        const targetArg = args
+          .slice(1)
+          .find((a) => !a.startsWith('-') && a !== 'HEAD' && a !== '--');
+
+        const liveDiffs = computeWorkingTreeChanges(rt.baseFiles, workingFiles);
         const filterPath = targetArg ? resolveVirtualPath(rt.cwd, targetArg) : null;
         const selectedDiffs = filterPath
-          ? rt.diffs.filter((d) => d.path === filterPath || d.path.startsWith(`${filterPath}/`))
-          : rt.diffs;
+          ? liveDiffs.filter((d) => d.path === filterPath || d.path.startsWith(`${filterPath}/`))
+          : liveDiffs;
 
         if (selectedDiffs.length === 0) return ok('');
-        if (args.includes('--stat')) {
+        if (nameOnly) {
+          return ok(selectedDiffs.map((d) => d.path).join('\n'));
+        }
+        if (nameStatus) {
+          return ok(
+            selectedDiffs
+              .map((d) => `${d.status === 'added' ? 'A' : d.status === 'deleted' ? 'D' : 'M'}\t${d.path}`)
+              .join('\n')
+          );
+        }
+        if (showStat) {
           return ok(
             selectedDiffs
               .map((d) => ` ${d.path} | +${d.additions} -${d.deletions} (${d.status})`)
@@ -2062,11 +2648,7 @@ async function runSingleCommand(
 
         const chunks: string[] = [];
         for (const d of selectedDiffs.slice(0, 20)) {
-          chunks.push(`diff --git a/${d.path} b/${d.path}`, `--- a/${d.path}`, `+++ b/${d.path}`);
-          for (const line of d.lines.slice(0, 120)) {
-            if (line.type === 'add') chunks.push(`+${line.content}`);
-            else if (line.type === 'delete') chunks.push(`-${line.content}`);
-          }
+          chunks.push(...formatUnifiedDiff(d, { contextLines: 3 }));
         }
         if (selectedDiffs.length > 20) {
           chunks.push(`... (${selectedDiffs.length - 20} more changed files omitted; run git diff <file>)`);
@@ -2075,53 +2657,326 @@ async function runSingleCommand(
       }
 
       if (sub === 'branch') {
-        const newBranch = args.slice(1).find((a) => !a.startsWith('-'));
-        if (!newBranch) {
+        const deleteFlag = args.includes('-d') || args.includes('-D');
+        const verboseFlag = args.includes('-v') || args.includes('-vv');
+        const targetBranch = args.slice(1).find((a) => !a.startsWith('-'));
+
+        if (deleteFlag) {
+          if (!targetBranch) {
+            return fail('fatal: branch name required');
+          }
+          if (targetBranch === rt.activeBranch) {
+            return fail(`error: Cannot delete branch '${targetBranch}' checked out at '${WORKSPACE_ROOT_DISPLAY}'.`);
+          }
+          if (!rt.branches.some((b) => b.name === targetBranch)) {
+            return fail(`error: branch '${targetBranch}' not found.`);
+          }
+          if (rt.onDeleteBranch) {
+            try {
+              await rt.onDeleteBranch(targetBranch);
+            } catch (e: any) {
+              return fail(`fatal: could not delete branch '${targetBranch}': ${e.message}`);
+            }
+          }
+          rt.branches = rt.branches.filter((b) => b.name !== targetBranch);
+          return ok(`Deleted branch ${targetBranch}.`);
+        }
+
+        if (!targetBranch) {
+          const latestMsg = rt.commits[0]?.message || 'Workspace baseline';
+          const latestSha = rt.commits[0]?.shortId || 'HEAD';
           return ok(
             rt.branches
-              .map((b) => `${b.name === rt.activeBranch ? '* ' : '  '}${b.name}`)
+              .map((b) => {
+                const marker = b.name === rt.activeBranch ? '* ' : '  ';
+                if (verboseFlag) {
+                  return `${marker}${b.name.padEnd(18)} ${latestSha} ${latestMsg}`;
+                }
+                return `${marker}${b.name}`;
+              })
               .join('\n')
           );
         }
+
+        if (rt.branches.some((b) => b.name === targetBranch)) {
+          return fail(`fatal: a branch named '${targetBranch}' already exists`);
+        }
         if (rt.onCreateBranch) {
           try {
-            await rt.onCreateBranch(newBranch);
-            return ok(`Created branch '${newBranch}'`);
+            await rt.onCreateBranch(targetBranch);
           } catch (e: any) {
-            return fail(`fatal: could not create branch '${newBranch}': ${e.message}`);
+            return fail(`fatal: could not create branch '${targetBranch}': ${e.message}`);
           }
         }
-        return ok(`Branch '${newBranch}'`);
+        rt.branches = [
+          ...rt.branches.map((b) => ({ ...b, isCurrent: false })),
+          {
+            name: targetBranch,
+            isCurrent: true,
+            isDefault: false,
+            commitSha: rt.commits[0]?.shortId || 'HEAD',
+          },
+        ];
+        rt.activeBranch = targetBranch;
+        return ok(`Created branch '${targetBranch}'`);
       }
 
-      if (sub === 'checkout' || sub === 'switch') {
+      if (sub === 'restore' || sub === 'checkout' || sub === 'switch') {
+        const dashDashIdx = args.indexOf('--');
         const createFlag = args.includes('-b') || args.includes('-c');
-        const targetBranch = args.slice(1).find((a) => !a.startsWith('-'));
-        if (!targetBranch) {
+        const restorePaths = (targets: string[]): SingleCmdResult => {
+          const restored: string[] = [];
+          for (const rawTarget of targets) {
+            const resolved = resolveVirtualPath(rt.cwd, rawTarget);
+            if (rawTarget === '.' || virtualDirExists(workingFiles, resolved) || virtualDirExists(rt.baseFiles, resolved)) {
+              const prefix = rawTarget === '.' || !resolved ? '' : `${resolved}/`;
+              const liveChanges = computeWorkingTreeChanges(rt.baseFiles, workingFiles);
+              for (const ch of liveChanges) {
+                if (!prefix || ch.path === resolved || ch.path.startsWith(prefix)) {
+                  if (rt.baseFiles[ch.path]) {
+                    workingFiles[ch.path] = { ...rt.baseFiles[ch.path] };
+                  } else {
+                    delete workingFiles[ch.path];
+                    deletedPaths.push(ch.path);
+                  }
+                  restored.push(ch.path);
+                  filesChanged = true;
+                }
+              }
+              continue;
+            }
+
+            const inBase = rt.baseFiles[resolved];
+            const inCurr = workingFiles[resolved];
+            if (!inBase && !inCurr) {
+              return fail(`error: pathspec '${rawTarget}' did not match any file(s) known to git`);
+            }
+            if (inBase) {
+              workingFiles[resolved] = { ...inBase };
+              filesChanged = true;
+              restored.push(resolved);
+            } else if (inCurr) {
+              delete workingFiles[resolved];
+              deletedPaths.push(resolved);
+              filesChanged = true;
+              restored.push(resolved);
+            }
+          }
+          return ok(
+            restored.length > 0
+              ? `Updated ${restored.length} path(s) from index baseline:\n  ${restored.join('\n  ')}`
+              : 'Nothing to restore.'
+          );
+        };
+
+        if (sub === 'restore') {
+          const targets = args.slice(1).filter((a) => !a.startsWith('-'));
+          if (targets.length === 0) return fail('fatal: you must specify path(s) to restore');
+          return restorePaths(targets);
+        }
+
+        if (sub === 'checkout' && dashDashIdx !== -1) {
+          const targets = args.slice(dashDashIdx + 1);
+          if (targets.length === 0) return fail('fatal: missing pathspec after "--"');
+          return restorePaths(targets);
+        }
+
+        const targetArg = args.slice(1).find((a) => !a.startsWith('-'));
+        if (!targetArg) {
           return fail(`git ${sub}: missing branch name`);
         }
         if (createFlag) {
-          if (!rt.onCreateBranch) return fail('git: branch creation handler unavailable');
-          try {
-            await rt.onCreateBranch(targetBranch);
-            return ok(`Switched to a new branch '${targetBranch}'`);
-          } catch (e: any) {
-            return fail(`fatal: ${e.message}`);
+          if (rt.branches.some((b) => b.name === targetArg)) {
+            return fail(`fatal: a branch named '${targetArg}' already exists`);
           }
+          if (rt.onCreateBranch) {
+            try {
+              await rt.onCreateBranch(targetArg);
+            } catch (e: any) {
+              return fail(`fatal: ${e.message}`);
+            }
+          }
+          rt.branches = [
+            ...rt.branches.map((b) => ({ ...b, isCurrent: false })),
+            {
+              name: targetArg,
+              isCurrent: true,
+              isDefault: false,
+              commitSha: rt.commits[0]?.shortId || 'HEAD',
+            },
+          ];
+          rt.activeBranch = targetArg;
+          return ok(`Switched to a new branch '${targetArg}'`);
         }
-        const exists = rt.branches.some((b) => b.name === targetBranch);
-        if (!exists) {
-          return fail(`error: pathspec '${targetBranch}' did not match any branch (use -b to create)`);
+
+        const existsAsBranch = rt.branches.some((b) => b.name === targetArg);
+        if (!existsAsBranch && sub === 'checkout') {
+          const resolved = resolveVirtualPath(rt.cwd, targetArg);
+          if (
+            targetArg === '.' ||
+            workingFiles[resolved] ||
+            rt.baseFiles[resolved] ||
+            virtualDirExists(workingFiles, resolved) ||
+            virtualDirExists(rt.baseFiles, resolved)
+          ) {
+            return restorePaths(args.slice(1).filter((a) => !a.startsWith('-')));
+          }
+          return fail(`error: pathspec '${targetArg}' did not match any branch or file (use -b to create branch)`);
+        }
+
+        if (!existsAsBranch) {
+          return fail(`error: invalid branch '${targetArg}' (use -c to create)`);
         }
         if (rt.onSwitchBranch) {
           try {
-            await rt.onSwitchBranch(targetBranch);
-            return ok(`Switched to branch '${targetBranch}'`);
+            await rt.onSwitchBranch(targetArg);
           } catch (e: any) {
             return fail(`fatal: ${e.message}`);
           }
         }
-        return ok(`Switched to branch '${targetBranch}'`);
+        rt.activeBranch = targetArg;
+        rt.branches = rt.branches.map((b) => ({ ...b, isCurrent: b.name === targetArg }));
+        return ok(`Switched to branch '${targetArg}'`);
+      }
+
+      if (sub === 'stash') {
+        const subCmd = args[1] && !args[1].startsWith('-') ? args[1].toLowerCase() : 'push';
+
+        const parseStashIndex = (ref?: string): number => {
+          if (!ref) return 0;
+          const m = ref.match(/^stash@\{(\d+)\}$/);
+          if (m) return parseInt(m[1], 10);
+          if (/^\d+$/.test(ref)) return parseInt(ref, 10);
+          return 0;
+        };
+
+        if (subCmd === 'list') {
+          if (nextStashes.length === 0) return ok('');
+          return ok(
+            nextStashes
+              .map((s, idx) => `stash@{${idx}}: ${s.message}`)
+              .join('\n')
+          );
+        }
+
+        if (subCmd === 'clear') {
+          nextStashes = [];
+          stashesChanged = true;
+          return ok('Cleared all stash entries.');
+        }
+
+        if (subCmd === 'drop') {
+          if (nextStashes.length === 0) return fail('error: No stash entries found.');
+          const idx = parseStashIndex(args[2]);
+          if (idx < 0 || idx >= nextStashes.length) return fail(`error: stash@{${idx}} is not a valid reference`);
+          const removed = nextStashes[idx];
+          nextStashes = nextStashes.filter((_, i) => i !== idx);
+          stashesChanged = true;
+          return ok(`Dropped stash@{${idx}} (${removed.id})`);
+        }
+
+        if (subCmd === 'show') {
+          if (nextStashes.length === 0) return fail('error: No stash entries found.');
+          const idx = parseStashIndex(args[2]);
+          const entry = nextStashes[idx];
+          if (!entry) return fail(`error: stash@{${idx}} is not a valid reference`);
+          if (args.includes('-p')) {
+            const patchLines: string[] = [];
+            for (const ch of entry.changes) {
+              const orig = rt.baseFiles[ch.path]?.content ?? null;
+              const curr = ch.file?.content ?? null;
+              patchLines.push(...formatUnifiedDiff(computeFileDiff(ch.path, orig, curr)));
+            }
+            return ok(patchLines.join('\n'));
+          }
+          return ok(
+            [
+              ...entry.changes.map((c) => ` ${c.path} | (${c.action})`),
+              ` ${entry.changes.length} file(s) changed`,
+            ].join('\n')
+          );
+        }
+
+        if (subCmd === 'apply' || subCmd === 'pop') {
+          if (nextStashes.length === 0) return fail('error: No stash entries found.');
+          const idx = parseStashIndex(args[2]);
+          const entry = nextStashes[idx];
+          if (!entry) return fail(`error: stash@{${idx}} is not a valid reference`);
+
+          for (const ch of entry.changes) {
+            if (ch.action === 'deleted') {
+              delete workingFiles[ch.path];
+              deletedPaths.push(ch.path);
+            } else if (ch.file) {
+              workingFiles[ch.path] = { ...ch.file, lastModified: Date.now() };
+            }
+            filesChanged = true;
+          }
+
+          if (subCmd === 'pop') {
+            nextStashes = nextStashes.filter((_, i) => i !== idx);
+            stashesChanged = true;
+            return ok(`Restored ${entry.changes.length} file(s) and dropped stash@{${idx}} (${entry.id}).`);
+          }
+          return ok(`Applied stash@{${idx}} (${entry.changes.length} file(s) updated).`);
+        }
+
+        // stash / stash push
+        let customMsg = '';
+        const mIdx = args.indexOf('-m');
+        if (mIdx !== -1 && args[mIdx + 1]) customMsg = args[mIdx + 1];
+        else {
+          const longMsg = args.find((a) => a.startsWith('--message='));
+          if (longMsg) customMsg = longMsg.slice(10);
+        }
+
+        const liveDiffs = computeWorkingTreeChanges(rt.baseFiles, workingFiles);
+        if (liveDiffs.length === 0) {
+          return ok('No local changes to save');
+        }
+
+        const changes: ShellStashFileChange[] = [];
+        for (const d of liveDiffs) {
+          if (d.status === 'deleted') {
+            changes.push({ path: d.path, action: 'deleted' });
+            if (rt.baseFiles[d.path]) {
+              workingFiles[d.path] = { ...rt.baseFiles[d.path] };
+            }
+          } else {
+            const currFile = workingFiles[d.path];
+            if (currFile) {
+              changes.push({
+                path: d.path,
+                action: d.status,
+                file: { ...currFile },
+              });
+            }
+            if (d.status === 'added') {
+              delete workingFiles[d.path];
+              deletedPaths.push(d.path);
+            } else if (rt.baseFiles[d.path]) {
+              workingFiles[d.path] = { ...rt.baseFiles[d.path] };
+            }
+          }
+        }
+        filesChanged = true;
+
+        const id = Math.random().toString(16).slice(2, 9);
+        const latestCommit = rt.commits[0];
+        const defaultLabel = latestCommit
+          ? `WIP on ${rt.activeBranch}: ${latestCommit.shortId} ${latestCommit.message}`
+          : `WIP on ${rt.activeBranch}: working tree snapshot`;
+        const entry: ShellStashEntry = {
+          id,
+          message: customMsg ? `On ${rt.activeBranch}: ${customMsg}` : defaultLabel,
+          branch: rt.activeBranch,
+          createdAt: Date.now(),
+          changes,
+        };
+        nextStashes = [entry, ...nextStashes];
+        stashesChanged = true;
+
+        return ok(`Saved working directory and index state ${entry.message}`);
       }
 
       if (sub === 'add') {

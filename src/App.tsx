@@ -131,6 +131,7 @@ export default function App() {
   const [baseFiles, setBaseFiles] = useState<Record<string, VFile>>(defaultTemplate.files);
   const [openTabs, setOpenTabs] = useState<string[]>(['index.html', 'style.css', 'app.js']);
   const [activeFilePath, setActiveFilePath] = useState<string>('index.html');
+  const [editorDiffMode, setEditorDiffMode] = useState<boolean>(false);
   const [targetSearchLine, setTargetSearchLine] = useState<number | undefined>(undefined);
 
   // Clean zip import overwrite flag
@@ -803,10 +804,23 @@ export default function App() {
     }
   };
 
+  // Delete local branch
+  const handleDeleteBranch = async (branchName: string) => {
+    setBranches((prev) => prev.filter((b) => b.name !== branchName));
+    addGitLog(`Deleted branch "${branchName}".`);
+  };
+
   // Compute live git diffs against baseFiles
   const diffs = useMemo(() => {
     return computeWorkingTreeChanges(baseFiles, files);
   }, [baseFiles, files]);
+
+  // Automatically leave Diff Mode if the active file no longer differs from baseline
+  useEffect(() => {
+    if (editorDiffMode && (!activeFilePath || !diffs.some((d) => d.path === activeFilePath))) {
+      setEditorDiffMode(false);
+    }
+  }, [editorDiffMode, activeFilePath, diffs]);
 
   // Refresh commit history on demand
   const handleRefreshCommits = async () => {
@@ -1274,9 +1288,51 @@ export default function App() {
       setOpenTabs((prev) => [...prev, path]);
     }
     setActiveFilePath(path);
+    setEditorDiffMode(false);
     if (isMobile) {
       setMobileTab('editor');
     }
+  };
+
+  const handleOpenDiffFile = (path: string) => {
+    setOpenTabs((prev) => (prev.includes(path) ? prev : [...prev, path]));
+    setActiveFilePath(path);
+    setEditorDiffMode(true);
+    if (isMobile) {
+      setMobileTab('editor');
+    } else if (viewMode === 'preview') {
+      setViewMode('split');
+    }
+  };
+
+  const handleRevertFile = (path: string) => {
+    const baseline = baseFiles[path];
+    if (baseline) {
+      setFiles((prev) => ({
+        ...prev,
+        [path]: {
+          ...baseline,
+          lastModified: Date.now(),
+        },
+      }));
+    } else {
+      setFiles((prev) => {
+        const updated = { ...prev };
+        delete updated[path];
+        return updated;
+      });
+      setOpenTabs((prev) => {
+        const nextTabs = prev.filter((tPath) => tPath !== path);
+        if (activeFilePath === path) {
+          setActiveFilePath(nextTabs[nextTabs.length - 1] || '');
+        }
+        return nextTabs;
+      });
+    }
+    if (activeFilePath === path) {
+      setEditorDiffMode(false);
+    }
+    addGitLog(`Reverted changes in "${path}" to baseline.`);
   };
 
   const handleApplyFilesFromTerminal = useCallback(
@@ -1649,6 +1705,10 @@ export default function App() {
               openTabs={openTabs}
               activeFilePath={activeFilePath}
               files={files}
+              baseFiles={baseFiles}
+              diffMode={editorDiffMode}
+              onToggleDiffMode={setEditorDiffMode}
+              onRevertFile={handleRevertFile}
               t={t}
               currentLang={currentLang}
               settings={settings}
@@ -1714,6 +1774,8 @@ export default function App() {
               onGitReset={handleGitReset}
               softResetTarget={softResetTarget}
               onClearSoftReset={() => setSoftResetTarget(null)}
+              onOpenFileDiff={handleOpenDiffFile}
+              onRevertFile={handleRevertFile}
             />
           </div>
 
@@ -1740,6 +1802,7 @@ export default function App() {
               onOpenFile={handleSelectFile}
               onSwitchBranch={handleSwitchBranch}
               onCreateBranch={handleCreateBranch}
+              onDeleteBranch={handleDeleteBranch}
               diffsCount={diffs.length}
               softResetTarget={softResetTarget}
               t={t}
@@ -2107,6 +2170,8 @@ export default function App() {
                 onGitReset={handleGitReset}
                 softResetTarget={softResetTarget}
                 onClearSoftReset={() => setSoftResetTarget(null)}
+                onOpenFileDiff={handleOpenDiffFile}
+                onRevertFile={handleRevertFile}
               />
             )}
 
@@ -2140,6 +2205,10 @@ export default function App() {
                   openTabs={openTabs}
                   activeFilePath={activeFilePath}
                   files={files}
+                  baseFiles={baseFiles}
+                  diffMode={editorDiffMode}
+                  onToggleDiffMode={setEditorDiffMode}
+                  onRevertFile={handleRevertFile}
                   t={t}
                   currentLang={currentLang}
                   settings={settings}
@@ -2215,6 +2284,7 @@ export default function App() {
               onOpenFile={handleSelectFile}
               onSwitchBranch={handleSwitchBranch}
               onCreateBranch={handleCreateBranch}
+              onDeleteBranch={handleDeleteBranch}
               diffsCount={diffs.length}
               softResetTarget={softResetTarget}
               t={t}

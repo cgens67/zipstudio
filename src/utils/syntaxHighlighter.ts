@@ -130,8 +130,8 @@ function escapeHtml(text: string): string {
 export function highlightCode(code: string, language: string): string {
   if (!code) return '';
 
-  // Performance guard: Large files (> 120KB) bypass heavy regex parsing
-  if (code.length > 120000) {
+  // Guard only against extreme minified/generated bundles (> 500KB)
+  if (code.length > 500_000) {
     return escapeHtml(code);
   }
 
@@ -143,16 +143,20 @@ export function highlightCode(code: string, language: string): string {
   }
 
   try {
-    // If file is between 50KB and 120KB, highlight first 1500 lines for high performance
-    if (code.length > 50000) {
-      const lines = code.split('\n');
-      if (lines.length > 1200) {
-        const topChunk = lines.slice(0, 1200).join('\n');
-        const restChunk = lines.slice(1200).join('\n');
-        return Prism.highlight(topChunk, grammar, prismLang) + '\n' + escapeHtml(restChunk);
-      }
+    // Highlight the entire file directly up to 250KB so multi-line strings/comments stay intact
+    if (code.length <= 250_000) {
+      return Prism.highlight(code, grammar, prismLang);
     }
-    return Prism.highlight(code, grammar, prismLang);
+
+    // For very large files (250KB - 500KB), highlight in 1,000-line blocks instead of dropping tail lines
+    const lines = code.split('\n');
+    const chunks: string[] = [];
+    const CHUNK_LINES = 1000;
+    for (let i = 0; i < lines.length; i += CHUNK_LINES) {
+      const sliceText = lines.slice(i, i + CHUNK_LINES).join('\n');
+      chunks.push(Prism.highlight(sliceText, grammar, prismLang));
+    }
+    return chunks.join('\n');
   } catch (err) {
     console.warn(`Prism highlighting failed for ${language}:`, err);
     return escapeHtml(code);

@@ -13,8 +13,61 @@ import {
   executeShellCommandLine,
   formatPromptCwd,
   getAutocompleteSuggestions,
+  ShellStashEntry,
   virtualDirExists,
 } from '../utils/terminalShell';
+
+const TERMINAL_HISTORY_STORAGE_KEY = 'zipstudio_terminal_history';
+const TERMINAL_STASH_STORAGE_KEY = 'zipstudio_git_stashes';
+const MAX_PERSISTED_HISTORY = 200;
+
+function loadPersistedCommandHistory(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(TERMINAL_HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      .slice(-MAX_PERSISTED_HISTORY);
+  } catch {
+    return [];
+  }
+}
+
+function savePersistedCommandHistory(entries: string[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      TERMINAL_HISTORY_STORAGE_KEY,
+      JSON.stringify(entries.slice(-MAX_PERSISTED_HISTORY))
+    );
+  } catch {
+    // ignore storage quota failures
+  }
+}
+
+function loadPersistedStashes(): ShellStashEntry[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(TERMINAL_STASH_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as ShellStashEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePersistedStashes(entries: ShellStashEntry[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(TERMINAL_STASH_STORAGE_KEY, JSON.stringify(entries));
+  } catch {
+    // ignore storage quota failures
+  }
+}
 
 export interface ConsoleLogEntry {
   id: string;
@@ -49,6 +102,7 @@ interface TerminalProps {
   onOpenFile?: (path: string) => void;
   onSwitchBranch?: (branchName: string) => Promise<void>;
   onCreateBranch?: (branchName: string) => Promise<void>;
+  onDeleteBranch?: (branchName: string) => Promise<void>;
   diffsCount?: number;
   softResetTarget?: GitCommit | null;
   t?: Translations;
@@ -82,7 +136,7 @@ export function Terminal({
   onOpenFile,
   onSwitchBranch,
   onCreateBranch,
-  diffsCount = 0,
+  onDeleteBranch,
   softResetTarget = null,
   t = TRANSLATIONS.en,
   height = 220,
@@ -104,17 +158,19 @@ export function Terminal({
   const [cwd, setCwd] = useState('');
   const [prevCwd, setPrevCwd] = useState('');
   const [shellEnv, setShellEnv] = useState<Record<string, string>>({});
+  const [stashes, setStashes] = useState<ShellStashEntry[]>(() => loadPersistedStashes());
   const [history, setHistory] = useState<string[]>([
     t.welcomeTerminal,
     t.typeHelp,
     `${t.connectedWorkspace} ${activeBranch}`,
   ]);
   const [inputVal, setInputVal] = useState('');
-  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [commandHistory, setCommandHistory] = useState<string[]>(() => loadPersistedCommandHistory());
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isRunningCmd, setIsRunningCmd] = useState(false);
   const terminalBottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const draftInputRef = useRef<string>('');
 
   // Reset cwd safely if current directory disappears (e.g. repo switch or zip upload)
   useEffect(() => {
@@ -131,9 +187,18 @@ export function Terminal({
     const rawLines = rawCmd.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
     if (rawLines.length === 0) return;
 
-    const updatedCmdHistory = [...commandHistory, ...rawLines];
+    let updatedCmdHistory = [...commandHistory];
+    for (const entry of rawLines) {
+      if (updatedCmdHistory[updatedCmdHistory.length - 1] !== entry) {
+        updatedCmdHistory.push(entry);
+      }
+    }
+    updatedCmdHistory = updatedCmdHistory.slice(-MAX_PERSISTED_HISTORY);
+
     setCommandHistory(updatedCmdHistory);
+    savePersistedCommandHistory(updatedCmdHistory);
     setHistoryIndex(-1);
+    draftInputRef.current = '';
     setInputVal('');
     setIsRunningCmd(true);
 
@@ -141,6 +206,8 @@ export function Terminal({
     let runningPrevCwd = prevCwd;
     let runningEnv = shellEnv;
     let workingFiles = { ...files };
+    let runningStashes = stashes;
+    let historyCleared = false;
     let cleared = false;
     const batchLines: string[] = [];
 
@@ -166,11 +233,13 @@ export function Terminal({
           diffs,
           selectedRepo,
           softResetTarget,
-          commandHistory: updatedCmdHistory,
+          commandHistory: historyCleared ? [] : updatedCmdHistory,
+          stashes: runningStashes,
           gitUser,
           onOpenFile,
           onSwitchBranch,
           onCreateBranch,
+          onDeleteBranch,
           onGitReset,
           onCommit,
           onCleanBuild,
@@ -179,6 +248,19 @@ export function Terminal({
         runningCwd = result.nextCwd;
         runningPrevCwd = result.nextPrevCwd;
         runningEnv = result.nextEnv;
+
+        if (result.clearCommandHistoryRequested) {
+          historyCleared = true;
+          updatedCmdHistory = [];
+          setCommandHistory([]);
+          savePersistedCommandHistory([]);
+        }
+
+        if (result.stashesChanged) {
+          runningStashes = result.nextStashes;
+          setStashes(result.nextStashes);
+          savePersistedStashes(result.nextStashes);
+        }
 
         if (result.clearRequested) {
           cleared = true;
@@ -241,6 +323,9 @@ export function Terminal({
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (commandHistory.length === 0) return;
+      if (historyIndex === -1) {
+        draftInputRef.current = inputVal;
+      }
       const nextIndex = historyIndex + 1;
       if (nextIndex < commandHistory.length) {
         setHistoryIndex(nextIndex);
@@ -254,7 +339,7 @@ export function Terminal({
         setInputVal(commandHistory[commandHistory.length - 1 - nextIndex]);
       } else if (historyIndex === 0) {
         setHistoryIndex(-1);
-        setInputVal('');
+        setInputVal(draftInputRef.current);
       }
     }
   };
@@ -448,7 +533,16 @@ export function Terminal({
             })}
             {/* Quick Command Chips */}
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-2 pb-1 select-none">
-              {['ls -la', 'tree -L 2', 'git status', 'git diff', 'git log --oneline', 'pwd', 'clear', 'help'].map((cmd) => (
+              {[
+                'ls -la',
+                'find . -maxdepth 2',
+                'git status',
+                'git diff',
+                'git branch',
+                'git stash list',
+                'history',
+                'help',
+              ].map((cmd) => (
                 <button
                   key={cmd}
                   type="button"
@@ -474,8 +568,14 @@ export function Terminal({
               <input
                 ref={inputRef}
                 type="text"
+                aria-label="Terminal command input"
                 value={inputVal}
-                onChange={(e) => setInputVal(e.target.value)}
+                onChange={(e) => {
+                  if (historyIndex === -1) {
+                    draftInputRef.current = e.target.value;
+                  }
+                  setInputVal(e.target.value);
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder={isRunningCmd ? 'Running...' : t.typeCommandPrompt}
                 disabled={isRunningCmd}

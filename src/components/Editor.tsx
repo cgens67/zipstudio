@@ -21,11 +21,17 @@ import { highlightCode } from '../utils/syntaxHighlighter';
 import { computeDocumentLineMetrics } from '../utils/editorMetrics';
 import { FontSpecimenViewer, MediaPlayer, BinaryAssetViewer } from './BinaryFileViewers';
 import { collabService, RemoteCursor, FileUpdateEvent } from '../utils/collabService';
+import { computeFileDiff } from '../utils/gitService';
+import { DiffViewer } from './DiffViewer';
 
 interface EditorProps {
   openTabs: string[];
   activeFilePath: string;
   files: Record<string, VFile>;
+  baseFiles?: Record<string, VFile>;
+  diffMode?: boolean;
+  onToggleDiffMode?: (enabled: boolean) => void;
+  onRevertFile?: (path: string) => void;
   onSelectTab: (path: string) => void;
   onCloseTab: (path: string) => void;
   onUpdateContent: (path: string, newContent: string) => void;
@@ -49,6 +55,10 @@ export function Editor({
   openTabs,
   activeFilePath,
   files,
+  baseFiles = {},
+  diffMode = false,
+  onToggleDiffMode,
+  onRevertFile,
   onSelectTab,
   onCloseTab,
   onUpdateContent,
@@ -62,9 +72,11 @@ export function Editor({
   settings,
 }: EditorProps) {
   const activeFile = files[activeFilePath];
+  const baseFile = baseFiles[activeFilePath];
   const [content, setContent] = useState(activeFile?.isBinary ? '' : (activeFile?.content || ''));
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
   const [plainEnglishMode, setPlainEnglishMode] = useState(false);
+  const [diffViewStyle, setDiffViewStyle] = useState<'inline' | 'side-by-side'>('inline');
   const [fontSize, setFontSize] = useState(settings?.fontSize ?? 13);
   const [wordWrap, setWordWrap] = useState(settings?.wordWrap ?? false);
   const [syntaxHighlighting, setSyntaxHighlighting] = useState(true);
@@ -167,14 +179,32 @@ export function Editor({
     return Math.max(8, Math.floor((stageWidth - 24) / charWidth));
   }, [wordWrap, stageWidth, charWidth]);
 
+  const displayFile = activeFile || (diffMode ? baseFile : undefined);
+
   // Accurate file language detection using full filename and extension
-  const lang = activeFile ? getLanguageFromFile(activeFile.name) : 'plaintext';
+  const lang = displayFile ? getLanguageFromFile(displayFile.name) : 'plaintext';
+
+  // Compute live FileDiff vs baseline for Diff Mode & Editor toolbar badge
+  const fileDiff = useMemo(() => {
+    if (!activeFilePath) return null;
+    if (!activeFile && !baseFile) return null;
+    const origContent = baseFile ? baseFile.content : null;
+    const currContent = activeFile
+      ? activeFile.isBinary
+        ? activeFile.content
+        : content
+      : null;
+    if (origContent === currContent) return null;
+    return computeFileDiff(activeFilePath, origContent, currContent);
+  }, [activeFilePath, activeFile, baseFile, content]);
+
+  const isDiffActive = Boolean(diffMode && fileDiff);
 
   // Syntax highlighted HTML generated via PrismJS
   const highlightedHtml = useMemo(() => {
-    if (!content || activeFile?.isBinary) return '';
+    if (!content || activeFile?.isBinary || isDiffActive) return '';
     return highlightCode(content, lang);
-  }, [content, lang, activeFile?.isBinary]);
+  }, [content, lang, activeFile?.isBinary, isDiffActive]);
 
   // Compute matches for in-file search
   const matches = useMemo(() => {
@@ -564,7 +594,7 @@ export function Editor({
     return explainCodeInPlainEnglish(activeFile.name, content, currentLang);
   }, [plainEnglishMode, activeFile?.name, activeFile?.isBinary, content, currentLang]);
 
-  if (!activeFile) {
+  if (!displayFile) {
     return (
       <div className="flex-1 h-full bg-[#1e1f22] flex flex-col items-center justify-center text-[#8e9199] p-8">
         <M3Icon name="code" size={56} className="text-[#a8c7fa]/30 mb-4" />
@@ -579,8 +609,10 @@ export function Editor({
       {/* Tabs Bar */}
       <div className="h-9 bg-[#18191c] border-b border-[#43474e]/40 flex items-center overflow-x-auto no-scrollbar shrink-0">
         {openTabs.map((path) => {
-          const file = files[path];
-          if (!file) return null;
+          const liveFile = files[path];
+          const deletedBaseFile = !liveFile ? baseFiles[path] : undefined;
+          const tabFile = liveFile || deletedBaseFile;
+          if (!tabFile) return null;
           const isActive = path === activeFilePath;
           return (
             <div
@@ -593,11 +625,17 @@ export function Editor({
               }`}
             >
               <M3Icon
-                name={file.isBinary ? 'image' : 'description'}
+                name={tabFile.isBinary ? 'image' : deletedBaseFile ? 'delete_outline' : 'description'}
                 size={14}
-                className={isActive ? 'text-[#a8c7fa]' : 'text-[#8e9199]'}
+                className={deletedBaseFile ? 'text-[#ff8585]' : isActive ? 'text-[#a8c7fa]' : 'text-[#8e9199]'}
               />
-              <span className="truncate max-w-[140px] font-mono text-[11px]">{file.name}</span>
+              <span
+                className={`truncate max-w-[140px] font-mono text-[11px] ${
+                  deletedBaseFile ? 'line-through opacity-80' : ''
+                }`}
+              >
+                {tabFile.name}
+              </span>
               <button
                 type="button"
                 onClick={(e) => {
@@ -618,7 +656,7 @@ export function Editor({
       <div className="h-9 px-3 bg-[#1e1f22] border-b border-[#43474e]/30 flex items-center justify-between text-xs shrink-0 gap-2 overflow-x-auto no-scrollbar">
         <div className="flex items-center gap-2 truncate shrink-0">
           <span className="text-[#a8c7fa] font-mono font-medium truncate max-w-[180px]">
-            {activeFile.path}
+            {displayFile.path}
           </span>
           <M3Badge variant="secondary">{lang.toUpperCase()}</M3Badge>
           <span className="text-[#8e9199] text-[11px] shrink-0 font-mono">
@@ -673,12 +711,31 @@ export function Editor({
           />
           <M3IconButton size="sm" icon="content_cut" label={t.deleteLine} onClick={handleDeleteLine} />
 
+          {/* Diff Mode Toggle (shown whenever active file has working-tree changes) */}
+          {fileDiff && onToggleDiffMode && (
+            <button
+              type="button"
+              onClick={() => onToggleDiffMode(!isDiffActive)}
+              aria-pressed={isDiffActive}
+              className={`px-2 py-0.5 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+                isDiffActive
+                  ? 'bg-[#0b57d0] text-white dark:bg-[#a8c7fa] dark:text-[#003062] font-semibold'
+                  : 'bg-[#2b2d30] text-[#ffd54f] hover:text-white border border-[#ffd54f]/30'
+              }`}
+              title={isDiffActive ? 'Exit Diff Mode and edit code' : 'View Diff against baseline'}
+            >
+              <M3Icon name="difference" size={13} />
+              <span>{t.diff || 'Diff'}</span>
+            </button>
+          )}
+
           {/* In-File Search Button (Does NOT open global Search in Code!) */}
           <M3IconButton
             size="sm"
             icon="search"
             label={`${t.findInFile} (Ctrl+F)`}
             variant={showFindBar ? 'filled' : 'standard'}
+            disabled={isDiffActive}
             onClick={() => {
               if (showFindBar) {
                 setShowFindBar(false);
@@ -790,7 +847,19 @@ export function Editor({
 
       {/* Editor Body */}
       <div className="flex-1 flex overflow-hidden relative">
-        {activeFile.isBinary ? (
+        {isDiffActive && fileDiff ? (
+          <DiffViewer
+            diff={fileDiff}
+            hasWorkingFile={Boolean(activeFile)}
+            viewStyle={diffViewStyle}
+            onChangeViewStyle={setDiffViewStyle}
+            onExitDiffMode={onToggleDiffMode ? () => onToggleDiffMode(false) : undefined}
+            onRevertFile={(path) => onRevertFile?.(path)}
+            fontSize={fontSize}
+            fontFamily={resolvedFontFamily}
+            t={t}
+          />
+        ) : activeFile?.isBinary ? (
           (() => {
             const ext = getFileExtension(activeFile.name).toLowerCase();
             if (isFontExtension(ext)) {
@@ -1207,15 +1276,21 @@ export function Editor({
       </div>
 
       {/* Editor Status Bar */}
-      <div className="h-6 px-3 bg-[#18191c] border-t border-[#43474e]/30 flex items-center justify-between text-[11px] text-[#8e9199] shrink-0 font-mono">
-        <div className="flex items-center gap-3">
-          <span className="text-[#a8c7fa]">
-            {t.linesLabel} {cursorPos.line}, {t.spaces} {cursorPos.col}
-          </span>
+      <div className="h-6 px-3 bg-[#18191c] border-t border-[#43474e]/30 flex items-center justify-between text-[11px] text-[#8e9199] shrink-0 font-mono whitespace-nowrap overflow-x-auto no-scrollbar gap-4">
+        <div className="flex items-center gap-3 shrink-0">
+          {isDiffActive && fileDiff ? (
+            <span className="text-[#a8c7fa] font-semibold">
+              DIFF MODE (+{fileDiff.additions} / -{fileDiff.deletions})
+            </span>
+          ) : (
+            <span className="text-[#a8c7fa]">
+              {t.linesLabel} {cursorPos.line}, {t.spaces} {cursorPos.col}
+            </span>
+          )}
           <span>{t.spaces}: {tabSize}</span>
           <span>UTF-8</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <span className="text-white font-semibold">{lang.toUpperCase()}</span>
           <span className="flex items-center gap-1 text-[#b4f3b7]">
             <M3Icon name="cloud_done" size={12} /> {t.ready}

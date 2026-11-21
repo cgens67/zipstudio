@@ -62,6 +62,8 @@ interface GitHubPanelProps {
   onGitReset?: (mode: 'soft' | 'mixed' | 'hard', count: number, forcePushRemote: boolean) => Promise<void>;
   softResetTarget?: GitCommit | null;
   onClearSoftReset?: () => void;
+  onOpenFileDiff?: (path: string) => void;
+  onRevertFile?: (path: string) => void;
 }
 
 export function GitHubPanel({
@@ -96,6 +98,8 @@ export function GitHubPanel({
   onGitReset,
   softResetTarget,
   onClearSoftReset,
+  onOpenFileDiff,
+  onRevertFile,
 }: GitHubPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState<'changes' | 'branches' | 'prs' | 'commits'>('changes');
   const [commitMessage, setCommitMessage] = useState('');
@@ -103,6 +107,7 @@ export function GitHubPanel({
   const [isConnectingToken, setIsConnectingToken] = useState(false);
   const [tokenError, setTokenError] = useState<string>('');
   const [selectedDiff, setSelectedDiff] = useState<FileDiff | null>(null);
+  const [confirmRevertPath, setConfirmRevertPath] = useState<string | null>(null);
   const [copiedSha, setCopiedSha] = useState<string | null>(null);
   const [isRefreshingCommits, setIsRefreshingCommits] = useState(false);
 
@@ -310,6 +315,94 @@ export function GitHubPanel({
             )}
           </div>
         </div>
+
+        {/* Local Working Tree Changes (available immediately offline) */}
+        <div className="bg-[#f8fafd] dark:bg-[#1e1f22] border border-[#d8dae5] dark:border-[#43474e]/50 rounded-2xl p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#5d6168] dark:text-[#8e9199] flex items-center gap-1.5">
+              <M3Icon name="difference" size={14} className="text-[#0b57d0] dark:text-[#a8c7fa]" />
+              <span>Local Changes ({diffs.length})</span>
+            </span>
+          </div>
+
+          {diffs.length === 0 ? (
+            <p className="text-[11px] text-[#5d6168] dark:text-[#8e9199] py-1">
+              Working tree clean. Edit any file to inspect diffs or revert changes here.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {diffs.map((diff) => (
+                <div
+                  key={diff.path}
+                  className="p-2 rounded-lg bg-white dark:bg-[#2b2d30] border border-[#d8dae5] dark:border-[#43474e]/40 flex items-center justify-between gap-2 text-xs"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onOpenFileDiff) {
+                        onOpenFileDiff(diff.path);
+                      } else {
+                        setSelectedDiff(diff);
+                      }
+                    }}
+                    className="flex-1 min-w-0 flex items-center justify-between gap-2 text-left cursor-pointer hover:opacity-85"
+                    title={`Open ${diff.path} in Diff Mode`}
+                  >
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <M3Icon
+                        name={diff.status === 'added' ? 'add_circle' : diff.status === 'deleted' ? 'remove_circle' : 'edit'}
+                        size={14}
+                        className={diff.status === 'added' ? 'text-[#0a6640] dark:text-[#b4f3b7]' : diff.status === 'deleted' ? 'text-[#ba1a1a] dark:text-[#ff8585]' : 'text-[#7e5700] dark:text-[#ffd54f]'}
+                      />
+                      <span className="truncate font-mono text-[#191c20] dark:text-white">{diff.path}</span>
+                    </span>
+                    <span className="flex items-center gap-1 text-[10px] font-mono shrink-0 font-semibold">
+                      {diff.additions > 0 && <span className="text-[#0a6640] dark:text-[#b4f3b7]">+{diff.additions}</span>}
+                      {diff.deletions > 0 && <span className="text-[#ba1a1a] dark:text-[#ff8585]">-{diff.deletions}</span>}
+                    </span>
+                  </button>
+
+                  {onRevertFile && (
+                    confirmRevertPath === diff.path ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setConfirmRevertPath(null);
+                            onRevertFile(diff.path);
+                          }}
+                          className="px-1.5 py-0.5 rounded bg-[#ba1a1a] text-white text-[10px] font-semibold cursor-pointer"
+                        >
+                          Revert
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmRevertPath(null)}
+                          className="px-1 py-0.5 rounded text-[10px] text-[#5d6168] dark:text-[#8e9199] cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <M3IconButton
+                        size="sm"
+                        icon="undo"
+                        label={`Revert ${diff.path}`}
+                        onClick={() => setConfirmRevertPath(diff.path)}
+                      />
+                    )
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <AnimatedDiffModal
+          diff={selectedDiff}
+          onClose={() => setSelectedDiff(null)}
+          t={t}
+        />
       </aside>
     );
   }
@@ -603,25 +696,68 @@ export function GitHubPanel({
                     {diffs.map((diff) => (
                       <div
                         key={diff.path}
-                        onClick={() => setSelectedDiff(diff)}
-                        className={`p-2 rounded-lg cursor-pointer flex items-center justify-between text-xs transition-colors ${
+                        className={`p-2 rounded-lg flex items-center justify-between gap-2 text-xs transition-colors ${
                           selectedDiff?.path === diff.path
                             ? 'bg-[#d3e3fd] dark:bg-[#00468b]/30 border border-[#0b57d0]/40 dark:border-[#a8c7fa]/50'
                             : 'bg-[#f0f2f8] hover:bg-[#e4e7ef] dark:bg-[#2b2d30] dark:hover:bg-[#383a3e]'
                         }`}
                       >
-                        <div className="flex items-center gap-1.5 truncate">
-                          <M3Icon
-                            name={diff.status === 'added' ? 'add_circle' : diff.status === 'deleted' ? 'remove_circle' : 'edit'}
-                            size={14}
-                            className={diff.status === 'added' ? 'text-[#0a6640] dark:text-[#b4f3b7]' : diff.status === 'deleted' ? 'text-[#ba1a1a] dark:text-[#ff8585]' : 'text-[#7e5700] dark:text-[#ffd54f]'}
-                          />
-                          <span className="truncate font-mono text-[#191c20] dark:text-white">{diff.path}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-[10px] font-mono shrink-0 ml-2 font-semibold">
-                          {diff.additions > 0 && <span className="text-[#0a6640] dark:text-[#b4f3b7]">+{diff.additions}</span>}
-                          {diff.deletions > 0 && <span className="text-[#ba1a1a] dark:text-[#ff8585]">-{diff.deletions}</span>}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onOpenFileDiff) {
+                              onOpenFileDiff(diff.path);
+                            } else {
+                              setSelectedDiff(diff);
+                            }
+                          }}
+                          className="flex-1 min-w-0 flex items-center justify-between gap-2 text-left cursor-pointer"
+                          title={`Open ${diff.path} in Diff Mode`}
+                        >
+                          <div className="flex items-center gap-1.5 truncate">
+                            <M3Icon
+                              name={diff.status === 'added' ? 'add_circle' : diff.status === 'deleted' ? 'remove_circle' : 'edit'}
+                              size={14}
+                              className={diff.status === 'added' ? 'text-[#0a6640] dark:text-[#b4f3b7]' : diff.status === 'deleted' ? 'text-[#ba1a1a] dark:text-[#ff8585]' : 'text-[#7e5700] dark:text-[#ffd54f]'}
+                            />
+                            <span className="truncate font-mono text-[#191c20] dark:text-white">{diff.path}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[10px] font-mono shrink-0 ml-2 font-semibold">
+                            {diff.additions > 0 && <span className="text-[#0a6640] dark:text-[#b4f3b7]">+{diff.additions}</span>}
+                            {diff.deletions > 0 && <span className="text-[#ba1a1a] dark:text-[#ff8585]">-{diff.deletions}</span>}
+                          </div>
+                        </button>
+
+                        {onRevertFile && (
+                          confirmRevertPath === diff.path ? (
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setConfirmRevertPath(null);
+                                  onRevertFile(diff.path);
+                                }}
+                                className="px-1.5 py-0.5 rounded bg-[#ba1a1a] text-white text-[10px] font-semibold cursor-pointer"
+                              >
+                                Revert
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmRevertPath(null)}
+                                className="px-1 py-0.5 rounded text-[10px] text-[#5d6168] dark:text-[#8e9199] cursor-pointer"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <M3IconButton
+                              size="sm"
+                              icon="undo"
+                              label={`Revert ${diff.path}`}
+                              onClick={() => setConfirmRevertPath(diff.path)}
+                            />
+                          )
+                        )}
                       </div>
                     ))}
                   </div>
